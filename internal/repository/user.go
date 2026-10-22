@@ -18,21 +18,21 @@ func NewUserRepo(db *pgxpool.Pool) *UserRepo {
 	return &UserRepo{db: db}
 }
 
-// GetClientByPhone ищет клиента по телефону в формате +7XXXXXXXXXX.
-func (r *UserRepo) GetClientByPhone(ctx context.Context, phone string) (domain.User, error) {
-	return r.get(ctx, `WHERE phone = $1 AND role = 'client'`, phone)
+// GetByPhone ищет пользователя роли role по телефону в формате +7XXXXXXXXXX.
+func (r *UserRepo) GetByPhone(ctx context.Context, role, phone string) (domain.User, error) {
+	return r.get(ctx, `WHERE phone = $1 AND role = $2`, phone, role)
 }
 
-// GetEmployeeByEmail ищет сотрудника по почте в нижнем регистре.
-func (r *UserRepo) GetEmployeeByEmail(ctx context.Context, email string) (domain.User, error) {
-	return r.get(ctx, `WHERE lower(email) = $1 AND role = 'employee'`, email)
+// GetByEmail ищет пользователя роли role по почте в нижнем регистре.
+func (r *UserRepo) GetByEmail(ctx context.Context, role, email string) (domain.User, error) {
+	return r.get(ctx, `WHERE lower(email) = $1 AND role = $2`, email, role)
 }
 
-func (r *UserRepo) get(ctx context.Context, where string, arg string) (domain.User, error) {
+func (r *UserRepo) get(ctx context.Context, where string, args ...any) (domain.User, error) {
 	var u domain.User
 	var phone, email, inn *string
 	err := r.db.QueryRow(ctx,
-		`SELECT id::text, phone, email, password_hash, role, company_inn FROM users `+where, arg,
+		`SELECT id::text, phone, email, password_hash, role, company_inn FROM users `+where, args...,
 	).Scan(&u.ID, &phone, &email, &u.PasswordHash, &u.Role, &inn)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, domain.ErrNotFound

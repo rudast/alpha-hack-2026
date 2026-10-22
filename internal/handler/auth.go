@@ -25,8 +25,7 @@ func NewAuthHandler(svc AuthService) *AuthHandler {
 
 type loginRequest struct {
 	Role     string `json:"role"`
-	Phone    string `json:"phone"`
-	Email    string `json:"email"`
+	Login    string `json:"login"` // телефон или почта
 	Password string `json:"password"`
 }
 
@@ -36,12 +35,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	identifier := req.Phone
-	if req.Role == domain.RoleEmployee {
-		identifier = req.Email
-	}
 
-	id, err := h.svc.Login(r.Context(), service.LoginInput{Role: req.Role, Identifier: identifier, Password: req.Password})
+	id, err := h.svc.Login(r.Context(), service.LoginInput{Role: req.Role, Identifier: req.Login, Password: req.Password})
 	if err != nil {
 		h.fail(w, err)
 		return

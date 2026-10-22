@@ -7,14 +7,14 @@
 ### Проверка работоспособности
 GET {{host}}/healthz
 
-### Вход клиента, шаг 1: пароль
+### Вход клиента, шаг 1: пароль (в login можно указать и почту: client2@example.test)
 # @name clientLogin
 POST {{host}}/api/v1/auth/login
 Content-Type: application/json
 
 {
   "role": "client",
-  "phone": "+79990000002",
+  "login": "+79990000002",
   "password": "demo-password"
 }
 
@@ -39,7 +39,7 @@ Content-Type: application/json
 
 {
   "role": "employee",
-  "email": "underwriter@example.test",
+  "login": "underwriter@example.test",
   "password": "demo-password"
 }
 

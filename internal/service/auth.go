@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -24,8 +25,8 @@ const (
 )
 
 type UserRepository interface {
-	GetClientByPhone(ctx context.Context, phone string) (domain.User, error)
-	GetEmployeeByEmail(ctx context.Context, email string) (domain.User, error)
+	GetByPhone(ctx context.Context, role, phone string) (domain.User, error)
+	GetByEmail(ctx context.Context, role, email string) (domain.User, error)
 }
 
 type AuthStore interface {
@@ -41,7 +42,7 @@ type AuthStore interface {
 
 type LoginInput struct {
 	Role       string // domain.RoleClient или domain.RoleEmployee
-	Identifier string // телефон для клиента, почта для сотрудника
+	Identifier string // телефон или почта
 	Password   string
 }
 
@@ -73,13 +74,13 @@ func NewAuthService(users UserRepository, store AuthStore, otp OTP) (*AuthServic
 // Login проверяет пароль и отправляет код. Возвращает идентификатор вызова для Verify.
 // На любую проблему с учётными данными отвечает одной и той же ошибкой.
 func (s *AuthService) Login(ctx context.Context, in LoginInput) (string, error) {
-	identifier, ok := normalizeIdentifier(in.Role, in.Identifier)
+	login, ok := parseLogin(in.Role, in.Identifier)
 	if !ok {
 		return "", domain.ErrInvalidCredentials
 	}
-	key := in.Role + ":" + identifier
+	identKey := in.Role + ":" + login.value
 
-	failures, err := s.store.LoginFailures(ctx, key)
+	failures, err := s.store.LoginFailures(ctx, identKey)
 	if err != nil {
 		return "", err
 	}
@@ -87,35 +88,53 @@ func (s *AuthService) Login(ctx context.Context, in LoginInput) (string, error) 
 		return "", domain.ErrTooManyAttempts
 	}
 
-	user, err := s.lookup(ctx, in.Role, identifier)
-	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+	user, err := s.lookup(ctx, in.Role, login)
+	notFound := errors.Is(err, domain.ErrNotFound)
+	if err != nil && !notFound {
 		return "", err
 	}
+
+	// Пользователь может входить и по телефону, и по почте, поэтому неудачи считаются
+	// ещё и на него самого: смена логина не даёт новых попыток. Заблокированному
+	// пользователю отвечаем как при неверном пароле, чтобы не раскрывать, что он существует.
+	keys := []string{identKey}
+	userLocked := false
 	hash := s.dummyHash
-	if err == nil {
+	if !notFound {
+		userKey := "user:" + user.ID
+		n, err := s.store.LoginFailures(ctx, userKey)
+		if err != nil {
+			return "", err
+		}
+		userLocked = n >= maxLoginFailures
+		keys = append(keys, userKey)
 		hash = []byte(user.PasswordHash)
 	}
 	passwordOK := bcrypt.CompareHashAndPassword(hash, []byte(in.Password)) == nil
 
-	if err != nil || !passwordOK {
-		if _, err := s.store.RecordLoginFailure(ctx, key, lockoutWindow); err != nil {
-			return "", err
+	if notFound || userLocked || !passwordOK {
+		for _, k := range keys {
+			if _, err := s.store.RecordLoginFailure(ctx, k, lockoutWindow); err != nil {
+				return "", err
+			}
 		}
 		return "", domain.ErrInvalidCredentials
 	}
-	if err := s.store.ResetLoginFailures(ctx, key); err != nil {
-		return "", err
+	for _, k := range keys {
+		if err := s.store.ResetLoginFailures(ctx, k); err != nil {
+			return "", err
+		}
 	}
 
 	id, err := randomToken(16)
 	if err != nil {
 		return "", err
 	}
-	ch := domain.Challenge{UserID: user.ID, Role: user.Role, CompanyINN: user.CompanyINN, Destination: identifier}
+	ch := domain.Challenge{UserID: user.ID, Role: user.Role, CompanyINN: user.CompanyINN, Destination: login.value}
 	if err := s.store.PutChallenge(ctx, id, ch, challengeTTL); err != nil {
 		return "", err
 	}
-	if err := s.otp.Send(ctx, identifier); err != nil {
+	if err := s.otp.Send(ctx, login.value); err != nil {
 		return "", err
 	}
 	return id, nil
@@ -164,22 +183,30 @@ func (s *AuthService) Verify(ctx context.Context, challengeID, code string) (Ses
 	return Session{Token: token, Role: ch.Role, Redirect: redirect}, nil
 }
 
-func (s *AuthService) lookup(ctx context.Context, role, identifier string) (domain.User, error) {
-	if role == domain.RoleEmployee {
-		return s.users.GetEmployeeByEmail(ctx, identifier)
-	}
-	return s.users.GetClientByPhone(ctx, identifier)
+// login — нормализованный логин: телефон в виде +7XXXXXXXXXX или почта в нижнем регистре.
+type login struct {
+	value   string
+	isEmail bool
 }
 
-func normalizeIdentifier(role, raw string) (string, bool) {
-	switch role {
-	case domain.RoleClient:
-		return domain.NormalizePhone(raw)
-	case domain.RoleEmployee:
-		email := domain.NormalizeEmail(raw)
-		return email, email != ""
+func (s *AuthService) lookup(ctx context.Context, role string, l login) (domain.User, error) {
+	if l.isEmail {
+		return s.users.GetByEmail(ctx, role, l.value)
 	}
-	return "", false
+	return s.users.GetByPhone(ctx, role, l.value)
+}
+
+// parseLogin принимает и телефон, и почту: наличие «@» определяет, что это почта.
+func parseLogin(role, raw string) (login, bool) {
+	if role != domain.RoleClient && role != domain.RoleEmployee {
+		return login{}, false
+	}
+	if strings.Contains(raw, "@") {
+		email := domain.NormalizeEmail(raw)
+		return login{value: email, isEmail: true}, email != ""
+	}
+	phone, ok := domain.NormalizePhone(raw)
+	return login{value: phone}, ok
 }
 
 func randomToken(n int) (string, error) {

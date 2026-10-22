@@ -11,21 +11,22 @@ import (
 	"github.com/rudast/alpha-hack-2026/internal/domain"
 )
 
-type fakeUsers struct {
-	clients   map[string]domain.User
-	employees map[string]domain.User
-}
+type fakeUsers []domain.User
 
-func (f fakeUsers) GetClientByPhone(_ context.Context, phone string) (domain.User, error) {
-	if u, ok := f.clients[phone]; ok {
-		return u, nil
+func (f fakeUsers) GetByPhone(_ context.Context, role, phone string) (domain.User, error) {
+	for _, u := range f {
+		if u.Role == role && u.Phone == phone {
+			return u, nil
+		}
 	}
 	return domain.User{}, domain.ErrNotFound
 }
 
-func (f fakeUsers) GetEmployeeByEmail(_ context.Context, email string) (domain.User, error) {
-	if u, ok := f.employees[email]; ok {
-		return u, nil
+func (f fakeUsers) GetByEmail(_ context.Context, role, email string) (domain.User, error) {
+	for _, u := range f {
+		if u.Role == role && u.Email == email {
+			return u, nil
+		}
 	}
 	return domain.User{}, domain.ErrNotFound
 }
@@ -98,8 +99,8 @@ func newAuth(t *testing.T) (*AuthService, *memStore) {
 		t.Fatal(err)
 	}
 	users := fakeUsers{
-		clients:   map[string]domain.User{"+79990000001": {ID: "c1", Role: domain.RoleClient, CompanyINN: "7700000001", PasswordHash: string(hash)}},
-		employees: map[string]domain.User{"underwriter@example.test": {ID: "e1", Role: domain.RoleEmployee, PasswordHash: string(hash)}},
+		{ID: "c1", Role: domain.RoleClient, Phone: "+79990000001", Email: "client1@example.test", CompanyINN: "7700000001", PasswordHash: string(hash)},
+		{ID: "e1", Role: domain.RoleEmployee, Phone: "+79990000100", Email: "underwriter@example.test", PasswordHash: string(hash)},
 	}
 	store := newMemStore()
 	svc, err := NewAuthService(users, store, StubOTP{Code: "000000"})
@@ -147,6 +148,52 @@ func TestEmployeeLoginFlow(t *testing.T) {
 	s, err := svc.Verify(ctx, id, "000000")
 	if err != nil || s.Redirect != RedirectEmployee {
 		t.Fatalf("got %+v, %v", s, err)
+	}
+}
+
+func TestLoginAcceptsPhoneOrEmailForBothRoles(t *testing.T) {
+	svc, store := newAuth(t)
+	ctx := context.Background()
+
+	cases := []struct {
+		name  string
+		in    LoginInput
+		wantU string
+	}{
+		{"client by phone", LoginInput{Role: domain.RoleClient, Identifier: "+79990000001"}, "c1"},
+		{"client by email", LoginInput{Role: domain.RoleClient, Identifier: " Client1@Example.test "}, "c1"},
+		{"employee by email", LoginInput{Role: domain.RoleEmployee, Identifier: "underwriter@example.test"}, "e1"},
+		{"employee by phone", LoginInput{Role: domain.RoleEmployee, Identifier: "8 999 000 01 00"}, "e1"},
+	}
+	for _, tc := range cases {
+		tc.in.Password = testPassword
+		id, err := svc.Login(ctx, tc.in)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if got := store.challenges[id].UserID; got != tc.wantU {
+			t.Errorf("%s: challenge for user %q, want %q", tc.name, got, tc.wantU)
+		}
+	}
+}
+
+func TestLockoutIsSharedBetweenPhoneAndEmail(t *testing.T) {
+	svc, _ := newAuth(t)
+	ctx := context.Background()
+
+	for _, login := range []string{"+79990000001", "client1@example.test", "+79990000001"} {
+		in := LoginInput{Role: domain.RoleClient, Identifier: login, Password: "nope"}
+		if _, err := svc.Login(ctx, in); !errors.Is(err, domain.ErrInvalidCredentials) {
+			t.Fatalf("%s: %v", login, err)
+		}
+	}
+	// Три неудачи набраны с разных логинов одного пользователя: правильный пароль
+	// не должен пройти ни по одному из них.
+	for _, login := range []string{"+79990000001", "client1@example.test"} {
+		in := LoginInput{Role: domain.RoleClient, Identifier: login, Password: testPassword}
+		if _, err := svc.Login(ctx, in); err == nil {
+			t.Fatalf("%s: login succeeded while the user must be locked", login)
+		}
 	}
 }
 
