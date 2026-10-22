@@ -1,31 +1,56 @@
 # Коллекция запросов (REST Client для VS Code / HTTP-файлы JetBrains).
-# Заглушка: работает только /healthz, остальное — черновой контракт из openapi.yaml.
+# Работают /healthz, вход и /me/bootstrap, остальное — черновой контракт из openapi.yaml.
+# Тестовые учётные записи и пароль описаны в README. Код 2FA-заглушки: 000000.
 
 @host = http://localhost:8080
 
 ### Проверка работоспособности
 GET {{host}}/healthz
 
-### Вход клиента
+### Вход клиента, шаг 1: пароль
+# @name clientLogin
 POST {{host}}/api/v1/auth/login
 Content-Type: application/json
 
 {
   "role": "client",
-  "inn": "7700000001",
-  "email": "client@example.test",
-  "password": "demo"
+  "phone": "+79990000002",
+  "password": "demo-password"
 }
 
-### Вход сотрудника
+### Вход клиента, шаг 2: код 2FA
+# @name clientVerify
+POST {{host}}/api/v1/auth/verify
+Content-Type: application/json
+
+{
+  "challenge_id": "{{clientLogin.response.body.challenge_id}}",
+  "code": "000000"
+}
+
+### Обновить показатели долговой нагрузки после входа
+POST {{host}}/api/v1/me/bootstrap
+Authorization: Bearer {{clientVerify.response.body.token}}
+
+### Вход сотрудника, шаг 1: пароль
+# @name employeeLogin
 POST {{host}}/api/v1/auth/login
 Content-Type: application/json
 
 {
   "role": "employee",
   "email": "underwriter@example.test",
-  "password": "demo",
-  "otp": "000000"
+  "password": "demo-password"
+}
+
+### Вход сотрудника, шаг 2: код 2FA
+# @name employeeVerify
+POST {{host}}/api/v1/auth/verify
+Content-Type: application/json
+
+{
+  "challenge_id": "{{employeeLogin.response.body.challenge_id}}",
+  "code": "000000"
 }
 
 ### Каталог продуктов

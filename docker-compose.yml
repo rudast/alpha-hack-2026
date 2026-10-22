@@ -8,12 +8,42 @@ services:
       WEB_DIR: /app/web
       DATABASE_URL: postgres://${POSTGRES_USER:-credit}:${POSTGRES_PASSWORD:-credit}@db:5432/${POSTGRES_DB:-credit}?sslmode=disable
       REDIS_ADDR: redis:6379
+      OTP_STUB_CODE: ${OTP_STUB_CODE:-000000}
+      TRUST_REFRESH_INTERVAL: ${TRUST_REFRESH_INTERVAL:-12h}
+      WORKER_TIMEOUT: ${WORKER_TIMEOUT:-8s}
     depends_on:
-      db:
+      migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
+      worker:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      REDIS_ADDR: redis:6379
+    depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    command: ["up"]
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: postgres://${POSTGRES_USER:-credit}:${POSTGRES_PASSWORD:-credit}@db:5432/${POSTGRES_DB:-credit}?sslmode=disable
+      GOOSE_MIGRATION_DIR: /migrations
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
 
   redis:
     image: redis:7.2-alpine

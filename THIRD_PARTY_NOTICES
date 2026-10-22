@@ -9,9 +9,15 @@ THIRD PARTY NOTICES
 -------------
   Go standard library — BSD 3-Clause — https://go.dev/LICENSE
   github.com/go-chi/chi/v5 v5.5.0 — MIT — https://github.com/go-chi/chi/blob/master/LICENSE
+  github.com/jackc/pgx/v5 v5.11.0 — MIT — https://github.com/jackc/pgx/blob/master/LICENSE
+  github.com/redis/go-redis/v9 v9.23.0 — BSD 2-Clause — https://github.com/redis/go-redis/blob/master/LICENSE
+  golang.org/x/crypto (bcrypt) — BSD 3-Clause — https://go.dev/LICENSE
+  golang.org/x/sync (singleflight) — BSD 3-Clause — https://go.dev/LICENSE
+  Остальные записи в go.sum — транзитивные зависимости перечисленных библиотек.
 
 Образы Docker
 -------------
+  goose v3.24.1      — применение миграций, собирается из github.com/pressly/goose (MIT)
   golang:1.26-alpine — сборка (Go: BSD 3-Clause; Alpine Linux: MIT и другие лицензии пакетов)
   alpine:3.22        — базовый образ рантайма
   postgres:17-alpine — СУБД (PostgreSQL License)
@@ -23,9 +29,9 @@ THIRD PARTY NOTICES
 
 Смоделированные интеграции
 --------------------------
-Планируются локальные моки, реальные внешние системы не вызываются:
-  - Бюро кредитных историй (БКИ)
+Реальные внешние системы не вызываются, используются локальные моки:
+  - Бюро кредитных историй (БКИ) — воркер-мок cmd/worker с синтетическими данными (реализовано)
   - ЕГРЮЛ / ЕГРИП
   - ФНС «Прозрачный бизнес»
   - Подписание документов и выдача средств (имитация)
-  - Двухфакторная аутентификация сотрудника (заглушка)
+  - Двухфакторная аутентификация клиента и сотрудника (заглушка с фиксированным кодом)
