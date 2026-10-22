@@ -4,7 +4,6 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/credit-cabinet ./cmd/api
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
 
 FROM golang:1.26-alpine AS goose
 RUN CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
@@ -13,12 +12,6 @@ FROM alpine:3.22 AS migrate
 COPY --from=goose /go/bin/goose /usr/local/bin/goose
 COPY migrations /migrations
 ENTRYPOINT ["goose"]
-
-FROM alpine:3.22 AS worker
-RUN adduser -D -u 10001 app
-COPY --from=build /out/worker /app/worker
-USER app
-ENTRYPOINT ["/app/worker"]
 
 FROM alpine:3.22
 RUN adduser -D -u 10001 app

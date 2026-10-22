@@ -22,8 +22,7 @@ services:
 
   worker:
     build:
-      context: .
-      target: worker
+      context: ./worker
     environment:
       REDIS_ADDR: redis:6379
     depends_on:

@@ -15,10 +15,15 @@ THIRD PARTY NOTICES
   golang.org/x/sync (singleflight) — BSD 3-Clause — https://go.dev/LICENSE
   Остальные записи в go.sum — транзитивные зависимости перечисленных библиотек.
 
+Библиотеки Python
+-----------------
+  redis-py 5.2.1 — MIT — https://github.com/redis/redis-py/blob/master/LICENSE
+
 Образы Docker
 -------------
   goose v3.24.1      — применение миграций, собирается из github.com/pressly/goose (MIT)
   golang:1.26-alpine — сборка (Go: BSD 3-Clause; Alpine Linux: MIT и другие лицензии пакетов)
+  python:3.13-slim   — Python worker (Python Software Foundation License; Debian packages with their own licenses)
   alpine:3.22        — базовый образ рантайма
   postgres:17-alpine — СУБД (PostgreSQL License)
   redis:7.2-alpine   — очередь и обмен с обработчиком (BSD 3-Clause; версии 7.4 и новее лицензированы иначе, поэтому закреплена 7.2)
@@ -30,7 +35,7 @@ THIRD PARTY NOTICES
 Смоделированные интеграции
 --------------------------
 Реальные внешние системы не вызываются, используются локальные моки:
-  - Бюро кредитных историй (БКИ) — воркер-мок cmd/worker с синтетическими данными (реализовано)
+  - Бюро кредитных историй (БКИ) — Python-верификатор с синтетическими данными (реализовано)
   - ЕГРЮЛ / ЕГРИП
   - ФНС «Прозрачный бизнес»
   - Подписание документов и выдача средств (имитация)

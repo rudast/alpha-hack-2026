@@ -1,6 +1,8 @@
 .git
 .gitignore
 .env
+.venv/
 docs
+worker
 README.md
 *.exe
