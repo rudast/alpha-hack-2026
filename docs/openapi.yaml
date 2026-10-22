@@ -1,0 +1,288 @@
+openapi: 3.0.3
+info:
+  title: Умный кредитный кабинет — API
+  version: 0.1.0
+  description: >
+    Заглушка. Реализован только `/healthz`, остальные методы — черновой контракт,
+    он будет меняться по ходу разработки.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: system
+  - name: auth
+  - name: client
+  - name: employee
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      summary: Проверка работоспособности
+      responses:
+        "200":
+          description: Сервис работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Вход клиента или сотрудника
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Токен сессии
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Неверные учётные данные
+  /api/v1/products:
+    get:
+      tags: [client]
+      summary: Каталог кредитных продуктов
+      responses:
+        "200":
+          description: Список продуктов
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+  /api/v1/loans:
+    get:
+      tags: [client]
+      summary: Действующие кредиты клиента и общая сумма долга
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: Кредиты и долговая нагрузка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoansOverview"
+  /api/v1/calculator:
+    post:
+      tags: [client]
+      summary: Расчёт платежа по будущему кредиту
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalculatorRequest"
+      responses:
+        "200":
+          description: Результат расчёта
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalculatorResponse"
+  /api/v1/applications:
+    post:
+      tags: [client]
+      summary: Создать черновик заявки
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationInput"
+      responses:
+        "201":
+          description: Черновик создан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+  /api/v1/applications/{id}:
+    get:
+      tags: [client]
+      summary: Заявка с историей статусов
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      responses:
+        "200":
+          description: Заявка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "404":
+          description: Заявка не найдена
+  /api/v1/applications/{id}/submit:
+    post:
+      tags: [client]
+      summary: Отправить заявку (с проверкой полноты полей)
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      responses:
+        "200":
+          description: Заявка отправлена, статус SUBMITTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "422":
+          description: Не заполнены обязательные поля
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+  /api/v1/employee/applications:
+    get:
+      tags: [employee]
+      summary: Очередь заявок для андеррайтера
+      security: [{ bearer: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/ApplicationStatus" }
+      responses:
+        "200":
+          description: Список заявок
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Application" }
+  /api/v1/employee/applications/{id}/decision:
+    post:
+      tags: [employee]
+      summary: Решение по заявке на ручной проверке
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionInput"
+      responses:
+        "200":
+          description: Решение принято
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+  parameters:
+    ApplicationId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    LoginRequest:
+      type: object
+      required: [role, password]
+      properties:
+        role: { type: string, enum: [client, employee] }
+        inn: { type: string, description: Только для клиента }
+        email: { type: string }
+        password: { type: string }
+        otp: { type: string, description: Код 2FA для сотрудника (заглушка) }
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        role: { type: string }
+    Product:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        min_amount: { type: number }
+        max_amount: { type: number }
+        max_term_months: { type: integer }
+        base_rate: { type: number }
+    LoansOverview:
+      type: object
+      properties:
+        loans:
+          type: array
+          items: { type: object }
+        total_debt: { type: number }
+        debt_to_equity:
+          type: number
+          description: Общий долг / собственный капитал; значение больше 2 ухудшает скоринг
+    CalculatorRequest:
+      type: object
+      required: [product_id, amount, term_months]
+      properties:
+        product_id: { type: string }
+        amount: { type: number }
+        term_months: { type: integer }
+    CalculatorResponse:
+      type: object
+      properties:
+        monthly_payment: { type: number }
+        total_payment: { type: number }
+        rate: { type: number }
+    ApplicationInput:
+      type: object
+      properties:
+        inn: { type: string }
+        org_type: { type: string, enum: [IP, OOO] }
+        product_id: { type: string }
+        amount: { type: number }
+        term_months: { type: integer }
+        purpose: { type: string }
+    ApplicationStatus:
+      type: string
+      enum:
+        - DRAFT
+        - SUBMITTED
+        - DATA_CHECK
+        - INFO_REQUESTED
+        - SCORING
+        - MANUAL_REVIEW
+        - APPROVED
+        - COUNTER_OFFER
+        - REJECTED
+        - SIGNING
+        - SIGNED
+        - DISBURSED
+        - ACTIVE
+        - OVERDUE
+        - CLOSED
+    Application:
+      type: object
+      properties:
+        id: { type: string }
+        status: { $ref: "#/components/schemas/ApplicationStatus" }
+        input: { $ref: "#/components/schemas/ApplicationInput" }
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              from: { type: string }
+              to: { type: string }
+              at: { type: string, format: date-time }
+    ValidationError:
+      type: object
+      properties:
+        missing_fields:
+          type: array
+          items: { type: string }
+    DecisionInput:
+      type: object
+      required: [outcome]
+      properties:
+        outcome: { type: string, enum: [APPROVED, COUNTER_OFFER, REJECTED] }
+        amount: { type: number }
+        rate: { type: number }
+        comment: { type: string }

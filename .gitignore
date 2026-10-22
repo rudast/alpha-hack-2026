@@ -1,0 +1,15 @@
+# сборка
+/bin/
+/credit-cabinet
+*.exe
+
+# окружение
+.env
+*.local
+
+# данные
+/data/
+
+# IDE
+.idea/
+.vscode/

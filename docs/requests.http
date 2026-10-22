@@ -1,0 +1,71 @@
+# Коллекция запросов (REST Client для VS Code / HTTP-файлы JetBrains).
+# Заглушка: работает только /healthz, остальное — черновой контракт из openapi.yaml.
+
+@host = http://localhost:8080
+
+### Проверка работоспособности
+GET {{host}}/healthz
+
+### Вход клиента
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "role": "client",
+  "inn": "7700000001",
+  "email": "client@example.test",
+  "password": "demo"
+}
+
+### Вход сотрудника
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "role": "employee",
+  "email": "underwriter@example.test",
+  "password": "demo",
+  "otp": "000000"
+}
+
+### Каталог продуктов
+GET {{host}}/api/v1/products
+
+### Расчёт платежа
+POST {{host}}/api/v1/calculator
+Content-Type: application/json
+
+{ "product_id": "working-capital", "amount": 1000000, "term_months": 12 }
+
+### Кредиты клиента
+GET {{host}}/api/v1/loans
+Authorization: Bearer {{token}}
+
+### Создать черновик заявки
+POST {{host}}/api/v1/applications
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "inn": "7700000001",
+  "org_type": "OOO",
+  "product_id": "working-capital",
+  "amount": 1000000,
+  "term_months": 12,
+  "purpose": "Пополнение оборотных средств"
+}
+
+### Отправить заявку
+POST {{host}}/api/v1/applications/{{applicationId}}/submit
+Authorization: Bearer {{token}}
+
+### Очередь заявок андеррайтера
+GET {{host}}/api/v1/employee/applications?status=MANUAL_REVIEW
+Authorization: Bearer {{token}}
+
+### Решение по заявке
+POST {{host}}/api/v1/employee/applications/{{applicationId}}/decision
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "outcome": "COUNTER_OFFER", "amount": 700000, "rate": 18.5, "comment": "Снижена сумма" }

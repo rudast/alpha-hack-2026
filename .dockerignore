@@ -1,0 +1,6 @@
+.git
+.gitignore
+.env
+docs
+README.md
+*.exe
