@@ -13,6 +13,7 @@ THIRD PARTY NOTICES
   github.com/redis/go-redis/v9 v9.23.0 — BSD 2-Clause — https://github.com/redis/go-redis/blob/master/LICENSE
   golang.org/x/crypto (bcrypt) — BSD 3-Clause — https://go.dev/LICENSE
   golang.org/x/sync (singleflight) — BSD 3-Clause — https://go.dev/LICENSE
+  gopkg.in/yaml.v3 (каталог продуктов) — MIT и Apache-2.0 — https://github.com/go-yaml/yaml/blob/v3/LICENSE
   Остальные записи в go.sum — транзитивные зависимости перечисленных библиотек.
 
 Образы Docker

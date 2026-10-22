@@ -36,7 +36,7 @@ func (r *CompanyRepo) GetByINN(ctx context.Context, inn string) (domain.Company,
 func (r *CompanyRepo) UpdateFinancials(ctx context.Context, inn string, debt, equity int64, fetchedAt time.Time) error {
 	tag, err := r.db.Exec(ctx, `
 		UPDATE companies
-		SET total_debt = $2, equity = $3, debt_to_equity = $4, financials_fetched_at = $5
+		SET total_debt = $2, equity = $3, debt_to_equity = $4, financials_fetched_at = $5, updated_at = now()
 		WHERE inn = $1`,
 		inn, debt, equity, domain.DebtToEquity(debt, equity), fetchedAt,
 	)

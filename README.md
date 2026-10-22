@@ -24,6 +24,7 @@
 | [docs/requests.http](docs/requests.http) | Коллекция запросов |
 | [docs/state-diagram.md](docs/state-diagram.md) | Диаграмма состояний заявки |
 | [docs/data-model.md](docs/data-model.md) | Модель данных |
+| [docs/db-schema-proposal.md](docs/db-schema-proposal.md) | Обоснование решений по схеме БД и открытые вопросы к аналитику |
 | [docs/test-scenarios.md](docs/test-scenarios.md) | Тестовые сценарии |
 
 ## Требования к окружению
@@ -57,7 +58,7 @@ go run ./cmd/worker
 goose -dir migrations postgres "$DATABASE_URL" up
 ```
 
-Откат последней миграции — `down`, состояние — `status`. Установка: `go install github.com/pressly/goose/v3/cmd/goose@latest`.
+В миграциях две записи: `00001_init.sql` создаёт схему целиком, `00002_seed_demo_data.sql` загружает демо-данные. Откат последней миграции — `down`, состояние — `status`. Если база уже создавалась прежними версиями миграций, её нужно пересоздать (`docker compose down -v`), иначе goose сочтёт старые версии применёнными. Установка: `go install github.com/pressly/goose/v3/cmd/goose@latest`.
 
 ## Структура проекта
 
@@ -73,6 +74,7 @@ goose -dir migrations postgres "$DATABASE_URL" up
 | `internal/repository` | Доступ к PostgreSQL (компании, пользователи) и к Redis (сессии, коды 2FA, счётчики попыток) |
 | `internal/domain` | Доменные типы и ошибки |
 | `internal/queue` | Протокол обмена с воркером через Redis |
+| `internal/catalog` | Каталог 14 кредитных продуктов: сроки, правила допуска, группы полей формы, обязательные документы (`products.yaml`) |
 | `internal/worker` | Синтетические данные воркера-мока |
 | `migrations` | SQL-миграции в формате [goose](https://github.com/pressly/goose) (`NNNNN_name.sql`) |
 | `web` | Статика веб-интерфейса |
@@ -105,9 +107,17 @@ goose -dir migrations postgres "$DATABASE_URL" up
 5. Вход сотрудника `underwriter@example.test` возвращает `redirect: /employee`; тот же токен на `/me/bootstrap` даёт 403.
 6. Три неверных пароля подряд блокируют вход на 15 минут (429).
 
+Все реализованные обработчики проверяет скрипт (нужен запущенный стек, ответы сверяются автоматически):
+
+```bash
+bash scripts/smoke.sh
+```
+
+Адрес можно передать аргументом, например `bash scripts/smoke.sh http://localhost:8080`.
+
 ### Тестовые учётные записи
 
-Пароль у всех `demo-password`, код 2FA `000000`. Войти можно по любому из двух логинов. Данные синтетические и создаются миграциями `00003_seed_demo_data.sql` и `00004_user_alternate_logins.sql`.
+Пароль у всех `demo-password`, код 2FA `000000`. Войти можно по любому из двух логинов. Данные синтетические и создаются миграцией `00002_seed_demo_data.sql`; для боевой базы её нужно убрать.
 
 | Роль | Телефон | Почта | Компания | Состояние коэффициента |
 |---|---|---|---|---|
