@@ -1,0 +1,364 @@
+/*
+ * core.css — общие стили в духе Alfa-Bank Core Design System.
+ * Подключайте на каждой странице: <link rel="stylesheet" href="/assets/css/core.css">
+ *
+ * Все цвета, радиусы и тени заданы переменными в :root. Если нужно сверить значения
+ * с настоящим Core DS, достаточно поменять их здесь — остальное подтянется само.
+ */
+
+:root {
+  /* Цвета */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f2f3f5;
+  --color-bg-tertiary: #e7e9eb;
+  --color-text-primary: #0b1f35;
+  --color-text-secondary: #6d7986;
+  --color-text-tertiary: #99a3ad;
+  --color-accent: #ef3124;
+  --color-accent-hover: #d9261a;
+  --color-accent-active: #bf1f14;
+  --color-border: #dbdee1;
+  --color-border-focus: #0b1f35;
+  --color-error-bg: #feeceb;
+  --color-error-border: #f8b4b0;
+  --color-error-text: #d9261a;
+  --color-focus-ring: rgba(11, 31, 53, 0.35);
+
+  /* Радиусы и тени */
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+  --radius-xl: 24px;
+  --shadow-card: 0 12px 40px rgba(11, 31, 53, 0.07), 0 2px 8px rgba(11, 31, 53, 0.04);
+
+  /* Шрифт: системный стек, чтобы страница не зависела от интернета на площадке */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.4;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- Шапка ---------- */
+
+.topbar {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--color-text-primary);
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  background-color: var(--color-accent);
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.brand-caption {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* ---------- Поле ввода (FormControl, filled, size 56) ---------- */
+
+.form-field {
+  margin-bottom: 16px;
+}
+
+.input-control {
+  position: relative;
+  height: 56px;
+  background-color: var(--color-bg-secondary);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-m);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.input-control:hover {
+  background-color: var(--color-bg-tertiary);
+}
+
+.input-control:focus-within {
+  background-color: var(--color-bg-primary);
+  border-color: var(--color-border-focus);
+}
+
+.input-control.input-error {
+  background-color: var(--color-error-bg);
+  border-color: var(--color-error-text);
+}
+
+.input-addon-left {
+  color: var(--color-text-secondary);
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.input-inner {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.input-element {
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 16px;
+  font-weight: 500;
+  padding-top: 16px;
+}
+
+/* Плавающая подпись: поднимается, когда в поле есть текст или фокус */
+.input-label {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+  transition: top 0.15s ease, font-size 0.15s ease, transform 0.15s ease;
+}
+
+.input-element:focus + .input-label,
+.input-element:not(:placeholder-shown) + .input-label {
+  top: 14px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.input-addon-right {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  margin-left: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-s);
+}
+
+.input-addon-right:hover {
+  color: var(--color-text-primary);
+  background-color: rgba(11, 31, 53, 0.05);
+}
+
+/* ---------- Кнопки ---------- */
+
+.btn {
+  width: 100%;
+  height: 56px;
+  border: none;
+  border-radius: var(--radius-m);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background-color 0.15s ease, transform 0.05s ease;
+}
+
+.btn-primary {
+  background-color: var(--color-accent);
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  background-color: var(--color-accent-active);
+  transform: translateY(1px);
+}
+
+.btn-secondary {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-bg-tertiary);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-inline {
+  width: auto;
+  height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.btn-back {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 4px 0;
+  transition: color 0.15s;
+}
+
+.btn-back:hover {
+  color: var(--color-text-primary);
+}
+
+/* ---------- Плашка ошибки (Plate) ---------- */
+
+.error-plate {
+  display: none;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text);
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 20px;
+}
+
+.error-plate.visible {
+  display: flex;
+}
+
+.error-plate svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ---------- Индикатор загрузки ---------- */
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.spinner-dark {
+  border-color: rgba(11, 31, 53, 0.2);
+  border-top-color: var(--color-text-primary);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+  .spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+@media (max-width: 920px) {
+  .topbar {
+    padding: 20px 16px;
+  }
+}
