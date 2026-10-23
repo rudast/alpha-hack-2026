@@ -55,6 +55,7 @@ erDiagram
         jsonb history "список переходов"
         jsonb decision "балл, исход, ставка, причины"
         timestamptz submitted_at
+        timestamptz enqueued_at "последняя отправка задачи воркеру (сборщик)"
         timestamptz created_at
         timestamptz updated_at
     }
@@ -107,6 +108,8 @@ erDiagram
 | Вход, ожидающий код 2FA | Redis | `challenge:<id>`, `challenge_attempts:<id>` | 5 минут |
 | Счётчик неудачных входов | Redis | `login_fail:<роль>:<телефон или почта>` и `login_fail:user:<id>` | 15 минут от первой неудачи |
 | Ключ идемпотентности и ответ на запрос по заявке | Redis | `idempotency:<id пользователя>:<ключ>` | минута, пока запрос выполняется; 24 часа после ответа |
+| Задача воркеру скоринга | Redis stream | `applications:submitted` | обрезается до 10 000 записей |
+| Результат воркера скоринга | Redis stream | `applications:results` (группа `api`) | обрезается не автоматически, подтверждённые записи остаются в журнале |
 | Запрос кредитной истории воркеру | Redis stream | `credit-history:requests` | обрезается до 10 000 записей |
 | Ответ воркера | Redis list | `credit-history:reply:<request_id>` | 1 минута |
 | Запросы банка клиенту (`INFO_REQUEST`) и ответы | Redis | не реализовано | пока заявка в обработке |

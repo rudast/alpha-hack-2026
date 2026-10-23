@@ -610,7 +610,8 @@ components:
               from: { $ref: "#/components/schemas/ApplicationStatus" }
               to: { $ref: "#/components/schemas/ApplicationStatus" }
               at: { type: string, format: date-time }
-              by: { type: string, description: Кто выполнил переход (идентификатор пользователя) }
+              by: { type: string, description: Кто выполнил переход (идентификатор пользователя либо `worker`) }
+              comment: { type: string, description: Пояснение к переходу (необязательное) }
         decision: { type: object, description: Решение по заявке; появится после скоринга }
         submitted_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }

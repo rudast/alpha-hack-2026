@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -43,7 +44,20 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	applications := service.NewApplicationService(repository.NewApplicationRepo(pool), companies, products)
+	applicationRepo := repository.NewApplicationRepo(pool)
+	applications := service.NewApplicationService(applicationRepo, companies, products)
+
+	// Сборщик: раз в минуту повторно отправляет воркеру заявки, которые больше 2 минут остаются в SUBMITTED.
+	sweeper := service.NewApplicationSweeper(applicationRepo, companies, queue.NewApplicationPublisher(rdb), time.Minute, 2*time.Minute)
+	go sweeper.Run(ctx)
+
+	// Приём результатов воркера скоринга: читает applications:results и пишет статусы и решения в Postgres.
+	consumerName, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+	results := service.NewResultProcessor(applicationRepo)
+	go queue.NewResultConsumer(rdb).Serve(ctx, consumerName, results.Process)
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,

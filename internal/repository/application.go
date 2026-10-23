@@ -110,6 +110,81 @@ func (r *ApplicationRepo) Submit(ctx context.Context, id, inn, by string, at tim
 	return r.afterConditionalUpdate(ctx, row, id, inn)
 }
 
+// ApplyResult применяет результат воркера: переводит заявку из res.From в res.To, дописывает переход
+// в history (автор «worker») и, если пришло решение, записывает его в decision.
+//
+// Условие status = res.From делает применение идемпотентным: повторное сообщение ничего не меняет.
+// Если строка не обновилась, различаются три случая: заявки нет (ErrNotFound), результат уже применён,
+// то есть статус уже равен res.To (ErrAlreadyApplied), либо статус другой (ErrStatusMismatch).
+// Метод не проверяет владельца: результаты приходят от воркера, а не от клиента.
+func (r *ApplicationRepo) ApplyResult(ctx context.Context, res domain.ApplicationResult, at time.Time) error {
+	var decision any
+	if len(res.Decision) > 0 {
+		decision = string(res.Decision)
+	}
+	tag, err := r.db.Exec(ctx, `
+		UPDATE applications SET
+			status     = $3,
+			version    = version + 1,
+			updated_at = now(),
+			decision   = COALESCE($4::jsonb, decision),
+			history    = history || jsonb_build_array(
+				jsonb_build_object('from', $2::text, 'to', $3::text, 'at', $5::timestamptz, 'by', $6::text)
+				|| CASE WHEN $7::text = '' THEN '{}'::jsonb ELSE jsonb_build_object('comment', $7::text) END)
+		WHERE id = $1::text::uuid AND status = $2`,
+		res.ApplicationID, string(res.From), string(res.To), decision, at, "worker", res.Comment)
+	if err != nil {
+		return mapNotFound(err)
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+
+	var current string
+	err = r.db.QueryRow(ctx, `SELECT status FROM applications WHERE id = $1::text::uuid`, res.ApplicationID).Scan(&current)
+	if err != nil {
+		return mapNotFound(err)
+	}
+	if domain.Status(current) == res.To {
+		return domain.ErrAlreadyApplied
+	}
+	return domain.ErrStatusMismatch
+}
+
+// ClaimStaleSubmitted находит заявки, которые слишком долго остаются в SUBMITTED, и помечает их
+// (enqueued_at = now()), чтобы следующая проверка не взяла их снова раньше срока.
+//
+// «Слишком долго» считается от последней отправки в очередь, а если её не было, то от submitted_at.
+// FOR UPDATE SKIP LOCKED нужен для нескольких экземпляров API: строку, которую уже взял другой
+// экземпляр, этот пропускает, и одну заявку не отправляют дважды одновременно.
+func (r *ApplicationRepo) ClaimStaleSubmitted(ctx context.Context, olderThan time.Duration, limit int) ([]domain.Application, error) {
+	rows, err := r.db.Query(ctx, `
+		UPDATE applications SET enqueued_at = now()
+		WHERE id IN (
+			SELECT id FROM applications
+			WHERE status = 'SUBMITTED'
+			  AND COALESCE(enqueued_at, submitted_at) < now() - make_interval(secs => $1::double precision)
+			ORDER BY COALESCE(enqueued_at, submitted_at)
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED)
+		RETURNING `+applicationColumns,
+		olderThan.Seconds(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	claimed := make([]domain.Application, 0)
+	for rows.Next() {
+		a, err := scanApplication(rows)
+		if err != nil {
+			return nil, err
+		}
+		claimed = append(claimed, a)
+	}
+	return claimed, rows.Err()
+}
+
 // afterConditionalUpdate различает причины пустого результата условного UPDATE: заявки нет
 // (или она чужая), заявка уже не черновик, либо версия устарела.
 func (r *ApplicationRepo) afterConditionalUpdate(ctx context.Context, row pgx.Row, id, inn string) (domain.Application, error) {
