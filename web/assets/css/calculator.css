@@ -1,0 +1,1047 @@
+/*
+ * calculator.css — стили страницы калькулятора (/): калькулятор кредитов и встроенный вход в кабинет.
+ * Подключается после core.css, переменные (--color-*, --radius-*) берутся оттуда.
+ */
+
+main.entry {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px 24px;
+}
+
+/* ---------- Переключатель разделов в шапке ---------- */
+
+.view-nav {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
+
+.view-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.view-nav a:hover {
+  color: var(--color-text-primary);
+}
+
+.view-nav a[aria-current='page'] {
+  background: var(--color-text-primary);
+  color: #ffffff;
+}
+
+/* ---------- Калькулятор ---------- */
+
+.calc-shell {
+  background: #f8f9fa;
+  border: 1px solid rgba(11, 31, 53, 0.05);
+  border-radius: 24px;
+  padding: 24px;
+}
+
+.calc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.calc-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.calc-counter {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+
+.calc-counter strong {
+  color: var(--color-accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.calc-controls {
+  display: grid;
+  gap: 14px;
+}
+
+fieldset.field-group {
+  border: 0;
+  min-width: 0;
+}
+
+.field-label {
+  display: block;
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* Переключатели-«таблетки» (настоящие radio, поэтому работают с клавиатуры) */
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+}
+
+.chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.chip span {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chip input:not(:checked):hover + span {
+  background: #dcdfe2;
+}
+
+.chip input:checked + span {
+  background: var(--color-text-primary);
+  color: #ffffff;
+}
+
+.chip input:focus-visible + span {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Сумма и срок */
+
+.range-card {
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-l);
+  padding: 12px 16px 10px;
+}
+
+.range-card-label {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.range-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.amount-input {
+  min-width: 40px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.amount-input:hover {
+  border-bottom-color: var(--color-text-tertiary);
+}
+
+.amount-input:focus {
+  border-bottom-color: var(--color-border-focus);
+}
+
+.range {
+  --p: 0;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* --p — доля от 0 до 1; заливка доходит ровно до центра бегунка */
+.range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) calc(11px + (100% - 22px) * var(--p)),
+    #c3c8cd calc(11px + (100% - 22px) * var(--p))
+  );
+}
+
+.range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) calc(11px + (100% - 22px) * var(--p)),
+    #c3c8cd calc(11px + (100% - 22px) * var(--p))
+  );
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 1px 4px rgba(11, 31, 53, 0.35);
+}
+
+.range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 1px 4px rgba(11, 31, 53, 0.35);
+}
+
+.range:focus-visible {
+  outline: none;
+}
+
+.range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.range-scale {
+  position: relative;
+  height: 18px;
+  margin: 4px 11px 0;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.range-scale span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.range-scale span.is-first {
+  transform: translateX(-11px);
+}
+
+.range-scale span.is-last {
+  transform: translateX(calc(-100% + 11px));
+}
+
+.calc-note {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.link-btn {
+  appearance: none;
+  background: none;
+  border: 0;
+  margin-top: 4px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+/* ---------- Подходящие кредиты ---------- */
+
+.calc-results {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.loan-card {
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-l);
+  box-shadow: 0 2px 12px rgba(11, 31, 53, 0.07);
+  padding: 20px;
+}
+
+.loan-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.loan-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tag-best {
+  background: var(--color-error-bg);
+  color: var(--color-accent-hover);
+}
+
+.loan-title {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 6px;
+}
+
+.loan-desc {
+  max-width: 60ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.loan-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-secondary);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loan-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.loan-metrics dt {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 2px;
+}
+
+.loan-metrics dd {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.loan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.btn-md {
+  width: auto;
+  height: 40px;
+  padding: 0 20px;
+  font-size: 14px;
+}
+
+.loan-details {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}
+
+.loan-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px 24px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.loan-facts dt {
+  color: var(--color-text-secondary);
+}
+
+.loan-facts dd {
+  font-weight: 500;
+}
+
+.loan-disclaimer {
+  margin-top: 16px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+}
+
+.calc-empty {
+  background: var(--color-bg-primary);
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-l);
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.calc-empty-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calc-empty h2 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.calc-empty p {
+  max-width: 44ch;
+  margin: 0 auto;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.calc-empty .btn {
+  margin-top: 20px;
+}
+
+/* ---------- Вход в кабинет ---------- */
+
+.auth-layout {
+  display: grid;
+  grid-template-columns: 440px 1fr;
+  gap: 48px;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.auth-card {
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 28px;
+  width: 100%;
+}
+
+.auth-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+  margin-bottom: 24px;
+}
+
+/* Расчёт, который переедет в кабинет */
+.draft-summary {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  background: var(--color-bg-secondary);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-s);
+  transition: opacity 0.15s ease;
+}
+
+.draft-summary.is-skipped {
+  opacity: 0.45;
+}
+
+.draft-summary-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.draft-summary-meta {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+/* Флажки: красный квадрат с галочкой, как в Core DS */
+.check {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.check input {
+  position: absolute;
+  opacity: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  cursor: inherit;
+}
+
+.check-mark {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border: 1.5px solid var(--color-text-tertiary);
+  border-radius: 6px;
+  background: var(--color-bg-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* клики достаются настоящему флажку под ним */
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.check-mark svg {
+  opacity: 0;
+}
+
+.check input:checked + .check-mark {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.check input:checked + .check-mark svg {
+  opacity: 1;
+}
+
+.check input:focus-visible + .check-mark {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.check input:disabled + .check-mark {
+  opacity: 0.55;
+}
+
+.check input:disabled ~ .check-text {
+  color: var(--color-text-secondary);
+}
+
+.check-text {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.check-box {
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-m);
+}
+
+
+
+/* Код подтверждения: 6 отдельных ячеек */
+.otp-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 20px 0 16px;
+}
+
+.otp-input {
+  width: 100%;
+  height: 56px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  background-color: var(--color-bg-secondary);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-m);
+  outline: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.otp-input:hover {
+  background-color: var(--color-bg-tertiary);
+}
+
+.otp-input:focus {
+  background-color: var(--color-bg-primary);
+  border-color: var(--color-border-focus);
+}
+
+.otp-input.input-error {
+  background-color: var(--color-error-bg);
+  border-color: var(--color-error-text);
+}
+
+.otp-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 16px;
+}
+
+.otp-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.btn-submit-wrap {
+  margin-top: 8px;
+}
+
+/* Быстрый вход для демонстрации (включается в login.js) */
+.demo-box {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+
+.demo-box-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  margin-bottom: 10px;
+}
+
+.demo-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.demo-pill {
+  appearance: none;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-s);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.demo-pill:hover {
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-text-tertiary);
+}
+
+/* Правая колонка с описанием */
+.promo-heading {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  margin-bottom: 16px;
+  max-width: 600px;
+}
+
+.promo-lead {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  margin-bottom: 32px;
+  max-width: 560px;
+}
+
+.feature-list {
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+}
+
+.feature-item {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.feature-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feature-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.feature-text {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+/* ---------- Раскладка калькулятора на весь экран ----------
+ * На широком экране (от 1041 px, при любой высоте окна) страница не прокручивается: шапка и панель параметров стоят на месте,
+ * прокручивается только список кредитов справа. На узких экранах (планшет, телефон) всё идёт
+ * обычным потоком — одна колонка и обычная прокрутка страницы. */
+
+.calc-left {
+  min-width: 0;
+}
+
+@media (min-width: 1041px) {
+  body.page-calc {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .page-calc .topbar {
+    padding: 14px 32px;
+  }
+
+  .page-calc .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  main.entry {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #view-calc {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  #view-calc .calc-shell {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #view-calc .calc-head {
+    flex-shrink: 0;
+  }
+
+  #view-calc .calc-grid {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  /* Левая панель: стоит на месте. Если окно совсем низкое, у неё появится своя прокрутка. */
+  #view-calc .calc-left {
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scrollbar-width: thin;
+  }
+
+  #view-calc .calc-left > * {
+    flex-shrink: 0;
+  }
+
+  /* Правая панель: единственное, что прокручивается. Отступы нужны, чтобы тени карточек не обрезались. */
+  #view-calc .calc-results {
+    min-height: 0;
+    overflow-y: auto;
+    align-content: start;
+    padding: 2px 8px 2px 2px;
+    margin: -2px -8px -2px -2px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #c3c8cd transparent;
+  }
+
+  #view-calc .calc-results:focus-visible {
+    outline: none;
+  }
+
+  /* Экран входа, если не помещается, прокручивается сам, а не вся страница */
+  #view-auth {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px 0 8px;
+  }
+}
+
+/* Невысокие окна (ноутбуки): всё чуть компактнее, чтобы левая панель помещалась без прокрутки */
+@media (min-width: 1041px) and (max-height: 820px) {
+  .page-calc .topbar {
+    padding: 10px 32px;
+  }
+
+  main.entry {
+    padding-bottom: 16px;
+  }
+
+  #view-calc .calc-shell {
+    padding: 16px 24px;
+  }
+
+  #view-calc .calc-head {
+    margin-bottom: 12px;
+  }
+
+  #view-calc .calc-title {
+    font-size: 24px;
+  }
+
+  #view-calc .calc-controls,
+  #view-calc .calc-left {
+    gap: 10px;
+  }
+
+  #view-calc .field-label {
+    margin-bottom: 4px;
+  }
+
+  #view-calc .chip span {
+    height: 34px;
+    padding: 0 14px;
+  }
+
+  #view-calc .range-card {
+    padding: 10px 16px 8px;
+  }
+
+  #view-calc .range-value {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+
+  #view-calc .calc-note {
+    padding: 10px 14px;
+  }
+}
+
+/* Совсем низкие окна: подсказку про вход без расчёта прячем, ту же кнопку даёт шапка */
+@media (min-width: 1041px) and (max-height: 680px) {
+  #view-calc .calc-note {
+    display: none;
+  }
+}
+
+/* Очень низкие окна (например, ноутбук с увеличенным масштабом): ещё компактнее. Если и так не помещается,
+   прокручивается только левая панель, а не вся страница. */
+@media (min-width: 1041px) and (max-height: 600px) {
+  .page-calc .brand-caption {
+    display: none;
+  }
+
+  #view-calc .calc-title {
+    font-size: 22px;
+  }
+
+  #view-calc .chip span {
+    height: 30px;
+    font-size: 13px;
+  }
+
+  #view-calc .range-value {
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+
+  #view-calc .range-scale {
+    display: none;
+  }
+
+  #view-calc .loan-metrics {
+    margin: 12px 0;
+  }
+}
+
+/* ---------- Адаптив ---------- */
+
+@media (max-width: 1040px) {
+  .calc-grid {
+    grid-template-columns: 1fr;
+  }
+  .calc-title {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 920px) {
+  main.entry {
+    padding: 8px 16px 40px;
+  }
+  .auth-layout {
+    grid-template-columns: 1fr;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .promo-panel {
+    display: none;
+  }
+  .auth-card {
+    padding: 28px 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .view-nav {
+    width: 100%;
+  }
+  .view-nav a {
+    flex: 1;
+    height: 46px;
+    padding: 0 12px;
+    font-size: 13px;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+  }
+  .calc-shell {
+    padding: 24px 16px;
+    border-radius: 24px;
+  }
+  .calc-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .calc-title {
+    font-size: 28px;
+  }
+  .loan-card {
+    padding: 20px;
+  }
+  .loan-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+  .loan-metrics dd {
+    font-size: 20px;
+  }
+  .loan-actions .btn {
+    width: 100%;
+  }
+  .loan-facts {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .loan-facts dd {
+    margin-bottom: 10px;
+  }
+}
