@@ -1,5 +1,5 @@
 # Коллекция запросов (REST Client для VS Code / HTTP-файлы JetBrains).
-# Работают /healthz, вход и /me/bootstrap, остальное — черновой контракт из openapi.yaml.
+# Работают /healthz, вход, /me/bootstrap и создание/отправка заявки. Остальное — черновой контракт из openapi.yaml.
 # Тестовые учётные записи и пароль описаны в README. Код 2FA-заглушки: 000000.
 
 @host = http://localhost:8080
@@ -60,29 +60,54 @@ GET {{host}}/api/v1/products
 POST {{host}}/api/v1/calculator
 Content-Type: application/json
 
-{ "product_id": "working-capital", "amount": 1000000, "term_months": 12 }
+{ "product_id": "working_capital", "amount": 1000000, "term_months": 12 }
 
 ### Кредиты клиента
 GET {{host}}/api/v1/loans
 Authorization: Bearer {{token}}
 
 ### Создать черновик заявки
+# @name applicationCreate
 POST {{host}}/api/v1/applications
-Authorization: Bearer {{token}}
+Authorization: Bearer {{clientVerify.response.body.token}}
 Content-Type: application/json
 
 {
-  "inn": "7700000001",
-  "org_type": "OOO",
-  "product_id": "working-capital",
+  "product_id": "working_capital",
   "amount": 1000000,
   "term_months": 12,
-  "purpose": "Пополнение оборотных средств"
+  "purpose": "Пополнение оборотных средств",
+  "form": {"applicant": {"position": "Директор", "has_collateral": false}}
 }
 
+### Демо-файл паспорта (содержимое служит только для проверки потока)
+POST {{host}}/api/v1/applications/{{applicationCreate.response.body.id}}/documents
+Authorization: Bearer {{clientVerify.response.body.token}}
+Content-Type: application/json
+
+{"kind":"passport","filename":"passport.txt","media_type":"text/plain","content_base64":"ZGVtby1wYXNzcG9ydA=="}
+
+### Демо-согласие на БКИ (подпись здесь не проверяется)
+POST {{host}}/api/v1/applications/{{applicationCreate.response.body.id}}/documents
+Authorization: Bearer {{clientVerify.response.body.token}}
+Content-Type: application/json
+
+{"kind":"bki_consent","filename":"consent.txt","media_type":"text/plain","content_base64":"ZGVtby1jb25zZW50"}
+
+### Структурированная финансовая отчётность
+POST {{host}}/api/v1/applications/{{applicationCreate.response.body.id}}/documents
+Authorization: Bearer {{clientVerify.response.body.token}}
+Content-Type: application/json
+
+{"kind":"financial_statements","filename":"report.json","media_type":"application/json","content_base64":"eyJwZXJpb2QiOiIyMDI1IiwicmV2ZW51ZSI6MTAwMDAwMCwibmV0X3Byb2ZpdCI6MjAwMDAwLCJlcXVpdHkiOjUwMDAwMCwibGlhYmlsaXRpZXMiOjMwMDAwMH0="}
+
 ### Отправить заявку
-POST {{host}}/api/v1/applications/{{applicationId}}/submit
-Authorization: Bearer {{token}}
+POST {{host}}/api/v1/applications/{{applicationCreate.response.body.id}}/submit
+Authorization: Bearer {{clientVerify.response.body.token}}
+
+### Получить статусы и результаты заданий
+GET {{host}}/api/v1/applications/{{applicationCreate.response.body.id}}
+Authorization: Bearer {{clientVerify.response.body.token}}
 
 ### Очередь заявок андеррайтера
 GET {{host}}/api/v1/employee/applications?status=MANUAL_REVIEW

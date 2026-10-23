@@ -1,8 +1,8 @@
 # Модель данных
 
-В PostgreSQL три таблицы: компании, пользователи и заявки. Всё, что принадлежит заявке (история статусов, документы, решение, данные формы), хранится в ней самой, без отдельных таблиц. Каталог продуктов лежит в приложении ([internal/catalog/products.yaml](../internal/catalog/products.yaml)). Временные данные и обмен с воркером живут в Redis.
+В PostgreSQL хранятся компании, пользователи, заявки, файлы заявки (`application_documents`) и задания воркера (`worker_jobs`). Метаданные формы, история и решение находятся в `applications`; байты файлов и извлечённые поля — в `application_documents`. Каталог продуктов лежит в приложении ([internal/catalog/products.yaml](../internal/catalog/products.yaml)). Обмен с воркером живёт в Redis.
 
-Схема целиком создаётся миграцией [`00001_init.sql`](../migrations/00001_init.sql), демо-данные загружает [`00002_seed_demo_data.sql`](../migrations/00002_seed_demo_data.sql). Решения, принятые при проектировании, перечислены в [db-schema-proposal.md](db-schema-proposal.md).
+Базовую схему создаёт [`00001_init.sql`](../migrations/00001_init.sql), демо-данные загружает [`00002_seed_demo_data.sql`](../migrations/00002_seed_demo_data.sql), файлы и задания добавляет [`00003_application_work.sql`](../migrations/00003_application_work.sql).
 
 ```mermaid
 erDiagram
@@ -65,7 +65,9 @@ erDiagram
 |---|---|
 | `companies` | Организация клиента, данные из реестров (`registry`), БКИ (`credit_history`) и показатели долговой нагрузки |
 | `users` | Клиенты и сотрудники банка; войти можно и по телефону, и по почте; отключённые (`is_active = false`) войти не могут |
-| `applications` | Заявка с данными формы (`form`), историей статусов (`history`), списком документов (`documents`) и решением (`decision`) |
+| `applications` | Заявка с данными формы (`form`), историей статусов (`history`) и решением (`decision`); поле `documents` осталось от ранней схемы и сейчас не используется для файлов |
+| `application_documents` | Вид файла, содержимое `bytea`, статус (`UPLOADED`, `PARSED`, `TEXT_EXTRACTED`, `UNSUPPORTED`, `FAILED`) и извлечённые поля с источником и периодом |
+| `worker_jobs` | Задания, сохранённые до отправки в Redis, и их результаты |
 
 ### Ограничения
 - ИНН: 10 цифр у ООО, 12 цифр у ИП (`companies_inn_format_check`).
@@ -109,7 +111,8 @@ erDiagram
 | Быстрые задания | Redis stream | `worker:fast` | до явной очистки |
 | Длительные задания | Redis stream | `worker:slow` | до явной очистки |
 | Синхронный ответ воркера | Redis list | `worker:reply:<id>` | 1 минута |
+| Результаты заданий заявки | Redis stream | `applications:results` | до явной очистки |
 | Запросы банка клиенту (`INFO_REQUEST`) и ответы | Redis | не реализовано | пока заявка в обработке |
-| Содержимое документов | не реализовано | см. [db-schema-proposal.md](db-schema-proposal.md) | в заявке остаются вид и имя файла |
+| Содержимое документов | PostgreSQL | `application_documents.content` | до удаления документа или заявки |
 | Каталог продуктов | [internal/catalog/products.yaml](../internal/catalog/products.yaml) | — | статичный список, встроен в бинарник |
 | Кредит после выдачи | отдельной сущности нет | — | выданная заявка (`DISBURSED`, `ACTIVE`) показывается в кабинете как кредит |
