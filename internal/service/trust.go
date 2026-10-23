@@ -40,8 +40,9 @@ func NewTrustService(c CompanyRepository, h CreditHistoryProvider, ttl, timeout 
 // EnsureTrustRatio возвращает компанию с актуальным коэффициентом. Если данных нет
 // или они старше ttl, запрашивает кредитную историю у воркера и ждёт ответа не дольше timeout.
 //
-// Если данных ещё не было и воркер не ответил, возвращает domain.ErrUpstreamTimeout.
-// Если данные есть, но устарели, а воркер недоступен, возвращает прежние значения.
+// Воркер считается недоступным, если он не ответил вовремя (domain.ErrUpstreamTimeout)
+// или ответил ошибкой (domain.ErrUpstreamFailed). Если данных ещё не было, эта ошибка
+// возвращается вызывающему. Если данные есть, но устарели, возвращаются прежние значения.
 func (s *TrustService) EnsureTrustRatio(ctx context.Context, inn string) (domain.Company, error) {
 	company, err := s.companies.GetByINN(ctx, inn)
 	if err != nil {
@@ -64,11 +65,15 @@ func (s *TrustService) EnsureTrustRatio(ctx context.Context, inn string) (domain
 		return nil, s.companies.UpdateFinancials(fetchCtx, inn, h.Debt, h.Equity, s.now())
 	})
 	if err != nil {
-		if company.FetchedAt != nil && errors.Is(err, domain.ErrUpstreamTimeout) {
-			log.Printf("trust ratio for %s is stale, worker did not answer: %v", inn, err)
+		if company.FetchedAt != nil && isUpstreamUnavailable(err) {
+			log.Printf("trust ratio for %s is stale, using previous values: %v", inn, err)
 			return company, nil
 		}
 		return domain.Company{}, err
 	}
 	return s.companies.GetByINN(ctx, inn)
+}
+
+func isUpstreamUnavailable(err error) bool {
+	return errors.Is(err, domain.ErrUpstreamTimeout) || errors.Is(err, domain.ErrUpstreamFailed)
 }

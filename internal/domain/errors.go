@@ -10,4 +10,5 @@ var (
 	ErrInvalidCode        = errors.New("invalid code")
 	ErrUnauthorized       = errors.New("unauthorized")
 	ErrUpstreamTimeout    = errors.New("credit history service did not answer in time")
+	ErrUpstreamFailed     = errors.New("credit history service returned an error")
 )

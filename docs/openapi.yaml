@@ -54,14 +54,28 @@ paths:
                 $ref: "#/components/schemas/LoginResponse"
         "400":
           description: Некорректное тело запроса
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401":
           description: Неверные учётные данные
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "429":
           description: Слишком много неудачных попыток
           headers:
             Retry-After:
               schema: { type: integer }
               description: Секунд до снятия блокировки
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: Внутренняя ошибка (например, недоступны база или Redis)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/auth/verify:
     post:
       tags: [auth]
@@ -83,8 +97,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VerifyResponse"
+        "400":
+          description: Некорректное тело запроса
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401":
-          description: Неверный код либо вызов не найден или истёк
+          description: Неверный код либо вызов не найден, истёк или уже использован
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: Внутренняя ошибка (например, недоступен Redis)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/me/bootstrap:
     post:
       tags: [client]
@@ -92,8 +119,8 @@ paths:
       description: >
         Вызывается клиентом после входа. Если коэффициент долговой нагрузки ни разу не считался
         или старше 12 часов, запрашивает кредитную историю у воркера и ждёт ответа не дольше
-        `WORKER_TIMEOUT` (по умолчанию 8 секунд). Если данные устарели, а воркер не ответил,
-        возвращаются прежние значения. Если данных не было вовсе, ответ 503.
+        `WORKER_TIMEOUT` (по умолчанию 8 секунд). Если данные устарели, а воркер не ответил
+        или вернул ошибку, возвращаются прежние значения. Если данных не было вовсе, ответ 503.
         Сценарий реализован отдельным методом сервиса, его можно вызывать и из других мест.
       security: [{ bearer: [] }]
       responses:
@@ -104,16 +131,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/Bootstrap"
         "401":
-          description: Нет сессии
+          description: Нет сессии (токен отсутствует, неверный или истёк)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "404":
           description: Компания клиента не найдена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: Внутренняя ошибка (например, недоступна база или Redis)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "503":
-          description: Воркер не ответил вовремя, повторите запрос
+          description: Воркер не ответил вовремя или вернул ошибку, а данных о компании ещё не было; повторите запрос
           headers:
             Retry-After:
               schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/products:
     get:
       tags: [client]
@@ -257,7 +301,7 @@ components:
     LoginRequest:
       type: object
       required: [role, login, password]
-      description: ИНН при входе не вводится: сервер берёт его из компании, привязанной к клиенту.
+      description: "ИНН при входе не вводится: сервер берёт его из компании, привязанной к клиенту."
       properties:
         role: { type: string, enum: [client, employee] }
         login:
@@ -283,7 +327,18 @@ components:
         role: { type: string, enum: [client, employee] }
         redirect:
           type: string
-          example: /personalAccount
+          enum: [/personalAccount, /employee]
+          description: Куда перейти после входа; выбирается сервером по роли
+    Error:
+      type: object
+      required: [error]
+      description: >
+        Тело любого ответа с ошибкой. Ориентироваться нужно на HTTP-код, текст в `error`
+        предназначен для показа и логов и может меняться.
+      properties:
+        error:
+          type: string
+          example: invalid credentials
     Bootstrap:
       type: object
       properties:

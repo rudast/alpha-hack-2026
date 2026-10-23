@@ -28,6 +28,11 @@ const (
 	defaultWait     = 10 * time.Second
 	requestMaxLen   = 10000
 	workerBlockTime = 5 * time.Second
+
+	// Сообщение, висящее без подтверждения дольше reclaimMinIdle, считается брошенным;
+	// проверка выполняется не чаще раза в reclaimEvery.
+	reclaimMinIdle = 30 * time.Second
+	reclaimEvery   = 10 * time.Second
 )
 
 // History — кредитная история в виде двух показателей по всем банкам.
@@ -52,6 +57,8 @@ func NewClient(rdb *redis.Client) *Client {
 
 // FetchHistory отправляет ИНН воркеру и ждёт ответ до дедлайна ctx.
 // Если воркер не ответил вовремя, возвращает domain.ErrUpstreamTimeout.
+// Если воркер ответил ошибкой или некорректным JSON, возвращает domain.ErrUpstreamFailed
+// (с подробностями в тексте ошибки).
 func (c *Client) FetchHistory(ctx context.Context, inn string) (History, error) {
 	wait := defaultWait
 	if dl, ok := ctx.Deadline(); ok {
@@ -79,10 +86,10 @@ func (c *Client) FetchHistory(ctx context.Context, inn string) (History, error) 
 
 	var r reply
 	if err := json.Unmarshal([]byte(res[1]), &r); err != nil {
-		return History{}, fmt.Errorf("decode worker reply: %w", err)
+		return History{}, fmt.Errorf("%w: decode reply: %v", domain.ErrUpstreamFailed, err)
 	}
 	if r.Error != "" {
-		return History{}, fmt.Errorf("worker: %s", r.Error)
+		return History{}, fmt.Errorf("%w: %s", domain.ErrUpstreamFailed, r.Error)
 	}
 	return r.History, nil
 }
@@ -98,14 +105,27 @@ func mapTimeout(err error) error {
 type Handler func(ctx context.Context, inn string) (History, error)
 
 // Serve читает запросы из stream через consumer group и отвечает на них.
-// Сообщение подтверждается (XACK) только после отправки ответа.
+// Сообщение подтверждается (XACK) только после отправки ответа. Сообщения, которые
+// кто-то прочитал, но так и не подтвердил (например, воркер упал), периодически
+// забираются обратно и обрабатываются заново, см. reclaim.
 func Serve(ctx context.Context, rdb *redis.Client, consumer string, handle Handler) error {
 	err := rdb.XGroupCreateMkStream(ctx, requestStream, consumerGroup, "0").Err()
 	if err != nil && !isBusyGroup(err) {
 		return err
 	}
 
+	var lastReclaim time.Time
 	for {
+		if time.Since(lastReclaim) >= reclaimEvery {
+			lastReclaim = time.Now()
+			if err := reclaim(ctx, rdb, consumer, handle); err != nil {
+				return err
+			}
+		}
+		if ctx.Err() != nil {
+			return nil
+		}
+
 		streams, err := rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
 			Group:    consumerGroup,
 			Consumer: consumer,
@@ -130,6 +150,38 @@ func Serve(ctx context.Context, rdb *redis.Client, consumer string, handle Handl
 				}
 			}
 		}
+	}
+}
+
+// reclaim забирает у любого потребителя группы сообщения, которые висят без подтверждения
+// дольше reclaimMinIdle (XAUTOCLAIM), и обрабатывает их. Клиент к этому моменту давно получил
+// таймаут, поэтому ответ нужен лишь затем, чтобы сообщение не оставалось «зависшим» навсегда.
+func reclaim(ctx context.Context, rdb *redis.Client, consumer string, handle Handler) error {
+	start := "0-0"
+	for {
+		msgs, next, err := rdb.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+			Stream:   requestStream,
+			Group:    consumerGroup,
+			Consumer: consumer,
+			MinIdle:  reclaimMinIdle,
+			Start:    start,
+			Count:    10,
+		}).Result()
+		if ctx.Err() != nil {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		for _, msg := range msgs {
+			if err := answer(ctx, rdb, msg, handle); err != nil {
+				return err
+			}
+		}
+		if next == "" || next == "0-0" {
+			return nil
+		}
+		start = next
 	}
 }
 

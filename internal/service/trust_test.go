@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -113,6 +114,32 @@ func TestEnsureTrustRatio_WorkerTimeout(t *testing.T) {
 		c, err := s.EnsureTrustRatio(context.Background(), "1")
 		if err != nil || *c.TotalDebt != 100 {
 			t.Fatalf("got %v, %v", c.TotalDebt, err)
+		}
+	})
+}
+
+func TestEnsureTrustRatio_WorkerError(t *testing.T) {
+	failed := &fakeHistory{err: fmt.Errorf("%w: unknown inn", domain.ErrUpstreamFailed)}
+
+	t.Run("no previous data fails with the worker error", func(t *testing.T) {
+		s, repo := newTrust(domain.Company{INN: "1"}, failed)
+		if _, err := s.EnsureTrustRatio(context.Background(), "1"); !errors.Is(err, domain.ErrUpstreamFailed) {
+			t.Fatalf("got %v, want ErrUpstreamFailed", err)
+		}
+		if repo.updates != 0 {
+			t.Fatalf("nothing must be written, got %d updates", repo.updates)
+		}
+	})
+
+	t.Run("stale data is used as is", func(t *testing.T) {
+		debt := int64(100)
+		s, repo := newTrust(domain.Company{INN: "1", TotalDebt: &debt, FetchedAt: ago(48 * time.Hour)}, failed)
+		c, err := s.EnsureTrustRatio(context.Background(), "1")
+		if err != nil || *c.TotalDebt != 100 {
+			t.Fatalf("got %v, %v", c.TotalDebt, err)
+		}
+		if repo.updates != 0 {
+			t.Fatalf("nothing must be written, got %d updates", repo.updates)
 		}
 	})
 }

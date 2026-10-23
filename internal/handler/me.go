@@ -41,7 +41,8 @@ func (h *MeHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		writeError(w, http.StatusNotFound, "company not found")
-	case errors.Is(err, domain.ErrUpstreamTimeout):
+	case errors.Is(err, domain.ErrUpstreamTimeout), errors.Is(err, domain.ErrUpstreamFailed):
+		log.Printf("bootstrap: credit history unavailable: %v", err)
 		w.Header().Set("Retry-After", "5")
 		writeError(w, http.StatusServiceUnavailable, "credit history is not available yet, try again")
 	case err != nil:
