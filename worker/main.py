@@ -23,9 +23,11 @@ ROUTER_GROUP = "worker-router"
 FAST_GROUP = "worker-fast"
 SLOW_GROUP = "worker-slow"
 REPLY_PREFIX = "worker:reply:"
+RESULT_STREAM = "applications:results"
 REPLY_TTL_SECONDS = 60
 FAST_WORKERS = 8
 SLOW_WORKERS = 2
+PENDING_IDLE_MS = 15 * 60 * 1000
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -58,6 +60,8 @@ class Worker:
             raise ValueError("task kind is required")
         if not isinstance(task.get("payload"), dict):
             raise ValueError("task payload must be an object")
+        if "persist" in task and not isinstance(task["persist"], bool):
+            raise ValueError("task persist must be a boolean")
         return task
 
     def _reply(self, stream: str, group: str, message_id: str, task_id: str | None,
@@ -71,11 +75,41 @@ class Worker:
         pipe.xack(stream, group, message_id)
         pipe.execute()
 
+    def _application_result(self, stream: str, group: str, message_id: str,
+                            task: dict[str, Any], result: dict[str, Any] | None,
+                            error: str | None) -> None:
+        payload = task["payload"]
+        event = {
+            "event_id": task["id"], "job_id": task["id"],
+            "application_id": payload["application_id"],
+            "from": "SUBMITTED", "to": "DATA_CHECK",
+            "kind": task["kind"], "result": result, "error": error,
+            "comment": error or f"{task['kind']} completed",
+        }
+        if task["kind"] == "verify_application" and result:
+            event["decision"] = {
+                "debt_to_equity": result.get("debt_to_equity"),
+                "risk_flags": result.get("risk_flags", []),
+                "manual_review_required": result.get("manual_review_required", False),
+            }
+            if result.get("next_status") == "INFO_REQUESTED":
+                event["info_request"] = {"missing_fields": result.get("missing_fields", [])}
+        pipe = self.redis.pipeline(transaction=True)
+        pipe.xadd(RESULT_STREAM, {"event": json.dumps(event, ensure_ascii=False)})
+        pipe.xack(stream, group, message_id)
+        pipe.execute()
+
     def _route_loop(self) -> None:
         while not self.stop.is_set():
             batches = self.redis.xreadgroup(
                 ROUTER_GROUP, self.consumer + "-router", {REQUEST_STREAM: ">"}, count=10, block=1000
             )
+            if not batches:
+                _, pending, _ = self.redis.xautoclaim(
+                    REQUEST_STREAM, ROUTER_GROUP, self.consumer + "-router",
+                    min_idle_time=PENDING_IDLE_MS, start_id="0-0", count=10,
+                )
+                batches = [(REQUEST_STREAM, pending)]
             for _, messages in batches:
                 for message_id, fields in messages:
                     try:
@@ -100,20 +134,33 @@ class Worker:
     def _service_loop(self, stream: str, group: str, consumer: str) -> None:
         while not self.stop.is_set():
             batches = self.redis.xreadgroup(group, consumer, {stream: ">"}, count=1, block=1000)
+            if not batches:
+                _, pending, _ = self.redis.xautoclaim(
+                    stream, group, consumer, min_idle_time=PENDING_IDLE_MS, start_id="0-0", count=1,
+                )
+                batches = [(stream, pending)]
             for _, messages in batches:
                 for message_id, fields in messages:
                     task_id = None
+                    task = None
                     try:
                         task = self._decode(fields)
                         task_id = task["id"]
                         expected = FAST_STREAM if lane_for(task["kind"]) == "fast" else SLOW_STREAM
                         if stream != expected:
                             raise ValueError("task was routed to the wrong lane")
-                        result = dispatch(task["kind"], task["payload"])
-                        self._reply(stream, group, message_id, task_id, data=result)
+                        payload = task["payload"]
+                        result = dispatch(task["kind"], payload)
+                        if task.get("persist"):
+                            self._application_result(stream, group, message_id, task, result, None)
+                        else:
+                            self._reply(stream, group, message_id, task_id, data=result)
                     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                         log.warning("task %s failed validation: %s", message_id, exc)
-                        self._reply(stream, group, message_id, task_id, error=str(exc))
+                        if task_id and isinstance(task, dict) and task.get("persist") and isinstance(task.get("payload", {}).get("application_id"), str):
+                            self._application_result(stream, group, message_id, task, None, str(exc))
+                        else:
+                            self._reply(stream, group, message_id, task_id, error=str(exc))
 
     def run(self) -> None:
         self.redis.ping()

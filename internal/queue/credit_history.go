@@ -30,6 +30,7 @@ type Task struct {
 	ID      string          `json:"id"`
 	Kind    string          `json:"kind"`
 	Payload json.RawMessage `json:"payload"`
+	Persist bool            `json:"persist,omitempty"`
 }
 
 type reply struct {
@@ -72,6 +73,16 @@ func (c *Client) Submit(ctx context.Context, kind string, payload any) (string, 
 		return "", mapTimeout(err)
 	}
 	return id, nil
+}
+
+// PublishStored publishes a job already committed to PostgreSQL. Repeating this
+// call is safe because the worker writes results by the same job ID.
+func (c *Client) PublishStored(ctx context.Context, id, kind string, payload json.RawMessage) error {
+	envelope, err := json.Marshal(Task{ID: id, Kind: kind, Payload: payload, Persist: true})
+	if err != nil {
+		return err
+	}
+	return c.rdb.XAdd(ctx, &redis.XAddArgs{Stream: requestStream, Values: map[string]any{"task": string(envelope)}}).Err()
 }
 
 // Await consumes one short-lived response. Use this only for fast tasks.

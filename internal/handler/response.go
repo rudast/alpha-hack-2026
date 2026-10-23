@@ -18,7 +18,11 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, dst any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	return decodeWithLimit(w, r, dst, maxBodyBytes)
+}
+
+func decodeWithLimit(w http.ResponseWriter, r *http.Request, dst any, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return false
