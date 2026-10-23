@@ -41,6 +41,7 @@ erDiagram
     }
     APPLICATION {
         uuid id PK
+        int version "растёт при каждом изменении, защита от перезаписи"
         string company_inn FK
         uuid created_by FK
         uuid assigned_to FK
@@ -105,6 +106,7 @@ erDiagram
 | Сессия пользователя | Redis | `session:<token>` | 8 часов |
 | Вход, ожидающий код 2FA | Redis | `challenge:<id>`, `challenge_attempts:<id>` | 5 минут |
 | Счётчик неудачных входов | Redis | `login_fail:<роль>:<телефон или почта>` и `login_fail:user:<id>` | 15 минут от первой неудачи |
+| Ключ идемпотентности и ответ на запрос по заявке | Redis | `idempotency:<id пользователя>:<ключ>` | минута, пока запрос выполняется; 24 часа после ответа |
 | Запрос кредитной истории воркеру | Redis stream | `credit-history:requests` | обрезается до 10 000 записей |
 | Ответ воркера | Redis list | `credit-history:reply:<request_id>` | 1 минута |
 | Запросы банка клиенту (`INFO_REQUEST`) и ответы | Redis | не реализовано | пока заявка в обработке |

@@ -51,6 +51,7 @@ CREATE UNIQUE INDEX users_email_lower_idx ON users (lower(email));
 
 CREATE TABLE applications (
     id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    version      integer NOT NULL DEFAULT 1, -- растёт при каждом изменении; PATCH принимает только актуальную версию (защита от перезаписи)
     company_inn  text NOT NULL REFERENCES companies (inn),
     created_by   uuid REFERENCES users (id),
     assigned_to  uuid REFERENCES users (id), -- сотрудник, ведущий заявку на ручной проверке

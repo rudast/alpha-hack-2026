@@ -1,5 +1,5 @@
 # Коллекция запросов (REST Client для VS Code / HTTP-файлы JetBrains).
-# Работают /healthz, вход и /me/bootstrap, остальное — черновой контракт из openapi.yaml.
+# Работают /healthz, вход, /me/bootstrap и заявки клиента, остальное — черновой контракт из openapi.yaml.
 # Тестовые учётные записи и пароль описаны в README. Код 2FA-заглушки: 000000.
 
 @host = http://localhost:8080
@@ -31,6 +31,44 @@ Content-Type: application/json
 ### Обновить показатели долговой нагрузки после входа
 POST {{host}}/api/v1/me/bootstrap
 Authorization: Bearer {{clientVerify.response.body.token}}
+
+### Создать черновик заявки (первое сохранение формы)
+# Idempotency-Key обязателен для POST и PATCH по заявкам. Здесь {{$guid}} — новый ключ на каждую отправку;
+# чтобы проверить повтор, подставьте один и тот же ключ вручную в два запроса.
+# @name createApplication
+POST {{host}}/api/v1/applications
+Authorization: Bearer {{clientVerify.response.body.token}}
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+
+{ "product_id": "express" }
+
+### Сохранить изменения черновика (version — из ответа; form заменяется целиком)
+PATCH {{host}}/api/v1/applications/{{createApplication.response.body.id}}
+Authorization: Bearer {{clientVerify.response.body.token}}
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+
+{
+  "version": {{createApplication.response.body.version}},
+  "amount": 500000,
+  "term_months": 6,
+  "purpose": "Пополнение оборотных средств",
+  "form": { "applicant": { "position": "Директор", "has_collateral": false } }
+}
+
+### Список заявок компании
+GET {{host}}/api/v1/applications
+Authorization: Bearer {{clientVerify.response.body.token}}
+
+### Просмотр заявки (только владелец, чужая даёт 404)
+GET {{host}}/api/v1/applications/{{createApplication.response.body.id}}
+Authorization: Bearer {{clientVerify.response.body.token}}
+
+### Отправить заявку (черновик становится SUBMITTED)
+POST {{host}}/api/v1/applications/{{createApplication.response.body.id}}/submit
+Authorization: Bearer {{clientVerify.response.body.token}}
+Idempotency-Key: {{$guid}}
 
 ### Вход сотрудника, шаг 1: пароль
 # @name employeeLogin
@@ -64,24 +102,6 @@ Content-Type: application/json
 
 ### Кредиты клиента
 GET {{host}}/api/v1/loans
-Authorization: Bearer {{token}}
-
-### Создать черновик заявки
-POST {{host}}/api/v1/applications
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{
-  "inn": "7700000001",
-  "org_type": "OOO",
-  "product_id": "working-capital",
-  "amount": 1000000,
-  "term_months": 12,
-  "purpose": "Пополнение оборотных средств"
-}
-
-### Отправить заявку
-POST {{host}}/api/v1/applications/{{applicationId}}/submit
 Authorization: Bearer {{token}}
 
 ### Очередь заявок андеррайтера

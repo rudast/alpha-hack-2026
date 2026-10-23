@@ -11,10 +11,12 @@ import (
 )
 
 type Deps struct {
-	WebDir   string
-	Sessions middleware.SessionReader
-	Auth     *AuthHandler
-	Me       *MeHandler
+	WebDir       string
+	Sessions     middleware.SessionReader
+	Auth         *AuthHandler
+	Me           *MeHandler
+	Applications *ApplicationHandler
+	Idempotency  middleware.IdempotencyStore
 }
 
 func New(d Deps) http.Handler {
@@ -32,6 +34,16 @@ func New(d Deps) http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(domain.RoleClient))
 				r.Post("/me/bootstrap", d.Me.Bootstrap)
+
+				// Изменяющие запросы по заявкам идемпотентны: нужен заголовок Idempotency-Key.
+				idempotent := middleware.Idempotency(d.Idempotency)
+				r.Route("/applications", func(r chi.Router) {
+					r.With(idempotent).Post("/", d.Applications.Create)
+					r.Get("/", d.Applications.List)
+					r.Get("/{id}", d.Applications.Get)
+					r.With(idempotent).Patch("/{id}", d.Applications.Update)
+					r.With(idempotent).Post("/{id}/submit", d.Applications.Submit)
+				})
 			})
 		})
 	})

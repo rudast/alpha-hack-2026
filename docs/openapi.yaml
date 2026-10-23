@@ -3,9 +3,9 @@ info:
   title: Умный кредитный кабинет — API
   version: 0.1.0
   description: >
-    Реализованы `/healthz`, `/api/v1/auth/login`, `/api/v1/auth/verify` и
-    `/api/v1/me/bootstrap`. Остальные методы — черновой контракт, он будет меняться
-    по ходу разработки.
+    Реализованы `/healthz`, `/api/v1/auth/login`, `/api/v1/auth/verify`, `/api/v1/me/bootstrap`
+    и методы заявок клиента (`/api/v1/applications`). Остальные методы — черновой контракт,
+    он будет меняться по ходу разработки.
 servers:
   - url: http://localhost:8080
 tags:
@@ -202,14 +202,20 @@ paths:
   /api/v1/applications:
     post:
       tags: [client]
-      summary: Создать черновик заявки
+      summary: Создать черновик заявки (первое сохранение формы)
+      description: >
+        Черновик создаётся при первом сохранении, а не при открытии формы, поэтому все поля
+        необязательны. Компания и автор берутся из сессии. Брошенные черновики будут удаляться
+        через 30 дней (пока не реализовано). Запрос идемпотентен: нужен заголовок `Idempotency-Key`.
       security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ApplicationInput"
+              $ref: "#/components/schemas/DraftInput"
       responses:
         "201":
           description: Черновик создан
@@ -217,10 +223,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Application"
+        "400":
+          description: Неизвестный продукт, отрицательное число или некорректное тело
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    get:
+      tags: [client]
+      summary: Список заявок компании
+      description: Заявки текущей компании от новых к старым. Статус берётся из базы.
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: Список заявок (может быть пустым)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ApplicationSummary" }
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/applications/{id}:
     get:
       tags: [client]
       summary: Заявка с историей статусов
+      description: >
+        Заявка возвращается только владельцу: ИНН берётся из сессии и входит в сам запрос к базе.
+        Чужая и несуществующая заявки неразличимы, в обоих случаях 404.
       security: [{ bearer: [] }]
       parameters:
         - $ref: "#/components/parameters/ApplicationId"
@@ -231,15 +278,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Application"
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "404":
-          description: Заявка не найдена
-  /api/v1/applications/{id}/submit:
-    post:
+          description: Заявка не найдена (или принадлежит другой компании)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    patch:
       tags: [client]
-      summary: Отправить заявку (с проверкой полноты полей)
+      summary: Сохранить изменения черновика
+      description: >
+        Автосохранение. Меняются только переданные поля; `form`, если передана, заменяет форму
+        целиком (передавайте текущую форму полностью). Менять можно только черновик.
+
+        Защита от перезаписи: в теле обязательно передаётся `version` — версия заявки, которую
+        клиент видел последней. Если заявка с тех пор менялась (другая вкладка, другой запрос),
+        ответ 409 и ничего не сохраняется; нужно перечитать заявку и повторить. Каждое успешное
+        изменение увеличивает версию на 1.
+
+        Запрос идемпотентен: нужен заголовок `Idempotency-Key`. Повтор с тем же ключом
+        (например, после обрыва связи) вернёт прежний ответ, а не ошибку устаревшей версии.
       security: [{ bearer: [] }]
       parameters:
         - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DraftInput"
+      responses:
+        "200":
+          description: Обновлённый черновик
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "400":
+          description: Неизвестный продукт, отрицательное число или некорректное тело
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Заявка не найдена (или принадлежит другой компании)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            Заявка уже отправлена, менять нельзя; либо `version` устарела (заявка изменена другим
+            запросом, перечитайте её); либо запрос с этим `Idempotency-Key` ещё выполняется
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/applications/{id}/submit:
+    post:
+      tags: [client]
+      summary: Отправить заявку
+      description: >
+        Проверяет, что заполнены продукт, сумма, срок, цель и обязательные поля формы продукта
+        (по каталогу), и что продукт доступен компании по типу организации, сумме и сроку.
+        Затем переводит заявку из DRAFT в SUBMITTED. Повторная отправка даёт 409.
+        Проверка обязательных документов появится вместе с их загрузкой.
+        Отправка задачи воркеру скоринга появится на следующем этапе.
+        Запрос идемпотентен: нужен заголовок `Idempotency-Key`; повтор с тем же ключом вернёт
+        прежний ответ.
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Заявка отправлена, статус SUBMITTED
@@ -247,12 +374,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Application"
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Заявка не найдена (или принадлежит другой компании)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Заявка уже отправлена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Не заполнены обязательные поля
+          description: >
+            Не заполнены обязательные поля (тело `{"missing_fields": [...]}`, поля формы
+            в виде `группа.поле`) либо продукт недоступен компании или параметрам (тело `{"error": "..."}`)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ValidationError"
+                oneOf:
+                  - { $ref: "#/components/schemas/ValidationError" }
+                  - { $ref: "#/components/schemas/Error" }
   /api/v1/employee/applications:
     get:
       tags: [employee]
@@ -297,6 +448,22 @@ components:
       in: path
       required: true
       schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+      description: >
+        Уникальный ключ операции, который клиент создаёт сам (например, UUID) и держит, пока не
+        получит ответ. Делает изменяющий запрос безопасным для повтора: первый запрос выполняется,
+        повтор с тем же ключом и тем же содержимым возвращает тот же самый ответ (с заголовком
+        `Idempotent-Replayed: true`), не выполняя действие второй раз. Ответ хранится 24 часа.
+        Ключи разных пользователей не пересекаются. Ответы сервера с ошибкой 5xx не запоминаются,
+        повтор выполнится заново.
+
+        Ошибки: ключ не передан или не подходит по длине (8–128 печатных символов без пробелов) — 400;
+        ключ уже использован для другого запроса — 422; запрос с этим ключом ещё выполняется — 409.
+        Для нового действия нужен новый ключ.
   schemas:
     LoginRequest:
       type: object
@@ -382,15 +549,28 @@ components:
         monthly_payment: { type: number }
         total_payment: { type: number }
         rate: { type: number }
-    ApplicationInput:
+    DraftInput:
       type: object
+      description: >
+        Все поля необязательны; непереданные поля не меняются. Исключение: при изменении черновика
+        (`PATCH`) обязательна `version`; при создании она игнорируется.
       properties:
-        inn: { type: string }
-        org_type: { type: string, enum: [IP, OOO] }
-        product_id: { type: string }
-        amount: { type: number }
-        term_months: { type: integer }
+        version:
+          type: integer
+          minimum: 1
+          description: Версия заявки, которую клиент видел последней (только для PATCH)
+        product_id: { type: string, description: Идентификатор продукта из каталога }
+        amount: { type: integer, format: int64, minimum: 0, description: Сумма, рубли }
+        term_months: { type: integer, minimum: 0 }
         purpose: { type: string }
+        form:
+          type: object
+          description: >
+            Данные формы блоками по группам полей: `form.<группа>.<поле>`, например
+            `form.applicant.position`. Какие группы и поля нужны, определяет продукт в каталоге.
+          additionalProperties: true
+          example:
+            applicant: { position: Генеральный директор, has_collateral: false }
     ApplicationStatus:
       type: string
       enum:
@@ -412,19 +592,44 @@ components:
     Application:
       type: object
       properties:
-        id: { type: string }
+        id: { type: string, format: uuid }
+        version: { type: integer, description: Растёт на 1 при каждом изменении; передаётся обратно в PATCH }
+        company_inn: { type: string }
+        product_id: { type: string }
+        amount: { type: integer, format: int64 }
+        term_months: { type: integer }
+        purpose: { type: string }
         status: { $ref: "#/components/schemas/ApplicationStatus" }
-        input: { $ref: "#/components/schemas/ApplicationInput" }
+        form: { type: object, additionalProperties: true }
+        documents: { type: array, items: { type: object }, description: Метаданные загруженных файлов (загрузка пока не реализована) }
         history:
           type: array
           items:
             type: object
             properties:
-              from: { type: string }
-              to: { type: string }
+              from: { $ref: "#/components/schemas/ApplicationStatus" }
+              to: { $ref: "#/components/schemas/ApplicationStatus" }
               at: { type: string, format: date-time }
+              by: { type: string, description: Кто выполнил переход (идентификатор пользователя) }
+        decision: { type: object, description: Решение по заявке; появится после скоринга }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ApplicationSummary:
+      type: object
+      description: Строка списка заявок. Название статуса для пользователя задаёт фронт.
+      properties:
+        id: { type: string, format: uuid }
+        product_id: { type: string }
+        product_name: { type: string }
+        amount: { type: integer, format: int64 }
+        term_months: { type: integer }
+        status: { $ref: "#/components/schemas/ApplicationStatus" }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
     ValidationError:
       type: object
+      required: [missing_fields]
       properties:
         missing_fields:
           type: array
