@@ -30,7 +30,7 @@ func TestPythonWorkerContracts(t *testing.T) {
 	var verification queue.VerifyApplicationResult
 	call(t, ctx, client, queue.KindVerifyApplication, queue.VerifyApplicationRequest{
 		Application: queue.ApplicationSnapshot{
-			INN: "7700000004", OrgType: "OOO", ProductID: "working-capital",
+			INN: "7700000004", OrgType: "OOO", ProductID: "working_capital",
 			Amount: 1_000_000, TermMonths: 12, Purpose: "оборотные средства", BKIConsent: true,
 		},
 		Company: queue.CompanySnapshot{TotalDebt: &debt, Equity: &equity},
@@ -42,9 +42,10 @@ func TestPythonWorkerContracts(t *testing.T) {
 	var parsed queue.ParseDocumentsResult
 	call(t, ctx, client, queue.KindParseDocuments, queue.ParseDocumentsRequest{
 		ApplicationID: "application-1",
-		Documents:     []queue.DocumentRef{{Kind: "financial_report", Filename: "report.pdf"}},
+		Documents: []queue.DocumentRef{{Kind: "financial_statements", Filename: "report.json",
+			MediaType: "application/json", ContentText: `{"period":"2025","revenue":1000000,"net_profit":200000,"equity":500000,"liabilities":300000}`}},
 	}, &parsed)
-	if parsed.Status != "STUB" || len(parsed.Documents) != 1 || parsed.Documents[0].Status != "NOT_PARSED" {
+	if parsed.Status != "DONE" || len(parsed.Documents) != 1 || parsed.Documents[0].Status != "PARSED" {
 		t.Fatalf("parser = %+v", parsed)
 	}
 

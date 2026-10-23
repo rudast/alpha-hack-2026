@@ -19,6 +19,20 @@ THIRD PARTY NOTICES
 Библиотеки Python
 -----------------
   redis-py 5.2.1 — MIT — https://github.com/redis/redis-py/blob/master/LICENSE
+  pypdfium2 5.14.0 — Apache-2.0 OR BSD-3-Clause (PDFium имеет сторонние компоненты) — https://pypdfium2-team.github.io/pypdfium2/about.html
+  python-docx 1.2.0 — MIT — https://github.com/python-openxml/python-docx/blob/master/LICENSE
+  Pillow 11.3.0 — MIT-CMU — https://github.com/python-pillow/Pillow/blob/main/LICENSE
+  pytesseract 0.3.13 — Apache-2.0 — https://github.com/madmaze/pytesseract/blob/master/LICENSE
+
+Документация API в браузере
+---------------------------
+  Swagger UI 5.33.3 — Apache-2.0 — https://github.com/swagger-api/swagger-ui/blob/master/LICENSE
+  Стили и скрипт загружаются браузером из jsDelivr CDN при открытии /docs.
+
+Утилиты Python worker
+---------------------
+  Tesseract OCR и пакеты языков eng/rus — Apache-2.0 — https://github.com/tesseract-ocr/tesseract/blob/main/LICENSE
+  antiword — GPL-2.0-or-later — https://packages.debian.org/trixie/antiword
 
 Образы Docker
 -------------
