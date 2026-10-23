@@ -3,11 +3,11 @@ info:
   title: Умный кредитный кабинет — API
   version: 0.1.0
   description: >
-    Реализованы `/healthz`, `/api/v1/auth/login`, `/api/v1/auth/verify` и
-    `/api/v1/me/bootstrap`. Остальные методы — черновой контракт, он будет меняться
+    Реализованы проверка работоспособности, вход, обновление данных клиента и
+    работа с заявками. Остальные методы — черновой контракт, он будет меняться
     по ходу разработки.
 servers:
-  - url: http://localhost:8080
+  - url: /
 tags:
   - name: system
   - name: auth
@@ -189,6 +189,24 @@ paths:
                 $ref: "#/components/schemas/Application"
         "404":
           description: Заявка не найдена
+  /api/v1/applications/{id}/documents:
+    post:
+      tags: [client]
+      summary: Приложить файл к черновику заявки
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentUpload" }
+      responses:
+        "201":
+          description: Файл сохранён, возвращена заявка без содержимого файла
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Application" }
   /api/v1/applications/{id}/submit:
     post:
       tags: [client]
@@ -197,8 +215,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/ApplicationId"
       responses:
-        "200":
-          description: Заявка отправлена, статус SUBMITTED
+        "202":
+          description: Заявка отправлена; задания выполняются асинхронно
           content:
             application/json:
               schema:
@@ -329,13 +347,25 @@ components:
         rate: { type: number }
     ApplicationInput:
       type: object
+      required: [product_id, amount, term_months, purpose]
       properties:
-        inn: { type: string }
-        org_type: { type: string, enum: [IP, OOO] }
         product_id: { type: string }
-        amount: { type: number }
+        amount: { type: integer, format: int64 }
         term_months: { type: integer }
         purpose: { type: string }
+        form:
+          type: object
+          description: Блоки полей из каталога продуктов; например applicant.position
+    DocumentUpload:
+      type: object
+      required: [kind, filename, media_type, content_base64]
+      properties:
+        kind: { type: string, description: Вид документа из каталога }
+        filename: { type: string }
+        media_type:
+          type: string
+          enum: [application/json, text/csv, text/plain, application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document, image/jpeg, image/png, image/tiff]
+        content_base64: { type: string, format: byte, description: Не более 10 МиБ после декодирования }
     ApplicationStatus:
       type: string
       enum:
@@ -359,7 +389,33 @@ components:
       properties:
         id: { type: string }
         status: { $ref: "#/components/schemas/ApplicationStatus" }
-        input: { $ref: "#/components/schemas/ApplicationInput" }
+        company_inn: { type: string }
+        product_id: { type: string }
+        amount: { type: integer, format: int64 }
+        term_months: { type: integer }
+        purpose: { type: string }
+        form: { type: object }
+        documents:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              kind: { type: string }
+              filename: { type: string }
+              media_type: { type: string }
+              status: { type: string, enum: [UPLOADED, PARSED, TEXT_EXTRACTED, UNSUPPORTED, FAILED] }
+              extracted: { type: object }
+        jobs:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              kind: { type: string }
+              status: { type: string, enum: [QUEUED, RUNNING, DONE, FAILED] }
+              result: { type: object }
+              error: { type: string }
         history:
           type: array
           items:

@@ -19,8 +19,9 @@ type CompanySnapshot struct {
 }
 
 type VerifyApplicationRequest struct {
-	Application ApplicationSnapshot `json:"application"`
-	Company     CompanySnapshot     `json:"company"`
+	ApplicationID string              `json:"application_id,omitempty"`
+	Application   ApplicationSnapshot `json:"application"`
+	Company       CompanySnapshot     `json:"company"`
 }
 
 type VerifyApplicationResult struct {
@@ -33,8 +34,12 @@ type VerifyApplicationResult struct {
 }
 
 type DocumentRef struct {
-	Kind     string `json:"kind"`
-	Filename string `json:"filename"`
+	ID            string `json:"id,omitempty"`
+	Kind          string `json:"kind"`
+	Filename      string `json:"filename"`
+	MediaType     string `json:"media_type,omitempty"`
+	ContentText   string `json:"content_text,omitempty"`
+	ContentBase64 string `json:"content_base64,omitempty"`
 }
 
 type ParseDocumentsRequest struct {
@@ -43,16 +48,24 @@ type ParseDocumentsRequest struct {
 }
 
 type ParsedDocument struct {
+	ID              string         `json:"id,omitempty"`
 	Kind            string         `json:"kind"`
 	Filename        string         `json:"filename"`
 	Status          string         `json:"status"`
 	ExtractedFields map[string]any `json:"extracted_fields"`
+	Error           string         `json:"error,omitempty"`
+}
+
+type ReviewReason struct {
+	DocumentID *string `json:"document_id"`
+	Reason     string  `json:"reason"`
 }
 
 type ParseDocumentsResult struct {
 	ApplicationID string           `json:"application_id"`
 	Status        string           `json:"status"`
 	Documents     []ParsedDocument `json:"documents"`
+	ReviewReasons []ReviewReason   `json:"review_reasons,omitempty"`
 	Reason        string           `json:"reason"`
 }
 

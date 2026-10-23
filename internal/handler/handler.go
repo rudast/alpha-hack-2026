@@ -11,16 +11,19 @@ import (
 )
 
 type Deps struct {
-	WebDir   string
-	Sessions middleware.SessionReader
-	Auth     *AuthHandler
-	Me       *MeHandler
+	WebDir       string
+	Sessions     middleware.SessionReader
+	Auth         *AuthHandler
+	Me           *MeHandler
+	Applications *ApplicationHandler
 }
 
 func New(d Deps) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID, chimw.Recoverer, chimw.Logger)
 	r.Get("/healthz", health)
+	r.Get("/openapi.yaml", openAPISpec)
+	r.Get("/docs", apiDocs)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/login", d.Auth.Login)
@@ -32,6 +35,10 @@ func New(d Deps) http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(domain.RoleClient))
 				r.Post("/me/bootstrap", d.Me.Bootstrap)
+				r.Post("/applications", d.Applications.Create)
+				r.Get("/applications/{id}", d.Applications.Get)
+				r.Post("/applications/{id}/documents", d.Applications.AddDocument)
+				r.Post("/applications/{id}/submit", d.Applications.Submit)
 			})
 		})
 	})

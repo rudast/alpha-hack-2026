@@ -2,7 +2,9 @@
 .gitignore
 .env
 .venv/
-docs
+docs/*
+!docs/embed.go
+!docs/openapi.yaml
 worker
 README.md
 *.exe

@@ -10,4 +10,6 @@ var (
 	ErrInvalidCode        = errors.New("invalid code")
 	ErrUnauthorized       = errors.New("unauthorized")
 	ErrUpstreamTimeout    = errors.New("credit history service did not answer in time")
+	ErrConflict           = errors.New("conflict")
+	ErrInvalidApplication = errors.New("invalid application")
 )

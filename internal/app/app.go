@@ -10,6 +10,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/rudast/alpha-hack-2026/internal/catalog"
 	"github.com/rudast/alpha-hack-2026/internal/config"
 	"github.com/rudast/alpha-hack-2026/internal/handler"
 	"github.com/rudast/alpha-hack-2026/internal/queue"
@@ -36,14 +37,22 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	trust := service.NewTrustService(repository.NewCompanyRepo(pool), queue.NewClient(rdb), cfg.TrustRefreshInterval, cfg.WorkerTimeout)
+	products, err := catalog.Load()
+	if err != nil {
+		return err
+	}
+	applications := service.NewApplicationService(repository.NewApplicationRepo(pool), products, queue.NewClient(rdb))
+	go applications.RunDispatcher(ctx)
+	go applications.RunResults(ctx)
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: handler.New(handler.Deps{
-			WebDir:   cfg.WebDir,
-			Sessions: authStore,
-			Auth:     handler.NewAuthHandler(auth),
-			Me:       handler.NewMeHandler(trust),
+			WebDir:       cfg.WebDir,
+			Sessions:     authStore,
+			Auth:         handler.NewAuthHandler(auth),
+			Me:           handler.NewMeHandler(trust),
+			Applications: handler.NewApplicationHandler(applications),
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
