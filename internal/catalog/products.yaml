@@ -1,0 +1,222 @@
+# Каталог кредитных продуктов и полей заявки.
+# Источник: «Поля заявки и скоринга по кредитным продуктам» (аналитик, 22.10.2026).
+#
+# Данные формы хранятся в applications.form (jsonb) блоками по группам полей:
+#   form.<группа>.<поле>, например form.vehicle.vin.
+# Наличие залога по базовому набору хранится как form.applicant.has_collateral.
+# Деньги указываются в рублях.
+
+# Группы, которые запрашиваются у любого продукта.
+base_groups: [applicant]
+
+# Документы базового набора.
+base_documents: [passport, bki_consent]
+base_optional_documents: [egrul_extract]
+
+documents:
+  passport: Паспорт заявителя (скан 2–3 стр.)
+  bki_consent: Согласие на обработку персональных данных и запрос в БКИ
+  egrul_extract: Выписка из ЕГРЮЛ/ЕГРИП
+  account_statement: Выписка по расчётному счёту
+  financial_statements: Бухгалтерский баланс и отчёт о прибылях и убытках (или декларация УСН)
+  marketplace_sales_report: Отчёт о продажах с площадки маркетплейса
+  title_documents: Правоустанавливающие документы на залог
+  equipment_purchase_contract: Договор купли-продажи или счёт-фактура на оборудование
+  equipment_specification: Спецификация оборудования
+  vehicle_registration: ПТС/СТС или договор купли-продажи автомобиля
+  egrn_extract: Выписка из ЕГРН
+  technical_passport: Технический паспорт
+  valuation_report: Отчёт об оценке
+  business_plan: Бизнес-план
+  target_financial_statements: Финансовая отчётность приобретаемого бизнеса
+  business_purchase_contract: Договор купли-продажи предприятия или долей
+  preliminary_purchase_contract: Предварительный договор купли-продажи
+
+field_groups:
+  applicant:
+    title: Заявитель
+    fields:
+      - {key: position, label: Должность в компании, type: text, required: true}
+      - {key: has_collateral, label: Есть залог, type: bool, required: true}
+  account:
+    title: Расчётный счёт
+    fields:
+      - {key: account_number, label: Номер расчётного счёта, type: text, required: true}
+  rko:
+    title: РКО в банке-кредиторе
+    fields:
+      - {key: has_settlement_account, label: Есть расчётно-кассовое обслуживание в банке, type: bool, required: true}
+  credit_line:
+    title: Кредитная линия
+    fields:
+      - {key: desired_limit, label: Желаемый лимит линии, type: money, required: true}
+  marketplace:
+    title: Маркетплейс
+    fields:
+      - {key: platform, label: Площадка, type: select, required: true, options: [Wildberries, Ozon, Яндекс Маркет, Другая]}
+      - {key: revenue_share, label: "Доля выручки через маркетплейс, %", type: number, required: true}
+  collateral:
+    title: Предмет залога
+    fields:
+      - {key: type, label: Тип предмета залога, type: select, required: true, options: [equipment, vehicle, real_estate, other]}
+      - {key: description, label: Описание предмета залога, type: text, required: true}
+      - {key: value, label: Оценочная стоимость залога, type: money, required: true}
+  supply:
+    title: Поставка оборудования
+    fields:
+      - {key: supplier, label: Поставщик, type: text, required: true}
+      - {key: contract_details, label: Реквизиты договора поставки, type: text, required: true}
+  vehicle:
+    title: Автомобиль
+    fields:
+      - {key: make, label: Марка, type: text, required: true}
+      - {key: model, label: Модель, type: text, required: true}
+      - {key: year, label: Год выпуска, type: number, required: true}
+      - {key: vin, label: VIN, type: text, required: true}
+  property:
+    title: Объект недвижимости
+    fields:
+      - {key: address, label: Адрес объекта, type: text, required: true}
+      - {key: cadastre_number, label: Кадастровый номер, type: text, required: true}
+      - {key: area, label: "Площадь, м²", type: number, required: false}
+  mortgage:
+    title: Ипотека
+    fields:
+      - {key: object_price, label: Стоимость объекта, type: money, required: true}
+      - {key: down_payment, label: Первоначальный взнос, type: money, required: true}
+  target_business:
+    title: Приобретаемый бизнес
+    fields:
+      - {key: inn, label: ИНН приобретаемого актива, type: text, required: true}
+      - {key: name, label: Наименование, type: text, required: true}
+      - {key: deal_description, label: Краткое описание сделки, type: text, required: true}
+      - {key: turnover, label: Оборот цели, type: money, required: true}
+      - {key: profit, label: Прибыль цели, type: money, required: true}
+
+# collateral: none — залога нет, optional — можно предложить, required — обязателен.
+# org_types пуст — продукт доступен и ИП, и ООО.
+# scoring — входные данные скоринга сверх базовых; расчёт делает код скоринга.
+products:
+  # Беззалоговые, срок до 2 месяцев
+  - id: overdraft
+    name: Овердрафт
+    min_term_months: 1
+    max_term_months: 2
+    collateral: none
+    field_groups: [account, rko]
+    documents: [account_statement]
+    scoring: [turnover_monthly, has_settlement_account]
+
+  - id: credit_line
+    name: Возобновляемая кредитная линия (ВКЛ)
+    min_term_months: 1
+    max_term_months: 24
+    collateral: optional
+    field_groups: [account, credit_line]
+    documents: [account_statement]
+    scoring: [turnover_monthly, turnover_volatility]
+
+  - id: express
+    name: Экспресс-кредит для бизнеса
+    min_term_months: 1
+    max_term_months: 18
+    collateral: none
+    scoring: [credit_history, registry]
+
+  # Беззалоговые, срок 3–18 месяцев
+  - id: working_capital
+    name: Кредит на пополнение оборотных средств
+    min_term_months: 3
+    max_term_months: 18
+    collateral: none
+    documents: [financial_statements]
+    scoring: [equity, total_debt, debt_to_equity, turnover]
+
+  - id: marketplace_seller
+    name: Кредит для селлеров маркетплейсов
+    min_term_months: 3
+    max_term_months: 18
+    collateral: none
+    field_groups: [marketplace]
+    documents: [marketplace_sales_report]
+    scoring: [marketplace_turnover]
+
+  - id: ip_loan
+    name: Кредит для ИП
+    min_term_months: 3
+    max_term_months: 18
+    collateral: none
+    org_types: [IP]
+
+  - id: ooo_loan
+    name: Кредит для ООО
+    min_term_months: 3
+    max_term_months: 18
+    collateral: none
+    org_types: [OOO]
+
+  - id: loan_up_to_1m
+    name: Кредит до 1 млн ₽
+    min_term_months: 3
+    max_term_months: 18
+    max_amount: 1000000
+    collateral: none
+    documents: [account_statement]
+    scoring: [turnover]
+
+  # Залоговые, срок 24–84 месяца
+  - id: equipment_loan
+    name: Кредит на оборудование
+    min_term_months: 24
+    max_term_months: 84
+    collateral: required
+    field_groups: [collateral, supply]
+    documents: [title_documents, equipment_purchase_contract, equipment_specification]
+    scoring: [ltv]
+
+  - id: auto_loan
+    name: Автокредит для бизнеса
+    min_term_months: 24
+    max_term_months: 84
+    collateral: required
+    field_groups: [collateral, vehicle]
+    documents: [title_documents, vehicle_registration]
+    scoring: [ltv]
+
+  # Базовый залоговый кредит доступен и на срок до 24 месяцев.
+  - id: secured_property_equipment
+    name: Кредит под залог недвижимости или оборудования
+    min_term_months: 3
+    max_term_months: 84
+    collateral: required
+    field_groups: [collateral, property]
+    documents: [title_documents, egrn_extract, technical_passport, valuation_report]
+    scoring: [ltv]
+
+  - id: business_purchase
+    name: Кредит на покупку завода или готового бизнеса
+    min_term_months: 24
+    max_term_months: 84
+    collateral: required
+    field_groups: [collateral, target_business]
+    documents: [title_documents, business_plan, target_financial_statements, business_purchase_contract]
+    scoring: [target_turnover, target_profit, ltv]
+
+  - id: mortgage_ip
+    name: Ипотека для ИП
+    min_term_months: 24
+    max_term_months: 84
+    collateral: required
+    org_types: [IP]
+    field_groups: [collateral, property, mortgage]
+    documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]
+    scoring: [ltv, down_payment]
+
+  - id: mortgage_business
+    name: Ипотека для бизнеса (коммерческая недвижимость)
+    min_term_months: 24
+    max_term_months: 84
+    collateral: required
+    field_groups: [collateral, property, mortgage]
+    documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]
+    scoring: [ltv, down_payment]

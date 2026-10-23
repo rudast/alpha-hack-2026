@@ -18,14 +18,15 @@ func NewUserRepo(db *pgxpool.Pool) *UserRepo {
 	return &UserRepo{db: db}
 }
 
-// GetByPhone ищет пользователя роли role по телефону в формате +7XXXXXXXXXX.
+// GetByPhone ищет активного пользователя роли role по телефону в формате +7XXXXXXXXXX.
+// Отключённые пользователи (is_active = false) не находятся, поэтому войти не могут.
 func (r *UserRepo) GetByPhone(ctx context.Context, role, phone string) (domain.User, error) {
-	return r.get(ctx, `WHERE phone = $1 AND role = $2`, phone, role)
+	return r.get(ctx, `WHERE phone = $1 AND role = $2 AND is_active`, phone, role)
 }
 
 // GetByEmail ищет пользователя роли role по почте в нижнем регистре.
 func (r *UserRepo) GetByEmail(ctx context.Context, role, email string) (domain.User, error) {
-	return r.get(ctx, `WHERE lower(email) = $1 AND role = $2`, email, role)
+	return r.get(ctx, `WHERE lower(email) = $1 AND role = $2 AND is_active`, email, role)
 }
 
 func (r *UserRepo) get(ctx context.Context, where string, args ...any) (domain.User, error) {

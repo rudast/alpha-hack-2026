@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Личный кабинет — Альфа-Будущее</title>
+  <link rel="stylesheet" href="/assets/css/core.css" />
+  <style>
+    .content {
+      flex: 1;
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 16px 32px 48px;
+    }
+
+    .card {
+      background: var(--color-bg-primary);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-card);
+      padding: 32px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .note {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .metric {
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius-m);
+      padding: 14px 16px;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 20px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 640px) {
+      .content { padding: 16px; }
+      .card { padding: 24px 20px; }
+      .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <a href="/personalAccount/" class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M13.6 3h-3.2L5 17h2.8l1.2-3.4h6l1.2 3.4H19L13.6 3zm-3.6 8.2L12 5.5l2 5.7h-4zM5 19.5h14V22H5v-2.5z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">Альфа-Будущее</div>
+        <div class="brand-caption">Умный кредитный кабинет предпринимателя</div>
+      </div>
+    </a>
+    <button type="button" id="btn-logout" class="btn btn-secondary btn-inline">Выйти</button>
+  </header>
+
+  <main class="content">
+    <section class="card">
+      <h1>Личный кабинет</h1>
+      <p class="note">
+        Заглушка: страница нужна, чтобы после входа было куда перейти. Здесь будут кредиты, подбор продукта и заявки.
+      </p>
+
+      <div id="error-plate" class="error-plate" role="alert">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 5a1 1 0 012 0v6a1 1 0 11-2 0V7zm1 11a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5z"/>
+        </svg>
+        <span id="error-message"></span>
+      </div>
+
+      <div id="loading" class="loading">
+        <div class="spinner spinner-dark" aria-hidden="true"></div>
+        <span>Загружаем данные о долговой нагрузке…</span>
+      </div>
+
+      <div id="metrics" class="metrics hidden">
+        <div class="metric">
+          <div class="metric-label">Общий долг</div>
+          <div class="metric-value" id="m-debt">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Собственный капитал</div>
+          <div class="metric-value" id="m-equity">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Долг / капитал</div>
+          <div class="metric-value" id="m-ratio">—</div>
+        </div>
+      </div>
+
+      <button type="button" id="btn-retry" class="btn btn-secondary btn-inline hidden">Повторить</button>
+    </section>
+  </main>
+
+  <script src="/assets/js/api.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      // Закрытая страница: без токена сразу на вход.
+      if (!Auth.requireLogin()) return;
+
+      var $ = function (id) { return document.getElementById(id); };
+      var rub = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+      var ratioFmt = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+
+      function showError(text) {
+        $('error-message').textContent = text;
+        $('error-plate').classList.add('visible');
+      }
+
+      // POST /api/v1/me/bootstrap — после входа обновляет коэффициент долговой нагрузки.
+      // Воркер может отвечать до 8 секунд; 503 означает «попробуйте ещё раз».
+      async function loadBootstrap() {
+        $('error-plate').classList.remove('visible');
+        $('btn-retry').classList.add('hidden');
+        $('loading').classList.remove('hidden');
+
+        var res = await api('/me/bootstrap', { method: 'POST' });
+        $('loading').classList.add('hidden');
+
+        if (!res.ok) {
+          if (res.status === 503) {
+            showError('Данные о кредитной истории ещё не готовы. Повторите через несколько секунд.');
+          } else if (res.status === 403) {
+            showError('Этот раздел доступен только клиентам.');
+          } else if (res.status === 0) {
+            showError('Не удалось связаться с сервером.');
+          } else {
+            showError('Не удалось загрузить данные. Попробуйте позже.');
+          }
+          $('btn-retry').classList.remove('hidden');
+          return;
+        }
+
+        var d = res.data;
+        $('m-debt').textContent = d.total_debt == null ? '—' : rub.format(d.total_debt) + ' ₽';
+        $('m-equity').textContent = d.equity == null ? '—' : rub.format(d.equity) + ' ₽';
+        $('m-ratio').textContent = d.debt_to_equity == null ? '—' : ratioFmt.format(d.debt_to_equity);
+        $('metrics').classList.remove('hidden');
+      }
+
+      $('btn-retry').addEventListener('click', loadBootstrap);
+      $('btn-logout').addEventListener('click', function () {
+        Auth.clear();
+        window.location.replace('/');
+      });
+
+      loadBootstrap();
+    })();
+  </script>
+</body>
+</html>
