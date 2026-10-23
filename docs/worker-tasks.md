@@ -8,7 +8,15 @@ Go API — единственная внешняя точка входа. Он �
 {"id":"уникальный-id","kind":"credit_history","payload":{"inn":"7700000002"}}
 ```
 
-Ответ записывается в список `worker:reply:<id>` на 60 секунд. Успех: `{"data":{...}}`; ошибка валидации: `{"error":"..."}`. Go-клиент в `internal/queue` умеет отправить задачу (`Submit`) и дождаться ответа (`Await`). Сейчас HTTP использует только быстрый `credit_history`; остальные задачи можно вызвать через Redis, но для них ещё нет публичных REST-маршрутов.
+Ответ записывается в список `worker:reply:<id>` на 60 секунд. Успех: `{"data":{...}}`; ошибка валидации: `{"error":"..."}`. Go-клиент в `internal/queue` умеет отправить задачу (`Submit`) и дождаться ответа (`Await`). Для заявок Go сначала сохраняет задание в `worker_jobs`, затем публикует его с `persist: true`. Worker публикует событие в Redis Stream `applications:results`; Go API сохраняет результат в PostgreSQL. `GET /api/v1/applications/{id}` возвращает статусы и результаты заданий.
+
+Событие результата содержит `event_id` (совпадает с `job_id` для защиты от повторов), `job_id`, `application_id`, `from`, `to`, `kind`, `result`, `error`, `comment`. Предварительная проверка также может заполнить `decision` с показателями риска и `info_request` с недостающими полями. Сейчас каждое событие сообщает переход `SUBMITTED → DATA_CHECK` по исходному снимку заявки; Go применяет его при первом результате, а после получения всех трёх результатов выбирает итоговый статус `INFO_REQUESTED`, `SCORING` или `MANUAL_REVIEW`. Redis consumer group `api-results` подтверждает событие после транзакции PostgreSQL.
+
+Пример события предварительной проверки:
+
+```json
+{"event_id":"job-uuid","job_id":"job-uuid","application_id":"application-uuid","from":"SUBMITTED","to":"DATA_CHECK","kind":"verify_application","result":{"next_status":"INFO_REQUESTED","missing_fields":["bki_consent"]},"decision":{"debt_to_equity":null,"risk_flags":[]},"info_request":{"missing_fields":["bki_consent"]},"error":null,"comment":"verify_application completed"}
+```
 
 ## Быстрые сервисы: `worker/services/financial_verifier.py`
 
@@ -18,12 +26,12 @@ Go API — единственная внешняя точка входа. Он �
 
 Этот маршрут нужен для `POST /api/v1/me/bootstrap`: Go API запрашивает данные, если они отсутствуют или старше 12 часов. Python возвращает синтетические значения, совместимые с демонстрационными компаниями из миграции. Отношение долга к капиталу считает и сохраняет Go API. Пустой или неверный ИНН даёт ошибку.
 
-### `verify_application` — предварительная заглушка
+### `verify_application` — предварительная проверка
 
 ```json
 {
   "application": {
-    "inn": "7700000004", "org_type": "OOO", "product_id": "working-capital",
+    "inn": "7700000004", "org_type": "OOO", "product_id": "working_capital",
     "amount": 1000000, "term_months": 12, "purpose": "Пополнение оборотных средств",
     "bki_consent": true
   },
@@ -43,17 +51,19 @@ Go API — единственная внешняя точка входа. Он �
 
 Проверяются поля заявки из [OpenAPI](openapi.yaml), положительные сумма и срок, согласие на БКИ из [сценариев](test-scenarios.md), а также долг и капитал из [модели данных](data-model.md). Если полей нет, `next_status` становится `INFO_REQUESTED`; это рекомендация для будущего API, текущий worker не меняет статус в PostgreSQL. При `equity <= 0` коэффициент `null` и флаг `EQUITY_NON_POSITIVE`. Значение больше 2 даёт флаг риска. Это предварительная проверка, не кредитное решение.
 
-## Длительные сервисы: заглушки интерфейсов
+## Длительные сервисы
 
 ### `parse_documents` — `worker/services/document_parser.py`
 
 Запрос:
 
 ```json
-{"application_id":"application-1","documents":[{"kind":"financial_report","filename":"report.pdf"}]}
+{"application_id":"application-uuid","documents":[{"id":"document-uuid","kind":"financial_statements","filename":"report.json","media_type":"application/json","content_base64":"eyJwZXJpb2QiOiIyMDI1In0="}]}
 ```
 
-Ответ содержит `application_id`, `status: "STUB"`, список документов с `status: "NOT_PARSED"` и пустыми `extracted_fields`. Содержимое файлов пока не читается, текст не извлекается. Нынешняя модель заявки хранит вид и имя файла; способ передачи содержимого ещё нужно определить.
+Go API берёт содержимое документов из `application_documents` и передаёт его в задаче через `content_base64`. Worker не подключается к PostgreSQL. Поддержаны CSV-выписки со столбцами `date,credit,debit,balance` (дата ISO, целые рубли), частично текстовый формат `1CClientBankExchange` и учебные JSON-файлы видов `financial_statements`, `target_financial_statements`, `marketplace_sales_report`, `valuation_report`. Для 1С поддерживается один счёт; каждая секция `СекцияРасчСчет` должна лежать внутри одного месяца, а секции вместе должны покрывать заявленный период; суммы сохраняются строками в рублях с копейками. Формат описан в [официальной спецификации 1С](https://v8.1c.ru/tekhnologii/obmen-dannymi-i-integratsiya/standarty-i-formaty/standart-obmena-s-sistemami-klient-banka/formaty-obmena/). JSON содержит `period` и соответствующие числовые поля: `revenue,net_profit,equity,liabilities`; `sales,returns,payouts`; либо `appraised_value,asset_id,owner,rights,encumbrances`. Каждое извлечённое поле содержит `value`, `source_document_id`, `period`, `verification_status: "UNVERIFIED"`. Цена, заявленная клиентом в `form.collateral.value`, остаётся отдельной от стоимости в отчёте об оценке. Для PDF, DOC, DOCX, TXT, PNG, JPEG и TIFF извлекается текст: PDFium читает текстовый слой, Tesseract распознаёт страницы без текста и изображения, `python-docx` читает DOCX, `antiword` переводит старый DOC в текст. Такой документ получает `TEXT_EXTRACTED`; поле `document_text` содержит метод извлечения и признак усечения. Из свободного текста финансовые показатели пока не извлекаются, период остаётся `null`, общий результат требует проверки. Неверный файл получает `FAILED`; отказ по кредиту из этого не следует. Go API сохраняет результаты в `application_documents.extracted` и `worker_jobs.result`.
+
+`parse_documents` возвращает `review_reasons` по каждому документу, который ещё не прошёл проверку: `PASSPORT_NOT_VERIFIED`, `BKI_CONSENT_NOT_VERIFIED`, `FIELDS_NOT_EXTRACTED`, `FORMAT_UNSUPPORTED` или `DOCUMENT_INVALID`. Извлечение текста из паспорта или согласия не подтверждает личность или действительность согласия. Такие заявки остаются на ручной проверке до появления специализированных валидаторов. Подробная [матрица покрытия](parser-coverage.md) показывает статус всех 17 видов документов.
 
 ### `critical_risk_review` — `worker/services/risk_reviewer.py`
 
@@ -74,7 +84,7 @@ Go API — единственная внешняя точка входа. Он �
 
 ## Границы текущего этапа
 
-- Новые три маршрута worker возвращают синтетические или явно помеченные заглушки; REST API заявок их пока не вызывает. В [OpenAPI](openapi.yaml) ещё нет полей согласия и документов, хотя сценарии их требуют.
-- Длительные задачи нельзя удерживать в HTTP-запросе. Нужны сохранённые статус и результат задачи, способ их чтения клиентом и повторная обработка после сбоя.
-- Redis consumer groups оставляют неподтверждённые сообщения в pending. Автоматическое восстановление через `XAUTOCLAIM` пока не реализовано.
+- `credit_history` и проверка критического риска пока используют синтетические показатели и предварительные правила. `verify_application` не принимает кредитное решение.
+- Go хранит задания до публикации и повторяет отправку каждые 5 секунд. Worker забирает зависшие Redis-сообщения через `XAUTOCLAIM` после 15 минут простоя с учётом длительного OCR. Обработка должна оставаться идемпотентной.
+- Согласие на БКИ сейчас определяется наличием загруженного документа вида `bki_consent`; проверка субъекта и подписи ещё не реализована.
 - Старые сообщения в `credit-history:requests` не переносятся автоматически в новый поток `worker:requests`.
