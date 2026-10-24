@@ -14,6 +14,7 @@ from typing import Any
 import redis
 
 from worker.router import dispatch, lane_for
+from worker.backend_protocol import BackendWorker
 
 
 REQUEST_STREAM = "worker:requests"
@@ -187,7 +188,13 @@ def main() -> None:
     address = os.getenv("REDIS_ADDR", "localhost:6379")
     host, port = address.rsplit(":", 1)
     client: redis.Redis[Any] = redis.Redis(host=host, port=int(port), decode_responses=True)
-    worker = Worker(client)
+    protocol = os.getenv("WORKER_PROTOCOL", "legacy")
+    if protocol == "legacy":
+        worker = Worker(client)
+    elif protocol == "backend":
+        worker = BackendWorker(client)
+    else:
+        raise ValueError("WORKER_PROTOCOL must be legacy or backend")
     signal.signal(signal.SIGTERM, lambda *_: worker.stop.set())
     signal.signal(signal.SIGINT, lambda *_: worker.stop.set())
     worker.run()
