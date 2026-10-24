@@ -126,6 +126,9 @@
       if (this.history.length === 0) {
         this.fetchGreeting();
       }
+
+      // Attract attention: show tooltip at 2.5s and auto-open window at 5s
+      this.scheduleAttentionTrigger();
     },
 
     loadHistory: function () {
@@ -276,12 +279,19 @@
       }
     },
 
-    open: function () {
+    open: function (isAuto) {
       var win = document.getElementById('alfa-assistant-window');
       var fab = document.getElementById('alfa-assistant-fab');
       var root = document.getElementById('alfa-assistant-root');
+      this.hideFabTooltip();
       if (win) {
         win.classList.add('is-open');
+        if (isAuto) {
+          win.classList.add('attention-pulse');
+          setTimeout(function () {
+            win.classList.remove('attention-pulse');
+          }, 1600);
+        }
         if (fab) fab.classList.add('is-hidden');
         if (root) root.classList.add('has-open-window');
         this.isOpen = true;
@@ -290,7 +300,7 @@
         } catch (e) {}
         this.scrollToBottom();
         var input = document.getElementById('assistant-input-text');
-        if (input) setTimeout(function () { input.focus(); }, 150);
+        if (input && !isAuto) setTimeout(function () { input.focus(); }, 150);
       }
     },
 
@@ -298,6 +308,7 @@
       var win = document.getElementById('alfa-assistant-window');
       var fab = document.getElementById('alfa-assistant-fab');
       var root = document.getElementById('alfa-assistant-root');
+      this.hideFabTooltip();
       if (win) {
         win.classList.remove('is-open');
         if (fab) fab.classList.remove('is-hidden');
@@ -305,8 +316,81 @@
         this.isOpen = false;
         try {
           sessionStorage.setItem(STORAGE_KEY_STATE, 'closed');
+          sessionStorage.setItem('alfa_assistant_user_dismissed', 'true');
         } catch (e) {}
       }
+    },
+
+    showFabTooltip: function (text) {
+      if (this.isOpen) return;
+      var self = this;
+      var tooltip = document.getElementById('alfa-assistant-tooltip');
+      if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'alfa-assistant-tooltip';
+        tooltip.className = 'assistant-fab-tooltip';
+        tooltip.addEventListener('click', function () {
+          self.open();
+        });
+        var root = document.getElementById('alfa-assistant-root');
+        if (root) root.appendChild(tooltip);
+      }
+      tooltip.innerHTML = (text || '👋 Привет! Я <strong>Альфи</strong>, помогу подобрать кредит') + '<span class="assistant-tooltip-close" title="Закрыть">×</span>';
+      var closeBtn = tooltip.querySelector('.assistant-tooltip-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          self.hideFabTooltip();
+          try {
+            sessionStorage.setItem('alfa_assistant_user_dismissed', 'true');
+          } catch (err) {}
+        });
+      }
+      setTimeout(function () {
+        if (tooltip) tooltip.classList.add('is-visible');
+      }, 50);
+    },
+
+    hideFabTooltip: function () {
+      var tooltip = document.getElementById('alfa-assistant-tooltip');
+      if (tooltip) {
+        tooltip.classList.remove('is-visible');
+        setTimeout(function () {
+          if (tooltip && tooltip.parentNode) {
+            tooltip.parentNode.removeChild(tooltip);
+          }
+        }, 300);
+      }
+    },
+
+    scheduleAttentionTrigger: function () {
+      var self = this;
+      var STORAGE_KEY_DISMISSED = 'alfa_assistant_user_dismissed';
+
+      try {
+        if (sessionStorage.getItem(STORAGE_KEY_DISMISSED) === 'true') {
+          return;
+        }
+      } catch (e) {}
+
+      // Step 1: Pre-attention tooltip at 2.5s
+      setTimeout(function () {
+        if (!self.isOpen) {
+          self.showFabTooltip('👋 Привет! Я <strong>Альфи</strong>, помогу с кредитом');
+        }
+      }, 2500);
+
+      // Step 2: Main attention trigger at 5s - automatically open the window!
+      setTimeout(function () {
+        if (!self.isOpen) {
+          try {
+            if (sessionStorage.getItem(STORAGE_KEY_DISMISSED) === 'true') {
+              return;
+            }
+          } catch (e) {}
+          self.open(true);
+        }
+      }, 5000);
     },
 
     clearHistory: function () {
