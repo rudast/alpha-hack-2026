@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import csv
 import base64
-import io
 import json
-from collections import defaultdict
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from worker.services.document_readers import READABLE_TYPES, extract_text
 from worker.services.bank_statement_1c import Unsupported1CFormat, parse_1c_statement
+from worker.services.account_statement_csv import UnsupportedStatementFormat, parse_csv_statement
+from worker.services.marketplace_csv import parse_marketplace_csv
+
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+MAX_BASE64_CHARS = ((MAX_DOCUMENT_BYTES + 2) // 3) * 4
 
 
 def _money(value: Any) -> int:
@@ -22,6 +23,8 @@ def _money(value: Any) -> int:
         raise ValueError(f"invalid monetary value: {value}") from exc
     if not amount.is_finite() or amount != amount.to_integral_value():
         raise ValueError("money must be an integer number of rubles")
+    if abs(amount) > 1_000_000_000_000_000:
+        raise ValueError("money exceeds supported range")
     return int(amount)
 
 
@@ -56,30 +59,6 @@ def _json_fields(kind: str, raw: bytes, document_id: str | None) -> dict[str, An
     return fields
 
 
-def _statement_fields(raw: bytes, document_id: str | None) -> dict[str, Any]:
-    reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig")))
-    if not reader.fieldnames or not {"date", "credit", "debit", "balance"}.issubset(reader.fieldnames):
-        raise ValueError("CSV columns date, credit, debit, balance are required")
-    monthly: dict[str, dict[str, int]] = defaultdict(lambda: {"credit": 0, "debit": 0})
-    final_date: date | None = None
-    final_balance = 0
-    for row in reader:
-        day = date.fromisoformat(row["date"])
-        month = day.strftime("%Y-%m")
-        monthly[month]["credit"] += _money(row["credit"])
-        monthly[month]["debit"] += _money(row["debit"])
-        if final_date is None or day >= final_date:
-            final_date, final_balance = day, _money(row["balance"])
-    if final_date is None:
-        raise ValueError("statement has no transactions")
-    periods = sorted(monthly)
-    turnover = [{"period": period, **monthly[period]} for period in periods]
-    return {
-        "turnover_monthly": _field(turnover, document_id, f"{periods[0]}..{periods[-1]}"),
-        "closing_balance": _field(final_balance, document_id, final_date.isoformat()),
-    }
-
-
 def parse_documents(payload: dict[str, Any]) -> dict[str, Any]:
     application_id = payload.get("application_id")
     documents = payload.get("documents")
@@ -92,23 +71,32 @@ def parse_documents(payload: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(document, dict):
             raise ValueError("each document must be an object")
         kind, media_type = document.get("kind"), document.get("media_type")
+        if isinstance(media_type, str):
+            media_type = media_type.split(";", 1)[0].strip().lower()
         item: dict[str, Any] = {"id": document.get("id"), "kind": kind,
                                 "filename": document.get("filename"),
                                 "status": "UNSUPPORTED", "extracted_fields": {}}
         raw = document.get("content")
-        if raw is None and isinstance(document.get("content_base64"), str):
-            try:
-                raw = base64.b64decode(document["content_base64"], validate=True)
-            except (ValueError, base64.binascii.Error) as exc:
-                raw = None
-                item["error"] = f"invalid base64 content: {exc}"
-        if raw is None and isinstance(document.get("content_text"), str):
-            raw = document["content_text"].encode("utf-8")
         try:
+            if raw is None and isinstance(document.get("content_base64"), str):
+                encoded = document["content_base64"]
+                if len(encoded) > MAX_BASE64_CHARS:
+                    raise ValueError("document exceeds 10 MiB limit")
+                try:
+                    raw = base64.b64decode(encoded, validate=True)
+                except (ValueError, base64.binascii.Error) as exc:
+                    raise ValueError("invalid base64 document content") from exc
+            if raw is None and isinstance(document.get("content_text"), str):
+                raw = document["content_text"].encode("utf-8")
             if not isinstance(raw, bytes):
                 raise ValueError("document content is required")
+            if len(raw) > MAX_DOCUMENT_BYTES:
+                raise ValueError("document exceeds 10 MiB limit")
             if kind == "account_statement" and media_type == "text/csv":
-                item["extracted_fields"] = _statement_fields(raw, document.get("id"))
+                item["extracted_fields"] = parse_csv_statement(raw, document.get("id"))
+                item["status"] = "PARSED"
+            elif kind == "marketplace_sales_report" and media_type == "text/csv":
+                item["extracted_fields"] = parse_marketplace_csv(raw, document.get("id"))
                 item["status"] = "PARSED"
             elif kind == "account_statement" and media_type == "text/plain" and raw.removeprefix(b"\xef\xbb\xbf").startswith(b"1CClientBankExchange"):
                 item["extracted_fields"] = parse_1c_statement(raw, document.get("id"))
@@ -129,10 +117,10 @@ def parse_documents(payload: dict[str, Any]) -> dict[str, Any]:
                 item["status"] = "TEXT_EXTRACTED"
             else:
                 item["error"] = "this document kind or media type is not parsed yet"
-        except Unsupported1CFormat as exc:
+        except (Unsupported1CFormat, UnsupportedStatementFormat) as exc:
             item["status"] = "UNSUPPORTED"
             item["error"] = str(exc)
-        except (ValueError, TypeError, UnicodeError, csv.Error) as exc:
+        except (ValueError, TypeError, UnicodeError) as exc:
             item["status"] = "FAILED"
             item["error"] = str(exc)
         items.append(item)

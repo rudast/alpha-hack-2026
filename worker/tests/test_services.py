@@ -65,6 +65,31 @@ class WorkerServicesTest(unittest.TestCase):
         self.assertEqual(result["review_reasons"], [
             {"document_id": "passport-1", "reason": "PASSPORT_NOT_VERIFIED"}])
 
+    def test_bad_document_does_not_hide_other_results(self):
+        result = dispatch("parse_documents", {
+            "application_id": "application-1",
+            "documents": [
+                {"id": "bad", "kind": "financial_statements", "filename": "bad.json",
+                 "media_type": "application/json", "content_base64": "not base64"},
+                {"id": "good", "kind": "financial_statements", "filename": "good.json",
+                 "media_type": "application/json; charset=utf-8", "content_text":
+                 '{"period":"2025","revenue":100,"net_profit":10,"equity":50,"liabilities":20}'},
+            ],
+        })
+        self.assertEqual([item["status"] for item in result["documents"]], ["FAILED", "PARSED"])
+        self.assertEqual(result["documents"][0]["error"], "invalid base64 document content")
+
+    def test_oversized_document_is_rejected_before_decoding(self):
+        from worker.services.document_parser import MAX_BASE64_CHARS
+
+        result = dispatch("parse_documents", {
+            "application_id": "application-1",
+            "documents": [{"id": "large", "kind": "account_statement", "filename": "large.csv",
+                           "media_type": "text/csv", "content_base64": "A" * (MAX_BASE64_CHARS + 1)}],
+        })
+        self.assertEqual(result["documents"][0]["status"], "FAILED")
+        self.assertIn("10 MiB", result["documents"][0]["error"])
+
 
 if __name__ == "__main__":
     unittest.main()
