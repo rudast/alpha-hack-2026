@@ -68,6 +68,14 @@ class DialogueManager:
         extracted = SlotFiller.extract(text)
         session.slots = session.slots.merge_with(extracted)
 
+        # 0. Bot Capabilities Guide
+        if extracted.intent == "bot_capabilities":
+            guide_item = qa_engine.get_by_id("assistant_capabilities_guide")
+            if guide_item:
+                res = templates.render_qa_answer(guide_item)
+                session.dialogue_state = res["dialogue_state"]
+                return ChatResponse(session_id=session.session_id, **res)
+
         # 1. Reset / Start Over
         if extracted.intent == "reset_flow":
             session.slots = ExtractedSlots()

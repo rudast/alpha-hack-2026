@@ -100,19 +100,22 @@
     sessionId: getSessionId(),
 
     init: function () {
-      // Do not render on login or authorization pages
-      if (
-        window.location.pathname.indexOf('login') !== -1 ||
-        document.querySelector('.auth-card') ||
-        document.querySelector('form[action*="login"]') ||
-        document.getElementById('login-form')
-      ) {
+      var pathname = window.location.pathname || '';
+      // Do not render on dedicated login/authorization page (/login/)
+      if (pathname === '/login' || pathname.indexOf('/login/') !== -1 || pathname.indexOf('/login') !== -1) {
         return;
       }
 
       this.loadHistory();
       this.renderWidget();
       this.bindEvents();
+
+      // If on #login view on the calculator page, hide until user returns to #calc
+      this.syncHashVisibility();
+      var self = this;
+      window.addEventListener('hashchange', function () {
+        self.syncHashVisibility();
+      });
 
       // Check if open state was persisted
       try {
@@ -318,6 +321,16 @@
           sessionStorage.setItem(STORAGE_KEY_STATE, 'closed');
           sessionStorage.setItem('alfa_assistant_user_dismissed', 'true');
         } catch (e) {}
+      }
+    },
+
+    syncHashVisibility: function () {
+      var root = document.getElementById('alfa-assistant-root');
+      if (!root) return;
+      if (window.location.hash === '#login') {
+        root.style.display = 'none';
+      } else {
+        root.style.display = '';
       }
     },
 
@@ -625,6 +638,28 @@
     },
 
     applyToCalculator: function (p) {
+      // If currently on #login view on calculator page, switch to #calc
+      if (window.location.hash === '#login') {
+        window.location.hash = '#calc';
+      }
+
+      var form = document.getElementById('calc-form');
+      if (!form) {
+        // We are on another page (e.g. personal account). Save draft and navigate to calculator
+        if (window.LoanDraft && window.LoanDraft.save) {
+          window.LoanDraft.save({
+            productId: p.product_id,
+            org: p.org || 'ooo',
+            collateral: p.collateral || 'without',
+            age: p.age || 'gte9',
+            amount: p.amount || 1500000,
+            term: p.term || 12,
+          });
+        }
+        window.location.href = '/#calc';
+        return;
+      }
+
       // 1. Radio: org
       if (p.org) {
         var orgEl = document.querySelector('input[name="org"][value="' + p.org + '"]');
@@ -636,7 +671,8 @@
 
       // 2. Radio: collateral
       if (p.collateral) {
-        var colEl = document.querySelector('input[name="collateral"][value="' + p.collateral + '"]');
+        var colVal = p.collateral === 'any' ? 'without' : p.collateral;
+        var colEl = document.querySelector('input[name="collateral"][value="' + colVal + '"]');
         if (colEl) {
           colEl.checked = true;
           colEl.dispatchEvent(new Event('change', { bubbles: true }));
@@ -654,8 +690,8 @@
 
       // 4. Sliders and inputs: amount
       if (p.amount) {
-        var amountRange = document.getElementById('amount-range') || document.getElementById('calc-amount-slider');
-        var amountInput = document.getElementById('amount-input') || document.getElementById('calc-amount-input');
+        var amountRange = document.getElementById('amount-range');
+        var amountInput = document.getElementById('amount-input');
         if (amountRange && window.Loans && window.Loans.AMOUNT_STOPS) {
           var idx = findNearestIndex(window.Loans.AMOUNT_STOPS, p.amount);
           amountRange.value = String(idx);
@@ -663,7 +699,8 @@
           amountRange.dispatchEvent(new Event('change', { bubbles: true }));
         }
         if (amountInput) {
-          amountInput.value = String(p.amount);
+          var formattedAmt = window.Loans && window.Loans.fmt ? window.Loans.fmt.number(p.amount) : String(p.amount);
+          amountInput.value = formattedAmt;
           amountInput.dispatchEvent(new Event('input', { bubbles: true }));
           amountInput.dispatchEvent(new Event('blur', { bubbles: true }));
         }
@@ -671,7 +708,7 @@
 
       // 5. Sliders and inputs: term
       if (p.term) {
-        var termRange = document.getElementById('term-range') || document.getElementById('calc-term-slider');
+        var termRange = document.getElementById('term-range');
         if (termRange && window.Loans && window.Loans.TERM_STOPS) {
           var termIdx = findNearestIndex(window.Loans.TERM_STOPS, p.term);
           termRange.value = String(termIdx);
@@ -680,13 +717,17 @@
         }
       }
 
+      // Trigger change on form to ensure calculation updates
+      form.dispatchEvent(new Event('change', { bubbles: true }));
+
       // 6. Highlight and scroll to recommended product card in results
       var targetId = p.product_id;
       setTimeout(function () {
         var card = null;
         if (targetId) {
           var btn = document.querySelector('[data-action="details"][data-id="' + targetId + '"]') ||
-                    document.querySelector('[data-action="apply"][data-id="' + targetId + '"]');
+                    document.querySelector('[data-action="apply"][data-id="' + targetId + '"]') ||
+                    document.querySelector('[data-id="' + targetId + '"]');
           if (btn) {
             card = btn.closest('.loan-card');
           }
@@ -703,10 +744,18 @@
             calcBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
         }
-      }, 100);
+      }, 150);
 
-      // Temporary visual notification in chat
-      this.addUserMessage('Параметры успешно применены в калькуляторе!');
+      // Friendly notification in chat from Alfi
+      var amtStr = p.amount ? (window.Loans && window.Loans.fmt ? window.Loans.fmt.rub(p.amount) : p.amount + ' ₽') : '';
+      var termStr = p.term ? (window.Loans && window.Loans.fmt ? window.Loans.fmt.term(p.term) : p.term + ' мес.') : '';
+      var feedbackText = 'Готово! Подставил параметры в калькулятор' + (amtStr ? ': **' + amtStr + '**' : '') + (termStr ? ' на **' + termStr + '**' : '') + '. Подходящий кредит подсвечен на странице.';
+      this.addBotMessage({
+        reply: feedbackText,
+        recommended_products: [],
+        actions: [],
+        quick_replies: ['Заполнить заявку', 'Изменить срок', 'Сравнить с другими'],
+      });
     },
 
     applyToWizard: function (p) {

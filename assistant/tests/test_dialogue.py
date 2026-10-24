@@ -167,6 +167,16 @@ class TestDialogueManager(unittest.TestCase):
         self.assertIn("0 ₽", resp.reply)
         self.assertIn("досрочно", resp.reply.lower())
 
+    def test_bot_capabilities_inquiry(self):
+        req = ChatRequest(
+            session_id="test-16",
+            message="Что ты умеешь?",
+        )
+        resp = self.dm.process(req)
+        self.assertEqual(resp.dialogue_state, "QA_EXPERT")
+        self.assertIn("Альфи", resp.reply)
+        self.assertIn("Подбор программы", resp.reply)
+
 
 if __name__ == "__main__":
     unittest.main()

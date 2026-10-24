@@ -90,6 +90,10 @@ class SlotFiller:
 
     @classmethod
     def _detect_intent(cls, text: str) -> str:
+        # 0. Bot Capabilities / How to use / Help
+        if re.search(r"\b(что\s+ты\s+(умеешь|можешь)|чем\s+(ты\s+)?(можешь\s+)?помочь|как\s+(тобой\s+)?пользоваться|что\s+тебе\s+написать|что\s+(можно\s+)?(тебе\s+)?написать|какие\s+команды|возможности)\b", text):
+            return "bot_capabilities"
+
         # 1. Greeting
         if re.search(r"\b(привет|здравствуй\w*|добрый\s+(день|вечер|утро)|хай|салют)\b", text):
             if not any(k in text for k in ["млн", "тыс", "руб", "кредит", "займ", "залог", "ип", "ооо"]):

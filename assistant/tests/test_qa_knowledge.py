@@ -58,6 +58,14 @@ class TestQAKnowledgeBase(unittest.TestCase):
         item, score = res[0]
         self.assertEqual(item.id, "rejection_reasons")
 
+    def test_capabilities_guide_query_and_get_by_id(self):
+        item = qa_engine.get_by_id("assistant_capabilities_guide")
+        self.assertIsNotNone(item)
+        self.assertEqual(item.category, "capabilities")
+        res = qa_engine.search("Что ты умеешь и что можно написать?", top_k=1)
+        self.assertTrue(len(res) > 0)
+        self.assertEqual(res[0][0].id, "assistant_capabilities_guide")
+
 
 if __name__ == "__main__":
     unittest.main()
