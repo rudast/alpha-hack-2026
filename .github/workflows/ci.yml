@@ -33,8 +33,10 @@ jobs:
           pip install -r assistant/requirements.txt
 
       - name: Run Pytest suite
+        env:
+          PYTHONPATH: .
         run: |
-          pytest assistant/tests/ -v
+          python -m pytest assistant/tests/ -v
 
   backend-tests:
     name: Go Backend Build & Unit Tests
