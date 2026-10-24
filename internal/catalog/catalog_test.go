@@ -83,7 +83,7 @@ func TestAvailable(t *testing.T) {
 		{"ip product for OOO", mortgageIP, "OOO", 5_000_000, 60, false},
 		{"amount over the cap", upTo1M, "OOO", 1_000_001, 12, false},
 		{"amount at the cap", upTo1M, "OOO", 1_000_000, 12, true},
-		{"term too long", overdraft, "OOO", 100_000, 3, false},
+		{"term too long", overdraft, "OOO", 100_000, 13, false},
 		{"term not given", overdraft, "OOO", 100_000, 0, true},
 	}
 	for _, tc := range cases {

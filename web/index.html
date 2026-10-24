@@ -3,221 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Вход в кабинет — Альфа-Будущее</title>
-  <link rel="stylesheet" href="/assets/css/core.css" />
-  <style>
-    /* Стили, нужные только странице входа. Общие компоненты лежат в core.css */
-
-    .page-layout {
-      flex: 1;
-      width: 100%;
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 16px 32px 48px;
-      display: grid;
-      grid-template-columns: 440px 1fr;
-      gap: 48px;
-      align-items: center;
-    }
-
-    .auth-card {
-      background: var(--color-bg-primary);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow-card);
-      padding: 36px 32px;
-      width: 100%;
-    }
-
-    .auth-title {
-      font-size: 26px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1.2;
-      margin-bottom: 8px;
-    }
-
-    .auth-subtitle {
-      font-size: 14px;
-      color: var(--color-text-secondary);
-      line-height: 1.45;
-      margin-bottom: 24px;
-    }
-
-    /* Код подтверждения: 6 отдельных ячеек (CodeInput) */
-    .otp-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 8px;
-      margin: 20px 0 16px;
-    }
-
-    .otp-input {
-      width: 100%;
-      height: 56px;
-      text-align: center;
-      font-size: 22px;
-      font-weight: 700;
-      background-color: var(--color-bg-secondary);
-      border: 1.5px solid transparent;
-      border-radius: var(--radius-m);
-      outline: none;
-      transition: background-color 0.15s ease, border-color 0.15s ease;
-    }
-
-    .otp-input:hover {
-      background-color: var(--color-bg-tertiary);
-    }
-
-    .otp-input:focus {
-      background-color: var(--color-bg-primary);
-      border-color: var(--color-border-focus);
-    }
-
-    .otp-input.input-error {
-      background-color: var(--color-error-bg);
-      border-color: var(--color-error-text);
-    }
-
-    .otp-meta {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 13px;
-      color: var(--color-text-secondary);
-      margin-bottom: 16px;
-    }
-
-    .otp-timer {
-      font-variant-numeric: tabular-nums;
-      font-weight: 700;
-      color: var(--color-text-primary);
-      background: var(--color-bg-secondary);
-      padding: 4px 8px;
-      border-radius: 6px;
-    }
-
-    .btn-submit-wrap {
-      margin-top: 8px;
-    }
-
-    /* Быстрый вход для демонстрации (включается в login.js) */
-    .demo-box {
-      margin-top: 24px;
-      padding-top: 18px;
-      border-top: 1px solid var(--color-border);
-    }
-
-    .demo-box-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--color-text-tertiary);
-      margin-bottom: 10px;
-    }
-
-    .demo-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .demo-pill {
-      appearance: none;
-      background-color: var(--color-bg-secondary);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-s);
-      padding: 6px 10px;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background-color 0.15s, border-color 0.15s;
-    }
-
-    .demo-pill:hover {
-      background-color: var(--color-bg-tertiary);
-      border-color: var(--color-text-tertiary);
-    }
-
-    /* Правая колонка с описанием */
-    .promo-panel {
-      padding: 16px 0;
-    }
-
-    .promo-heading {
-      font-size: 36px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1.15;
-      margin-bottom: 16px;
-      max-width: 560px;
-    }
-
-    .promo-lead {
-      font-size: 16px;
-      line-height: 1.55;
-      color: var(--color-text-secondary);
-      margin-bottom: 32px;
-      max-width: 520px;
-    }
-
-    .feature-list {
-      display: grid;
-      gap: 16px;
-      max-width: 520px;
-    }
-
-    .feature-item {
-      background: var(--color-bg-primary);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-l);
-      padding: 18px 20px;
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-    }
-
-    .feature-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background-color: var(--color-bg-secondary);
-      color: var(--color-accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .feature-title {
-      font-size: 15px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-
-    .feature-text {
-      font-size: 13px;
-      color: var(--color-text-secondary);
-      line-height: 1.45;
-    }
-
-    @media (max-width: 920px) {
-      .page-layout {
-        grid-template-columns: 1fr;
-        max-width: 480px;
-        padding: 16px;
-      }
-      .promo-panel {
-        display: none;
-      }
-      .auth-card {
-        padding: 28px 20px;
-      }
-    }
-  </style>
+  <title>Калькулятор кредитов — Альфа-Будущее</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23ef3124'/%3E%3Cpath fill='white' transform='translate(3.6 3.6) scale(.7)' d='M13.6 3h-3.2L5 17h2.8l1.2-3.4h6l1.2 3.4H19L13.6 3zm-3.6 8.2L12 5.5l2 5.7h-4zM5 19.5h14V22H5v-2.5z'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/assets/css/core.css?v=2" />
+  <link rel="stylesheet" href="/assets/css/calculator.css?v=2" />
+  <link rel="stylesheet" href="/assets/css/assistant.css?v=2" />
 </head>
-<body>
+<body class="page-calc">
 
   <header class="topbar">
-    <a href="/" class="brand">
+    <a href="#calc" class="brand">
       <div class="brand-mark" aria-hidden="true">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
           <path d="M13.6 3h-3.2L5 17h2.8l1.2-3.4h6l1.2 3.4H19L13.6 3zm-3.6 8.2L12 5.5l2 5.7h-4zM5 19.5h14V22H5v-2.5z"/>
@@ -228,176 +23,283 @@
         <div class="brand-caption">Умный кредитный кабинет предпринимателя</div>
       </div>
     </a>
+
+    <!-- Два экрана этой страницы: калькулятор (#calc) и вход (#login). Состояние калькулятора не теряется.
+         Отдельная страница входа без калькулятора лежит по адресу /login/ и с этой страницей не связана. -->
+    <nav class="view-nav" aria-label="Разделы страницы">
+      <a href="#calc" id="nav-calc" aria-current="page">Калькулятор кредитов</a>
+      <a href="#login" id="nav-auth">Войти в кабинет (без расчёта)</a>
+    </nav>
   </header>
 
-  <main class="page-layout">
+  <main class="entry" id="main">
 
-    <section class="auth-card" aria-label="Вход в кабинет">
+    <!-- ============ Калькулятор кредитов ============ -->
+    <section id="view-calc" aria-labelledby="calc-title">
+      <div class="calc-shell">
+        <div class="calc-head">
+          <h1 class="calc-title" id="calc-title">Рассчитаем кредит под вашу задачу</h1>
+          <p class="calc-counter" aria-live="polite">
+            Доступно видов кредита: <strong id="calc-count">— из 14</strong>
+          </p>
+        </div>
 
-      <!-- Сюда login.js выводит ошибки -->
-      <div id="error-plate" class="error-plate" role="alert">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 5a1 1 0 012 0v6a1 1 0 11-2 0V7zm1 11a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5z"/>
-        </svg>
-        <span id="error-message"></span>
-      </div>
+        <div class="calc-grid">
+          <div class="calc-left">
+            <form id="calc-form" class="calc-controls" novalidate>
+              <fieldset class="field-group">
+                <legend class="field-label">Тип регистрации</legend>
+                <div class="chip-group">
+                  <label class="chip"><input type="radio" name="org" value="ooo" checked /><span>Для ООО</span></label>
+                  <label class="chip"><input type="radio" name="org" value="ip" /><span>Для ИП</span></label>
+                </div>
+              </fieldset>
 
-      <!-- Шаг 1: телефон или почта и пароль → POST /api/v1/auth/login -->
-      <div id="view-login">
-        <h1 class="auth-title">Вход в кабинет</h1>
-        <p class="auth-subtitle">
-          Введите телефон или почту и пароль. После этого подтвердите вход кодом.
-        </p>
+              <fieldset class="field-group">
+                <legend class="field-label">Залог</legend>
+                <div class="chip-group">
+                  <label class="chip"><input type="radio" name="collateral" value="without" checked /><span>Без залога</span></label>
+                  <label class="chip"><input type="radio" name="collateral" value="with" /><span>С залогом</span></label>
+                </div>
+              </fieldset>
 
-        <form id="form-login" novalidate>
-          <div class="form-field">
-            <div class="input-control" id="login-control">
-              <span class="input-addon-left" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 12a4.5 4.5 0 100-9 4.5 4.5 0 000 9zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z"/>
-                </svg>
-              </span>
-              <div class="input-inner">
-                <input
-                  type="text"
-                  id="field-login"
-                  class="input-element"
-                  placeholder=" "
-                  autocomplete="username"
-                  autocapitalize="none"
-                  spellcheck="false"
-                  required
-                />
-                <label for="field-login" class="input-label">Телефон или почта</label>
+              <fieldset class="field-group">
+                <legend class="field-label">Срок ведения бизнеса</legend>
+                <div class="chip-group">
+                  <label class="chip"><input type="radio" name="age" value="gte9" checked /><span>9 месяцев и больше</span></label>
+                  <label class="chip"><input type="radio" name="age" value="lt9" /><span>Меньше 9 месяцев</span></label>
+                </div>
+              </fieldset>
+
+              <div class="range-card">
+                <label class="range-card-label" for="amount-input">Сумма кредита</label>
+                <div class="range-value">
+                  <input id="amount-input" class="amount-input" type="text" inputmode="numeric" autocomplete="off" value="1 500 000" />
+                  <span aria-hidden="true">₽</span>
+                </div>
+                <input id="amount-range" class="range" type="range" min="0" max="128" step="1" value="0" aria-label="Сумма кредита" />
+                <div class="range-scale" id="amount-scale" aria-hidden="true"></div>
               </div>
+
+              <div class="range-card">
+                <div class="range-card-label" id="term-label">Срок кредита</div>
+                <output id="term-output" class="range-value" for="term-range">1 год</output>
+                <input id="term-range" class="range" type="range" min="0" max="33" step="1" value="0" aria-labelledby="term-label" />
+                <div class="range-scale" id="term-scale" aria-hidden="true"></div>
+              </div>
+            </form>
+
+            <div class="calc-note">
+              <p>Уже есть заявка или хотите войти в кабинет без предварительного расчёта кредита?</p>
+              <button type="button" id="btn-skip-calc" class="link-btn">Перейти ко входу без переноса данных</button>
             </div>
           </div>
 
-          <div class="form-field">
-            <div class="input-control" id="password-control">
-              <span class="input-addon-left" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path fill-rule="evenodd" clip-rule="evenodd" d="M7 7a5 5 0 0110 0v2h1a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-9a2 2 0 012-2h1V7zm2 2h6V7a3 3 0 10-6 0v2zm3 4a1.5 1.5 0 00-.75 2.8V18h1.5v-2.2A1.5 1.5 0 0012 13z"/>
-                </svg>
-              </span>
-              <div class="input-inner">
-                <input
-                  type="password"
-                  id="field-password"
-                  class="input-element"
-                  placeholder=" "
-                  autocomplete="current-password"
-                  required
-                />
-                <label for="field-password" class="input-label">Пароль</label>
-              </div>
-              <button type="button" id="btn-toggle-password" class="input-addon-right" aria-label="Показать пароль" aria-pressed="false">
-                <svg id="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-                <svg id="icon-eye-off" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
-                  <line x1="1" y1="1" x2="23" y2="23"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="btn-submit-wrap">
-            <button type="submit" id="btn-login" class="btn btn-primary">
-              <span>Продолжить</span>
-            </button>
-          </div>
-        </form>
-
-        <!-- Заполняется из login.js, если включён DEMO_MODE -->
-        <div id="demo-login" class="demo-box hidden">
-          <div class="demo-box-label">Демо-клиенты (пароль подставится сам)</div>
-          <div id="demo-login-pills" class="demo-pills"></div>
+          <!-- Сюда calculator.js выводит только те кредиты, которые подходят под введённые данные -->
+          <div id="calc-results" class="calc-results" tabindex="-1" aria-label="Подходящие кредиты"></div>
         </div>
       </div>
-
-      <!-- Шаг 2: код подтверждения → POST /api/v1/auth/verify -->
-      <div id="view-verify" class="hidden">
-        <button type="button" id="btn-back" class="btn-back">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M10.7 5.3a1 1 0 010 1.4L6.4 11H20a1 1 0 110 2H6.4l4.3 4.3a1 1 0 01-1.4 1.4l-6-6a1 1 0 010-1.4l6-6a1 1 0 011.4 0z"/>
-          </svg>
-          Изменить данные для входа
-        </button>
-
-        <h2 class="auth-title">Подтверждение входа</h2>
-        <p class="auth-subtitle">
-          Введите 6-значный код для <strong id="verify-target"></strong>.
-          <span id="demo-code-hint" class="hidden">В тестовом окружении код — <strong>000000</strong>.</span>
-        </p>
-
-        <form id="form-verify" novalidate>
-          <div class="otp-grid" id="otp-grid" role="group" aria-label="Код подтверждения">
-            <input type="text" inputmode="numeric" autocomplete="one-time-code" class="otp-input" aria-label="Цифра 1 из 6" />
-            <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 2 из 6" />
-            <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 3 из 6" />
-            <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 4 из 6" />
-            <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 5 из 6" />
-            <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 6 из 6" />
-          </div>
-
-          <div class="otp-meta">
-            <span>Код действителен ещё</span>
-            <span class="otp-timer" id="otp-timer" role="timer" aria-live="off">05:00</span>
-          </div>
-
-          <button type="submit" id="btn-verify" class="btn btn-primary">
-            <span>Войти</span>
-          </button>
-        </form>
-
-        <div id="demo-verify" class="demo-box hidden">
-          <div class="demo-pills">
-            <button type="button" id="btn-fill-code" class="demo-pill">Подставить код 000000</button>
-          </div>
-        </div>
-      </div>
-
     </section>
 
-    <aside class="promo-panel">
-      <h2 class="promo-heading">Кредит для бизнеса: от заявки до решения в одном кабинете</h2>
-      <p class="promo-lead">
-        Выберите продукт, подайте заявку и следите за её статусом, не выходя из кабинета. Данные о вашей компании мы подставим сами.
-      </p>
+    <!-- ============ Вход в кабинет ============ -->
+    <section id="view-auth" class="hidden" aria-label="Вход в кабинет">
+      <div class="auth-layout">
 
-      <div class="feature-list">
-        <div class="feature-item">
-          <div class="feature-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm-1.06 13.54L7.4 12l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/>
+        <div class="auth-card">
+
+          <!-- Сюда calc-login.js выводит ошибки -->
+          <div id="error-plate" class="error-plate" role="alert">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 5a1 1 0 012 0v6a1 1 0 11-2 0V7zm1 11a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5z"/>
             </svg>
+            <span id="error-message"></span>
           </div>
-          <div>
-            <div class="feature-title">Минимум ручного ввода</div>
-            <div class="feature-text">Сведения о компании подтягиваются из ЕГРЮЛ/ЕГРИП, сервиса ФНС «Прозрачный бизнес» и бюро кредитных историй.</div>
+
+          <!-- Шаг 1: телефон или почта и пароль → POST /api/v1/auth/login -->
+          <div id="view-login">
+            <button type="button" id="btn-to-calc" class="btn-back">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M10.7 5.3a1 1 0 010 1.4L6.4 11H20a1 1 0 110 2H6.4l4.3 4.3a1 1 0 01-1.4 1.4l-6-6a1 1 0 010-1.4l6-6a1 1 0 011.4 0z"/>
+              </svg>
+              Вернуться к калькулятору кредитов
+            </button>
+
+            <h1 class="auth-title">Вход в кабинет</h1>
+            <p class="auth-subtitle">
+              Введите телефон или почту и пароль. После этого подтвердите вход кодом.
+            </p>
+
+            <!-- Показывается, если клиент пришёл из калькулятора с расчётом -->
+            <div id="draft-summary" class="draft-summary hidden">
+              <div class="draft-summary-title" id="draft-summary-title"></div>
+              <div class="draft-summary-meta" id="draft-summary-meta"></div>
+            </div>
+
+            <form id="form-login" novalidate>
+              <div class="form-field">
+                <div class="input-control" id="login-control">
+                  <span class="input-addon-left" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 12a4.5 4.5 0 100-9 4.5 4.5 0 000 9zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z"/>
+                    </svg>
+                  </span>
+                  <div class="input-inner">
+                    <input
+                      type="text"
+                      id="field-login"
+                      class="input-element"
+                      placeholder=" "
+                      autocomplete="username"
+                      autocapitalize="none"
+                      spellcheck="false"
+                      required
+                    />
+                    <label for="field-login" class="input-label">Телефон или почта</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-field">
+                <div class="input-control" id="password-control">
+                  <span class="input-addon-left" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M7 7a5 5 0 0110 0v2h1a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-9a2 2 0 012-2h1V7zm2 2h6V7a3 3 0 10-6 0v2zm3 4a1.5 1.5 0 00-.75 2.8V18h1.5v-2.2A1.5 1.5 0 0012 13z"/>
+                    </svg>
+                  </span>
+                  <div class="input-inner">
+                    <input
+                      type="password"
+                      id="field-password"
+                      class="input-element"
+                      placeholder=" "
+                      autocomplete="current-password"
+                      required
+                    />
+                    <label for="field-password" class="input-label">Пароль</label>
+                  </div>
+                  <button type="button" id="btn-toggle-password" class="input-addon-right" aria-label="Показать пароль" aria-pressed="false">
+                    <svg id="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <svg id="icon-eye-off" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Без расчёта: флажок включён и недоступен. С расчётом: выключен, клиент может отказаться от переноса -->
+              <label class="check check-box">
+                <input type="checkbox" id="check-skip-carry" checked disabled />
+                <span class="check-mark" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+                </span>
+                <span class="check-text">Не переносить данные из калькулятора (только войти в кабинет)</span>
+              </label>
+
+              <div class="btn-submit-wrap">
+                <button type="submit" id="btn-login" class="btn btn-primary">
+                  <span>Продолжить</span>
+                </button>
+              </div>
+            </form>
+
+            <!-- Заполняется из calc-login.js, если включён DEMO_MODE -->
+            <div id="demo-login" class="demo-box hidden">
+              <div class="demo-box-label">Демо-клиенты (пароль подставится сам)</div>
+              <div id="demo-login-pills" class="demo-pills"></div>
+            </div>
           </div>
+
+          <!-- Шаг 2: код подтверждения → POST /api/v1/auth/verify -->
+          <div id="view-verify" class="hidden">
+            <button type="button" id="btn-back" class="btn-back">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M10.7 5.3a1 1 0 010 1.4L6.4 11H20a1 1 0 110 2H6.4l4.3 4.3a1 1 0 01-1.4 1.4l-6-6a1 1 0 010-1.4l6-6a1 1 0 011.4 0z"/>
+              </svg>
+              Изменить данные для входа
+            </button>
+
+            <h2 class="auth-title">Подтверждение входа</h2>
+            <p class="auth-subtitle">
+              Введите 6-значный код для <strong id="verify-target"></strong>.
+              <span id="demo-code-hint" class="hidden">В тестовом окружении код — <strong>000000</strong>.</span>
+            </p>
+
+            <form id="form-verify" novalidate>
+              <div class="otp-grid" id="otp-grid" role="group" aria-label="Код подтверждения">
+                <input type="text" inputmode="numeric" autocomplete="one-time-code" class="otp-input" aria-label="Цифра 1 из 6" />
+                <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 2 из 6" />
+                <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 3 из 6" />
+                <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 4 из 6" />
+                <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 5 из 6" />
+                <input type="text" inputmode="numeric" autocomplete="off" class="otp-input" aria-label="Цифра 6 из 6" />
+              </div>
+
+              <div class="otp-meta">
+                <span>Код действителен ещё</span>
+                <span class="otp-timer" id="otp-timer" role="timer" aria-live="off">05:00</span>
+              </div>
+
+              <button type="submit" id="btn-verify" class="btn btn-primary">
+                <span>Войти</span>
+              </button>
+            </form>
+
+            <div id="demo-verify" class="demo-box hidden">
+              <div class="demo-pills">
+                <button type="button" id="btn-fill-code" class="demo-pill">Подставить код 000000</button>
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        <div class="feature-item">
-          <div class="feature-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H6v-2h6v2zm4-4H6v-2h10v2zm0-4H6V7h10v2z"/>
-            </svg>
+        <aside class="promo-panel">
+          <h2 class="promo-heading">Кредит для бизнеса: от заявки до решения в одном кабинете</h2>
+          <p class="promo-lead">
+            Выберите продукт, подайте заявку и следите за её статусом, не выходя из кабинета. Данные о вашей компании мы подставим сами.
+          </p>
+
+          <div class="feature-list">
+            <div class="feature-item">
+              <div class="feature-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm-1.06 13.54L7.4 12l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66z"/>
+                </svg>
+              </div>
+              <div>
+                <div class="feature-title">Минимум ручного ввода</div>
+                <div class="feature-text">Сведения о компании подтягиваются из ЕГРЮЛ/ЕГРИП, сервиса ФНС «Прозрачный бизнес» и бюро кредитных историй.</div>
+              </div>
+            </div>
+
+            <div class="feature-item">
+              <div class="feature-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H6v-2h6v2zm4-4H6v-2h10v2zm0-4H6V7h10v2z"/>
+                </svg>
+              </div>
+              <div>
+                <div class="feature-title">Понятный статус заявки</div>
+                <div class="feature-text">Видно, на каком этапе заявка, есть ли встречное предложение и какие документы нужно добавить.</div>
+              </div>
+            </div>
           </div>
-          <div>
-            <div class="feature-title">Понятный статус заявки</div>
-            <div class="feature-text">Видно, на каком этапе заявка, есть ли встречное предложение и какие документы нужно добавить.</div>
-          </div>
-        </div>
+        </aside>
+
       </div>
-    </aside>
+    </section>
 
   </main>
 
-  <script src="/assets/js/api.js"></script>
-  <script src="/assets/js/login.js"></script>
+  <!-- Порядок важен: api.js и loans.js нужны и calculator.js, и calc-login.js -->
+  <script src="/assets/js/api.js?v=2"></script>
+  <script src="/assets/js/loans.js?v=2"></script>
+  <script src="/assets/js/calculator.js?v=2"></script>
+  <script src="/assets/js/calc-login.js?v=2"></script>
+  <script src="/assets/js/assistant.js?v=2"></script>
 </body>
 </html>

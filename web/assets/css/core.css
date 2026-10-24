@@ -210,6 +210,15 @@ input {
   font-weight: 500;
 }
 
+/* Автозаполнение браузера: до первого клика значение скрыто от :placeholder-shown,
+   поэтому подпись налезала на текст. Отдельным правилом — чтобы незнакомый браузеру
+   селектор не отключил правило выше. */
+.input-element:-webkit-autofill + .input-label {
+  top: 14px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .input-addon-right {
   background: none;
   border: none;
