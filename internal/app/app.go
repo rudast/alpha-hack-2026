@@ -69,6 +69,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			Me:           handler.NewMeHandler(trust),
 			Applications: handler.NewApplicationHandler(applications),
 			Idempotency:  repository.NewIdempotencyStore(rdb),
+			AssistantURL: cfg.AssistantURL,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

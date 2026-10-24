@@ -97,11 +97,11 @@ field_groups:
 # org_types пуст — продукт доступен и ИП, и ООО.
 # scoring — входные данные скоринга сверх базовых; расчёт делает код скоринга.
 products:
-  # Беззалоговые, срок до 2 месяцев
+  # Беззалоговые
   - id: overdraft
     name: Овердрафт
     min_term_months: 1
-    max_term_months: 2
+    max_term_months: 12
     collateral: none
     field_groups: [account, rko]
     documents: [account_statement]
@@ -123,11 +123,11 @@ products:
     collateral: none
     scoring: [credit_history, registry]
 
-  # Беззалоговые, срок 3–18 месяцев
+  # Беззалоговые, срок 3–36 месяцев
   - id: working_capital
     name: Кредит на пополнение оборотных средств
     min_term_months: 3
-    max_term_months: 18
+    max_term_months: 36
     collateral: none
     documents: [financial_statements]
     scoring: [equity, total_debt, debt_to_equity, turnover]
@@ -144,21 +144,21 @@ products:
   - id: ip_loan
     name: Кредит для ИП
     min_term_months: 3
-    max_term_months: 18
+    max_term_months: 36
     collateral: none
     org_types: [IP]
 
   - id: ooo_loan
     name: Кредит для ООО
     min_term_months: 3
-    max_term_months: 18
+    max_term_months: 36
     collateral: none
     org_types: [OOO]
 
   - id: loan_up_to_1m
     name: Кредит до 1 млн ₽
-    min_term_months: 3
-    max_term_months: 18
+    min_term_months: 1
+    max_term_months: 24
     max_amount: 1000000
     collateral: none
     documents: [account_statement]
@@ -176,8 +176,8 @@ products:
 
   - id: auto_loan
     name: Автокредит для бизнеса
-    min_term_months: 24
-    max_term_months: 84
+    min_term_months: 12
+    max_term_months: 60
     collateral: required
     field_groups: [collateral, vehicle]
     documents: [title_documents, vehicle_registration]
@@ -186,8 +186,8 @@ products:
   # Базовый залоговый кредит доступен и на срок до 24 месяцев.
   - id: secured_property_equipment
     name: Кредит под залог недвижимости или оборудования
-    min_term_months: 3
-    max_term_months: 84
+    min_term_months: 6
+    max_term_months: 120
     collateral: required
     field_groups: [collateral, property]
     documents: [title_documents, egrn_extract, technical_passport, valuation_report]
@@ -205,7 +205,7 @@ products:
   - id: mortgage_ip
     name: Ипотека для ИП
     min_term_months: 24
-    max_term_months: 84
+    max_term_months: 120
     collateral: required
     org_types: [IP]
     field_groups: [collateral, property, mortgage]
@@ -215,7 +215,7 @@ products:
   - id: mortgage_business
     name: Ипотека для бизнеса (коммерческая недвижимость)
     min_term_months: 24
-    max_term_months: 84
+    max_term_months: 120
     collateral: required
     field_groups: [collateral, property, mortgage]
     documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]

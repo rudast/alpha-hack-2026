@@ -2,6 +2,9 @@ package handler
 
 import (
 	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -17,12 +20,28 @@ type Deps struct {
 	Me           *MeHandler
 	Applications *ApplicationHandler
 	Idempotency  middleware.IdempotencyStore
+	AssistantURL string
 }
 
 func New(d Deps) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID, chimw.Recoverer, chimw.Logger)
 	r.Get("/healthz", health)
+
+	if d.AssistantURL != "" {
+		if u, err := url.Parse(d.AssistantURL); err == nil {
+			proxy := httputil.NewSingleHostReverseProxy(u)
+			origDirector := proxy.Director
+			proxy.Director = func(req *http.Request) {
+				origDirector(req)
+				req.Host = u.Host
+				if !strings.HasPrefix(req.URL.Path, "/api/v1/assistant") {
+					req.URL.Path = "/api/v1/assistant" + req.URL.Path
+				}
+			}
+			r.Mount("/api/v1/assistant", proxy)
+		}
+	}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/login", d.Auth.Login)

@@ -15,15 +15,17 @@ type Config struct {
 	OTPStubCode          string
 	TrustRefreshInterval time.Duration
 	WorkerTimeout        time.Duration
+	AssistantURL         string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:    getenv("HTTP_ADDR", ":8080"),
-		WebDir:      getenv("WEB_DIR", "web"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisAddr:   getenv("REDIS_ADDR", "localhost:6379"),
-		OTPStubCode: getenv("OTP_STUB_CODE", "000000"),
+		HTTPAddr:             getenv("HTTP_ADDR", ":8080"),
+		WebDir:               getenv("WEB_DIR", "web"),
+		DatabaseURL:          os.Getenv("DATABASE_URL"),
+		RedisAddr:            getenv("REDIS_ADDR", "localhost:6379"),
+		OTPStubCode:          getenv("OTP_STUB_CODE", "000000"),
+		AssistantURL:         getenv("ASSISTANT_URL", "http://assistant:8081"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
