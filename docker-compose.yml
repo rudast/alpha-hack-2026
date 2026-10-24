@@ -47,6 +47,7 @@ services:
       context: ./worker
     environment:
       REDIS_ADDR: redis:6379
+      WORKER_PROTOCOL: ${WORKER_PROTOCOL:-legacy}
     depends_on:
       redis:
         condition: service_healthy
