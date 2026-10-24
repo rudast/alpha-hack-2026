@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -62,7 +63,12 @@ func stuckApp(id string) domain.Application {
 func TestSweep_SendsATaskForEveryStuckApplication(t *testing.T) {
 	debt, equity := int64(2_400_000), int64(4_000_000)
 	ratio := 0.6
-	companies := &fakeCompanies{c: domain.Company{INN: "7700000002", TotalDebt: &debt, Equity: &equity, DebtToEquity: &ratio}}
+	registered := time.Date(2022, 9, 1, 0, 0, 0, 0, time.UTC)
+	companies := &fakeCompanies{c: domain.Company{
+		INN: "7700000002", OrgType: "OOO", OKVED: "41.20", RegistrationDate: &registered,
+		TotalDebt: &debt, Equity: &equity, DebtToEquity: &ratio,
+		Registry: json.RawMessage(`{"status":"ACTIVE"}`),
+	}}
 	claimer := &fakeClaimer{stuck: []domain.Application{stuckApp("a1"), stuckApp("a2")}}
 	publisher := &fakePublisher{}
 	s := NewApplicationSweeper(claimer, companies, publisher, time.Minute, 2*time.Minute)
@@ -80,6 +86,17 @@ func TestSweep_SendsATaskForEveryStuckApplication(t *testing.T) {
 	}
 	if task.Debt == nil || *task.Debt != debt || *task.Equity != equity || *task.DebtToEquity != ratio {
 		t.Fatalf("company figures are missing: %+v", task)
+	}
+	profile := task.Company
+	if profile.OrgType != "OOO" || profile.OKVED != "41.20" || profile.RegistrationDate != "2022-09-01" {
+		t.Fatalf("company profile: %+v", profile)
+	}
+	if string(profile.Registry) != `{"status":"ACTIVE"}` {
+		t.Fatalf("registry must be passed as stored, got %s", profile.Registry)
+	}
+	// данных БКИ и документов у компании нет: воркер получает пустые объекты, а не null
+	if string(profile.CreditHistory) != "{}" || string(profile.Financials) != "{}" {
+		t.Fatalf("missing data must be an empty object, got %s and %s", profile.CreditHistory, profile.Financials)
 	}
 }
 

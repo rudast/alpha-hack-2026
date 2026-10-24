@@ -17,4 +17,18 @@ type ApplicationTask struct {
 	Debt         *int64
 	Equity       *int64
 	DebtToEquity *float64
+
+	Company CompanyProfile
+}
+
+// CompanyProfile — сведения о компании, которые нужны скорингу и которые уже хранятся у нас.
+// Воркер не подключается к базе, поэтому получает их в задаче. Объекты Registry, CreditHistory и Financials
+// передаются как сохранены (пустой объект, если данных нет).
+type CompanyProfile struct {
+	OrgType          string          `json:"org_type"`
+	OKVED            string          `json:"okved"`
+	RegistrationDate string          `json:"registration_date,omitempty"` // YYYY-MM-DD
+	Registry         json.RawMessage `json:"registry"`
+	CreditHistory    json.RawMessage `json:"credit_history"`
+	Financials       json.RawMessage `json:"financials"`
 }

@@ -1,16 +1,25 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Company struct {
-	INN          string
-	OrgType      string
-	Name         string
-	OKVED        string
-	TotalDebt    *int64
-	Equity       *int64
-	DebtToEquity *float64
-	FetchedAt    *time.Time
+	INN              string
+	OrgType          string
+	Name             string
+	OKVED            string
+	RegistrationDate *time.Time
+	TotalDebt        *int64
+	Equity           *int64
+	DebtToEquity     *float64
+	FetchedAt        *time.Time
+
+	// Данные из реестров, БКИ и документов в том виде, в каком они сохранены (JSON-объекты, по умолчанию пустые).
+	Registry      json.RawMessage
+	CreditHistory json.RawMessage
+	Financials    json.RawMessage
 }
 
 // NeedsRefresh сообщает, что показатели долговой нагрузки не запрашивались

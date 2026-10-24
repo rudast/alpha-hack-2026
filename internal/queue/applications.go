@@ -40,6 +40,11 @@ func (p *ApplicationPublisher) Publish(ctx context.Context, t domain.Application
 		documents = "[]"
 	}
 
+	company, err := json.Marshal(t.Company)
+	if err != nil {
+		return err
+	}
+
 	values := map[string]any{
 		"application_id": t.ApplicationID,
 		"inn":            t.INN,
@@ -48,6 +53,7 @@ func (p *ApplicationPublisher) Publish(ctx context.Context, t domain.Application
 		"term_months":    t.TermMonths,
 		"form":           string(form),
 		"documents":      documents,
+		"company":        string(company),
 	}
 	if t.Debt != nil {
 		values["debt"] = *t.Debt

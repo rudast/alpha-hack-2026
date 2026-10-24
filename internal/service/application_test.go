@@ -18,6 +18,16 @@ type fakeApps struct {
 	items     map[string]domain.Application
 	createdBy []string
 	submits   int
+	enqueued  []string // заявки, отмеченные как отправленные воркеру
+	markErr   error
+}
+
+func (f *fakeApps) MarkEnqueued(_ context.Context, id string) error {
+	if f.markErr != nil {
+		return f.markErr
+	}
+	f.enqueued = append(f.enqueued, id)
+	return nil
 }
 
 func newFakeApps() *fakeApps { return &fakeApps{items: map[string]domain.Application{}} }
@@ -110,10 +120,13 @@ func newApplications(t *testing.T, orgType string) (*ApplicationService, *fakeAp
 	}
 	repo := newFakeApps()
 	companies := &fakeCompanies{c: domain.Company{INN: clientA.CompanyINN, OrgType: orgType}}
-	s := NewApplicationService(repo, companies, cat)
+	s := NewApplicationService(repo, companies, cat, &fakePublisher{})
 	s.now = func() time.Time { return testNow }
 	return s, repo
 }
+
+// publishedBy возвращает очередь-пустышку, в которую сервис отправляет задачи воркеру.
+func publishedBy(s *ApplicationService) *fakePublisher { return s.publisher.(*fakePublisher) }
 
 func str(s string) *string { return &s }
 func i64(n int64) *int64   { return &n }
@@ -277,6 +290,80 @@ func TestApplicationSubmit_Success(t *testing.T) {
 	if repo.submits != 1 {
 		t.Fatalf("submits = %d, want 1", repo.submits)
 	}
+}
+
+func TestApplicationSubmit_SendsTheTaskToTheWorkerImmediately(t *testing.T) {
+	ctx := context.Background()
+	s, repo := newApplications(t, "OOO")
+	a, _ := s.Create(ctx, clientA, completeExpress())
+
+	if _, err := s.Submit(ctx, clientA, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	tasks := publishedBy(s).tasks
+	if len(tasks) != 1 {
+		t.Fatalf("tasks sent = %d, want 1", len(tasks))
+	}
+	task := tasks[0]
+	if task.ApplicationID != a.ID || task.INN != clientA.CompanyINN || task.ProductID != "express" || task.Amount != 500_000 || task.TermMonths != 6 {
+		t.Fatalf("task fields: %+v", task)
+	}
+	if task.Form["applicant"] == nil {
+		t.Fatal("the form must be passed to the worker")
+	}
+	if !slices.Equal(repo.enqueued, []string{a.ID}) {
+		t.Fatalf("enqueued marks = %v, want the application marked once", repo.enqueued)
+	}
+}
+
+func TestApplicationSubmit_NothingIsSentWhenTheSubmitFails(t *testing.T) {
+	ctx := context.Background()
+	s, repo := newApplications(t, "OOO")
+
+	incomplete, _ := s.Create(ctx, clientA, domain.DraftPatch{ProductID: str("express")})
+	if _, err := s.Submit(ctx, clientA, incomplete.ID); err == nil {
+		t.Fatal("want a validation error")
+	}
+	full, _ := s.Create(ctx, clientA, completeExpress())
+	_, _ = s.Submit(ctx, clientA, full.ID)
+	_, _ = s.Submit(ctx, clientA, full.ID) // повторная отправка: 409
+
+	if n := len(publishedBy(s).tasks); n != 1 {
+		t.Fatalf("tasks sent = %d, want 1 (only the successful submit)", n)
+	}
+	if len(repo.enqueued) != 1 {
+		t.Fatalf("enqueued marks = %v, want 1", repo.enqueued)
+	}
+}
+
+func TestApplicationSubmit_QueueFailureDoesNotFailTheSubmit(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("the task could not be published", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		a, _ := s.Create(ctx, clientA, completeExpress())
+		publishedBy(s).failFor = a.ID
+
+		got, err := s.Submit(ctx, clientA, a.ID)
+		if err != nil || got.Status != domain.StatusSubmitted {
+			t.Fatalf("got %v, %v; the application must still be submitted", got.Status, err)
+		}
+		// метка не ставится: сборщик отправит задачу, когда пройдёт порог
+		if len(repo.enqueued) != 0 {
+			t.Fatalf("enqueued marks = %v, want none", repo.enqueued)
+		}
+	})
+
+	t.Run("the enqueued mark could not be saved", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		repo.markErr = errors.New("db is down")
+		a, _ := s.Create(ctx, clientA, completeExpress())
+
+		got, err := s.Submit(ctx, clientA, a.ID)
+		if err != nil || got.Status != domain.StatusSubmitted {
+			t.Fatalf("got %v, %v; the application must still be submitted", got.Status, err)
+		}
+	})
 }
 
 func TestApplicationSubmit_TwiceIsRejected(t *testing.T) {

@@ -151,6 +151,14 @@ func (r *ApplicationRepo) ApplyResult(ctx context.Context, res domain.Applicatio
 	return domain.ErrStatusMismatch
 }
 
+// MarkEnqueued отмечает, что задача по заявке только что отправлена воркеру (enqueued_at = now()).
+// Версию и updated_at не трогает: для клиента заявка не меняется. Если статус уже сменился, метка не нужна.
+func (r *ApplicationRepo) MarkEnqueued(ctx context.Context, id string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE applications SET enqueued_at = now() WHERE id = $1::text::uuid AND status = 'SUBMITTED'`, id)
+	return err
+}
+
 // ClaimStaleSubmitted находит заявки, которые слишком долго остаются в SUBMITTED, и помечает их
 // (enqueued_at = now()), чтобы следующая проверка не взяла их снова раньше срока.
 //

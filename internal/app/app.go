@@ -45,10 +45,11 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	applicationRepo := repository.NewApplicationRepo(pool)
-	applications := service.NewApplicationService(applicationRepo, companies, products)
+	applicationPublisher := queue.NewApplicationPublisher(rdb)
+	applications := service.NewApplicationService(applicationRepo, companies, products, applicationPublisher)
 
 	// Сборщик: раз в минуту повторно отправляет воркеру заявки, которые больше 2 минут остаются в SUBMITTED.
-	sweeper := service.NewApplicationSweeper(applicationRepo, companies, queue.NewApplicationPublisher(rdb), time.Minute, 2*time.Minute)
+	sweeper := service.NewApplicationSweeper(applicationRepo, companies, applicationPublisher, time.Minute, 2*time.Minute)
 	go sweeper.Run(ctx)
 
 	// Приём результатов воркера скоринга: читает applications:results и пишет статусы и решения в Postgres.

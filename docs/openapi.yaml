@@ -219,12 +219,14 @@ paths:
       responses:
         "201":
           description: Черновик создан
+          headers:
+            Idempotent-Replayed: { $ref: "#/components/headers/IdempotentReplayed" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Application"
         "400":
-          description: Неизвестный продукт, отрицательное число или некорректное тело
+          description: Неизвестный продукт, отрицательное число, некорректное тело либо не передан или некорректен Idempotency-Key
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -235,6 +237,16 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Запрос с этим Idempotency-Key ещё выполняется
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Idempotency-Key уже использован для другого запроса
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -320,12 +332,14 @@ paths:
       responses:
         "200":
           description: Обновлённый черновик
+          headers:
+            Idempotent-Replayed: { $ref: "#/components/headers/IdempotentReplayed" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Application"
         "400":
-          description: Неизвестный продукт, отрицательное число или некорректное тело
+          description: Неизвестный продукт, отрицательное число, некорректное тело, не передана version либо не передан или некорректен Idempotency-Key
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -351,6 +365,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Idempotency-Key уже использован для другого запроса
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/applications/{id}/submit:
     post:
       tags: [client]
@@ -360,7 +379,9 @@ paths:
         (по каталогу), и что продукт доступен компании по типу организации, сумме и сроку.
         Затем переводит заявку из DRAFT в SUBMITTED. Повторная отправка даёт 409.
         Проверка обязательных документов появится вместе с их загрузкой.
-        Отправка задачи воркеру скоринга появится на следующем этапе.
+        Сразу после сохранения задача уходит воркеру скоринга. Если отправка задачи не удалась,
+        ответ всё равно успешный: заявку, которая остаётся в SUBMITTED, позже подберёт сборщик
+        застрявших заявок (см. docs/worker-protocol.md).
         Запрос идемпотентен: нужен заголовок `Idempotency-Key`; повтор с тем же ключом вернёт
         прежний ответ.
       security: [{ bearer: [] }]
@@ -370,10 +391,17 @@ paths:
       responses:
         "200":
           description: Заявка отправлена, статус SUBMITTED
+          headers:
+            Idempotent-Replayed: { $ref: "#/components/headers/IdempotentReplayed" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Application"
+        "400":
+          description: Не передан или некорректен Idempotency-Key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401":
           description: Нет сессии
           content:
@@ -390,14 +418,15 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: Заявка уже отправлена
+          description: Заявка уже отправлена либо запрос с этим Idempotency-Key ещё выполняется
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: >
             Не заполнены обязательные поля (тело `{"missing_fields": [...]}`, поля формы
-            в виде `группа.поле`) либо продукт недоступен компании или параметрам (тело `{"error": "..."}`)
+            в виде `группа.поле`), либо продукт недоступен компании или параметрам, либо Idempotency-Key
+            уже использован для другого запроса (тело `{"error": "..."}`)
           content:
             application/json:
               schema:
@@ -464,6 +493,10 @@ components:
         Ошибки: ключ не передан или не подходит по длине (8–128 печатных символов без пробелов) — 400;
         ключ уже использован для другого запроса — 422; запрос с этим ключом ещё выполняется — 409.
         Для нового действия нужен новый ключ.
+  headers:
+    IdempotentReplayed:
+      description: Равен true, если ответ повторён из сохранённого по этому Idempotency-Key, а действие второй раз не выполнялось
+      schema: { type: string, enum: ["true"] }
   schemas:
     LoginRequest:
       type: object
