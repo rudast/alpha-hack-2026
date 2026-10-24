@@ -1,10 +1,10 @@
 """
 Natural Language Understanding (NLU) slot filler for Russian loan inquiries.
-Extracts amount, term, legal form, collateral, business age, purpose, and user intents.
+Extracts amount, term, legal form, collateral, business age, purpose, target products, and user intents.
 """
 from __future__ import annotations
 import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 
 class ExtractedSlots:
@@ -17,6 +17,7 @@ class ExtractedSlots:
         age_months: Optional[int] = None,
         age_category: Optional[str] = None,  # 'gte9' or 'lt9'
         purpose: Optional[str] = None,
+        target_product_id: Optional[str] = None,
         intent: str = "general_inquiry",
     ):
         self.amount = amount
@@ -26,6 +27,7 @@ class ExtractedSlots:
         self.age_months = age_months
         self.age_category = age_category
         self.purpose = purpose
+        self.target_product_id = target_product_id
         self.intent = intent
 
     def to_dict(self) -> Dict[str, Any]:
@@ -37,6 +39,7 @@ class ExtractedSlots:
             "age_months": self.age_months,
             "age_category": self.age_category,
             "purpose": self.purpose,
+            "target_product_id": self.target_product_id,
             "intent": self.intent,
         }
 
@@ -49,6 +52,7 @@ class ExtractedSlots:
             age_months=other.age_months if other.age_months is not None else self.age_months,
             age_category=other.age_category if other.age_category is not None else self.age_category,
             purpose=other.purpose if other.purpose is not None else self.purpose,
+            target_product_id=other.target_product_id if other.target_product_id is not None else self.target_product_id,
             intent=other.intent if other.intent != "general_inquiry" else self.intent,
         )
 
@@ -70,6 +74,7 @@ class SlotFiller:
         collateral = cls._extract_collateral(t)
         age_months, age_category = cls._extract_business_age(t)
         purpose = cls._extract_purpose(t)
+        target_product_id = cls._extract_target_product(t)
 
         return ExtractedSlots(
             amount=amount,
@@ -79,33 +84,107 @@ class SlotFiller:
             age_months=age_months,
             age_category=age_category,
             purpose=purpose,
+            target_product_id=target_product_id,
             intent=intent,
         )
 
     @classmethod
     def _detect_intent(cls, text: str) -> str:
+        # 1. Greeting
         if re.search(r"\b(привет|здравствуй\w*|добрый\s+(день|вечер|утро)|хай|салют)\b", text):
-            # Check if there are other slots in the message
             if not any(k in text for k in ["млн", "тыс", "руб", "кредит", "займ", "залог", "ип", "ооо"]):
                 return "greeting"
 
-        if re.search(r"\b(документ\w*|доки|справк\w*|выписк\w*|паспорт\w*|что\s+нужно\s+(собрать|предоставить|принести))\b", text):
+        # 2. Gratitude / acknowledgment
+        if re.search(r"\b(спасибо\w*|благодар\w*|отлично|супер|понятно|ясно|понял|договорились)\b", text):
+            if not any(k in text for k in ["млн", "тыс", "руб", "кредит", "займ", "залог"]):
+                return "gratitude"
+
+        # 3. Increase Amount Command
+        if re.search(r"\b(хочу\s+сумму\s+побольше|сумму\s+больше|нужно\s+больше|увеличить\s+сумму|лимит\s+выше|побольше\s+денег|больше\s+денег|мало\b)\b", text):
+            return "increase_amount"
+
+        # 4. Change Term Command
+        if re.search(r"\b(изменить\s+срок|другой\s+срок|срок\s+больше|срок\s+меньше|подольше|покороче|выбрать\s+срок)\b", text):
+            return "change_term"
+
+        # 5. Reset / Other Product Command
+        if re.search(r"\b(другой\s+продукт|подать\s+новую\s+заявку|начать\s+сначала|сбросить|выбрать\s+другое|в\s+начало)\b", text):
+            return "reset_flow"
+
+        # 6. FAQ: Signing
+        if re.search(r"\b(подписа\w*.*договор|электронн\w*\s+подпис\w*|смс.*код|как\s+подписать)\b", text):
+            return "faq_signing"
+
+        # 7. FAQ: Timeline / consideration speed
+        if re.search(r"\b(скольк\w*\s+(по\s+времени\s+)?рассматрива\w*|срок\w*\s+рассмотрен\w*|как\s+долго\s+рассматрива\w*|время\s+рассмотрен\w*|когда\s+деньги|когда\s+придут)\b", text):
+            return "faq_timeline"
+
+        # 8. FAQ: Manager contact
+        if re.search(r"\b(связа\w*.*менеджер\w*|позвонить|телефон\s+поддержк\w*|номер\s+банк\w*|горяч\w*\s+лини\w*|оператор\w*)\b", text):
+            return "faq_manager"
+
+        # 9. Documents
+        if re.search(r"\b(какие\s+документ\w*|документ\w*|доки|справк\w*|выписк\w*|паспорт\w*|что\s+нужно\s+(собрать|предоставить|принести))\b", text):
             return "docs_consultation"
 
+        # 10. Status
         if re.search(r"\b(статус\w*|заявк\w*|info_requested|рассмотрен\w*|одобрен\w*|на\s+доработк\w*)\b", text) or "с заявкой" in text or "по заявке" in text:
             return "status_inquiry"
 
-        if re.search(r"\b(сравн\w*|чем\s+отлича\w*|разниц\w*|что\s+лучше|посоветуй)\b", text):
+        # 11. Comparison
+        if re.search(r"\b(сравн\w*|чем\s+отлича\w*|разниц\w*|что\s+лучше|в\s+чем\s+отличи\w*|покажи\s+другие)\b", text):
             return "comparison"
 
-        if re.search(r"\b(подбер\w*|рассчитай\w*|помоги\s+выбрать|нужен\s+кредит|хочу\s+взять|ищу\s+кредит|оформить)\b", text):
+        # 12. All products overview
+        if re.search(r"\b(все\s+кредит\w*|все\s+продукт\w*|какие\s+(бывают\s+)?(кредит\w*|продукт\w*)|список\s+(кредит\w*|программ|продукт\w*)|каталог)\b", text):
+            return "all_products"
+
+        # 13. General inquiry / collecting slots
+        if re.search(r"\b(помоги\w*\s+выбрать|посоветуй\w*|какой\s+кредит|хочу\s+взять\s+кредит|нужен\s+кредит|подбер\w*)\b", text):
+            if not any(k in text for k in ["млн", "тыс", "руб", "маркетплейс", "авто", "оборудован", "ипотек", "завод", "овердрафт", "вкл", "линия", "залог"]):
+                return "collect_slots"
+            return "recommendation"
+
+        if re.search(r"\b(подбер\w*|рассчитай\w*|оформить)\b", text):
             return "recommendation"
 
         return "loan_inquiry"
 
     @classmethod
+    def _extract_target_product(cls, text: str) -> Optional[str]:
+        if "овердрафт" in text:
+            return "overdraft"
+        if "вкл" in text or "кредитная линия" in text or "кредитную линию" in text:
+            return "credit-line"
+        if "экспресс" in text:
+            return "express"
+        if "до 1 млн" in text or "до миллиона" in text:
+            return "small"
+        if "селлер" in text or "маркетплейс" in text or "wildberries" in text or "ozon" in text:
+            return "seller"
+        if "автокредит" in text or "авто" in text or "машин" in text:
+            return "auto"
+        if "оборудован" in text or "станок" in text:
+            return "equipment"
+        if "ипотек" in text:
+            if "ип" in text and "ооо" not in text:
+                return "mortgage-ip"
+            return "mortgage-ooo"
+        if "залог недвижимости" in text or "под залог имущества" in text:
+            return "secured-property"
+        if "завод" in text or "готов" in text and "бизнес" in text:
+            return "ready-business"
+        if "для ооо без залога" in text:
+            return "ooo-unsecured"
+        if "для ип без залога" in text:
+            return "ip-unsecured"
+        if "оборотные средства" in text or "оборотк" in text:
+            return "working-capital"
+        return None
+
+    @classmethod
     def _extract_amount(cls, text: str) -> Optional[int]:
-        # Clean non-breaking spaces
         clean = text.replace("\u00a0", " ").replace(",", ".")
 
         # Case: "1.5 млн", "3 миллиона", "15 млн"
@@ -129,7 +208,6 @@ class SlotFiller:
         # Case: full digits with spaces like "1 500 000" or "500000"
         digits_spaced = re.findall(r"\b\d{1,3}(?:\s\d{3})+\b", clean)
         if digits_spaced:
-            # take the largest reasonable loan number
             for d in digits_spaced:
                 num = int(d.replace(" ", ""))
                 if 50_000 <= num <= 50_000_000:
@@ -153,16 +231,24 @@ class SlotFiller:
     def _extract_term(cls, text: str) -> Optional[int]:
         clean = text.replace(",", ".")
 
+        # Strip business age phrases so they are never mistakenly parsed as loan terms!
+        clean_for_term = re.sub(
+            r"(?:бизнесу|работаем|существуем|открылись|стаж|компании)\s*(?:уже\s*)?\d+(?:\.\d+)?\s*(?:мес\w*|год\w*|лет)\b",
+            " ",
+            clean,
+        )
+        clean_for_term = re.sub(r"\b\d+(?:\.\d+)?\s*(?:мес\w*|год\w*|лет)\s+назад\b", " ", clean_for_term)
+
         # "на полтора года" / "полтора года"
-        if re.search(r"\bполтора\s+года\b", clean):
+        if re.search(r"\bполтора\s+года\b", clean_for_term):
             return 18
 
         # "на полгода" / "полгода"
-        if re.search(r"\bполгода\b", clean):
+        if re.search(r"\bполгода\b", clean_for_term):
             return 6
 
         # "на 1.5 года", "на 2 года", "на 5 лет"
-        year_match = re.search(r"(?:на\s+)?(\d+(?:\.\d+)?)\s*(?:год|года|лет|г\.)\b", clean)
+        year_match = re.search(r"(?:на\s+)?(\d+(?:\.\d+)?)\s*(?:год|года|лет|г\.)\b", clean_for_term)
         if year_match:
             try:
                 years = float(year_match.group(1))
@@ -170,18 +256,18 @@ class SlotFiller:
             except ValueError:
                 pass
 
-        # "на 6 месяцев", "на 18 мес", "на месяц"
-        month_match = re.search(r"(?:на\s+)?(\d+)\s*(?:мес|месяц|месяца|месяцев|м\.)\b", clean)
+        # "на 6 месяцев", "на 18 мес"
+        month_match = re.search(r"(?:на\s+)?(\d+)\s*(?:мес|месяц|месяца|месяцев|м\.)\b", clean_for_term)
         if month_match:
             try:
                 return int(month_match.group(1))
             except ValueError:
                 pass
 
-        if re.search(r"\b(на\s+)?(один\s+)?месяц\b", clean):
+        if re.search(r"\b(на\s+)?(один\s+)?месяц\b", clean_for_term):
             return 1
 
-        if re.search(r"\b(на\s+)?(один\s+)?год\b", clean):
+        if re.search(r"\b(на\s+)?(один\s+)?год\b", clean_for_term):
             return 12
 
         return None
@@ -209,13 +295,19 @@ class SlotFiller:
         return None
 
     @classmethod
-    def _extract_business_age(cls, text: str) -> tuple[Optional[int], Optional[str]]:
+    def _extract_business_age(cls, text: str) -> Tuple[Optional[int], Optional[str]]:
         clean = text.replace(",", ".")
 
         # Match "бизнесу X месяцев", "работаем X мес", "открылись X месяцев назад"
         age_m = re.search(r"(?:бизнесу|работаем|существуем|открылись|стаж|компании)\s*(?:уже\s*)?(\d+)\s*(?:мес|месяц|месяца|месяцев)\b", clean)
         if age_m:
             months = int(age_m.group(1))
+            return months, "lt9" if months < 9 else "gte9"
+
+        # Match "X месяцев назад"
+        ago_m = re.search(r"\b(\d+)\s*(?:мес|месяц|месяца|месяцев)\s+назад\b", clean)
+        if ago_m:
+            months = int(ago_m.group(1))
             return months, "lt9" if months < 9 else "gte9"
 
         # Match years: "бизнесу 2 года"
@@ -236,16 +328,16 @@ class SlotFiller:
 
     @classmethod
     def _extract_purpose(cls, text: str) -> Optional[str]:
-        if re.search(r"\b(маркетплейс|вайлдберриз|wildberries|вб|wb|озон|ozon|яндекс\s*маркет)\b", text):
+        if re.search(r"\b(маркетплейс\w*|вайлдберриз|wildberries|вб|wb|озон\w*|ozon|яндекс\s*маркет|селлер\w*)\b", text):
             return "marketplace"
 
-        if re.search(r"\b(кассов\w*\s+разрыв|срочно\s+деньги|зарплат\w*|налоги|закрыть\s+дыру|перехватить)\b", text):
+        if re.search(r"\b(овердрафт\w*|кассов\w*\s+разрыв|срочно\s+деньги|зарплат\w*|налоги|закрыть\s+дыру|перехватить)\b", text):
             return "cashflow_gap"
 
-        if re.search(r"\b(оборотк\w*|оборотн\w*|закупк\w*|товар\w*|материал\w*|пополнить\s+оборот\w*)\b", text):
-            return "working_capital"
+        if re.search(r"\b(вкл|кредитн\w*\s+лини\w*|транш\w*|возобновляем\w*)\b", text):
+            return "credit_line"
 
-        if re.search(r"\b(авто|автомобил\w*|машин\w*|транспорт\w*|грузов\w*|грузовик\w*|газел\w*|тягач\w*|фургон\w*)\b", text):
+        if re.search(r"\b(авто|автокредит\w*|автомобил\w*|машин\w*|транспорт\w*|грузов\w*|грузовик\w*|газел\w*|тягач\w*|фургон\w*)\b", text):
             return "vehicle"
 
         if re.search(r"\b(оборудовани\w*|станок\w*|станки|линия|техник\w*|аппарат\w*|печь|погрузчик\w*)\b", text):
@@ -256,5 +348,14 @@ class SlotFiller:
 
         if re.search(r"\b(завод\w*|покупк\w*.*(бизнес\w*|предприяти\w*|доли)|готов\w*\s+бизнес\w*|купить\s+бизнес\w*)\b", text):
             return "business_purchase"
+
+        if re.search(r"\b(экспресс\w*|быстр\w*\s+кредит|срочн\w*\s+кредит)\b", text):
+            return "express"
+
+        if re.search(r"\b(до\s+1\s+млн|до\s+миллиона|микро\w*)\b", text):
+            return "small_loan"
+
+        if re.search(r"\b(оборотк\w*|оборотн\w*|закупк\w*|товар\w*|материал\w*|пополнить\s+оборот\w*|текущ\w*\s+расход\w*)\b", text):
+            return "working_capital"
 
         return None

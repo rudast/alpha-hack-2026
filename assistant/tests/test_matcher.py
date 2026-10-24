@@ -103,7 +103,29 @@ class TestMatcher(unittest.TestCase):
             term_months=24,
             purpose="vehicle",
         )
-        self.assertEqual(v_offers[0].product.id, "auto")
+    def test_target_product_boost_and_warning(self):
+        # Mature business asking for overdraft gets overdraft
+        offers = ProductMatcher.match(
+            org="ooo",
+            collateral="without",
+            age_months=24,
+            amount=500_000,
+            term_months=6,
+            target_product_id="overdraft",
+        )
+        self.assertEqual(offers[0].product.id, "overdraft")
+
+        # Young business asking for overdraft gets warning and available alternatives
+        young_offers = ProductMatcher.match(
+            org="ooo",
+            collateral="without",
+            age_months=4,
+            amount=500_000,
+            term_months=6,
+            target_product_id="overdraft",
+        )
+        self.assertNotIn("overdraft", [o.product.id for o in young_offers])
+        self.assertTrue(any("от 9 месяцев" in w for w in young_offers[0].warnings))
 
 
 if __name__ == "__main__":

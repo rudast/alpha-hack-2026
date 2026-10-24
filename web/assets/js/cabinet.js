@@ -442,7 +442,7 @@
     var st = Catalog.status(a.status);
     var draft = a.status === 'DRAFT';
     return (
-      '<article class="app" data-app="' + esc(a.id) + '" tabindex="0" role="button" aria-label="Открыть заявку">' +
+      '<article class="app" data-app="' + esc(a.id) + '" data-status="' + esc(a.status) + '" tabindex="0" role="button" aria-label="Открыть заявку">' +
       '<div class="app-main">' +
       '<div class="app-title">' + esc(productName(a.product_id, a.product_name)) + '</div>' +
       '<div class="app-meta">' +
@@ -451,7 +451,7 @@
       ' · ' + (a.submitted_at ? 'подана ' + esc(fmt.dateShort(a.submitted_at)) : 'создана ' + esc(fmt.dateShort(a.created_at))) +
       '</div>' +
       '</div>' +
-      '<span class="badge badge-' + st.tone + '">' + esc(st.label) + '</span>' +
+      '<span class="badge badge-' + st.tone + '" data-status="' + esc(a.status) + '">' + esc(st.label) + '</span>' +
       (draft
         ? '<a class="btn btn-primary btn-inline app-continue" href="#draft=' + encodeURIComponent(a.id) + '">Продолжить</a>'
         : '<span class="app-chevron">' + icon('chevron', 18) + '</span>') +

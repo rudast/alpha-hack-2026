@@ -70,6 +70,8 @@ class ActionCommand(BaseModel):
 
 class ProductOffer(BaseModel):
     product: ProductSpec
+    amount: int = Field(default=1_000_000, description="Amount in rubles used for calculation")
+    term_months: int = Field(default=12, description="Term in months used for calculation")
     payment: int = Field(..., description="Estimated monthly annuity payment")
     overpayment: int = Field(..., description="Total interest overpayment")
     why_matched: List[str] = Field(default_factory=list)

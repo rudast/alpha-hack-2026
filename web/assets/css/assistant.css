@@ -478,3 +478,11 @@
     border-radius: 0;
   }
 }
+
+/* Card highlight animation when assistant applies calculator */
+.loan-card.assistant-highlight {
+  outline: 2px solid var(--alfa-red) !important;
+  box-shadow: 0 0 20px rgba(239, 49, 36, 0.45) !important;
+  transform: translateY(-2px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}

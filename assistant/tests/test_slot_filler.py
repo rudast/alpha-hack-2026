@@ -33,6 +33,20 @@ class TestSlotFiller(unittest.TestCase):
             slots = SlotFiller.extract(text)
             self.assertEqual(slots.term_months, expected, f"Failed on text: {text}")
 
+    def test_term_does_not_confuse_with_business_age(self):
+        slots1 = SlotFiller.extract("хотим взять автокредит 4 млн, ооо, компании 7 месяцев")
+        self.assertIsNone(slots1.term_months)
+        self.assertEqual(slots1.age_months, 7)
+        self.assertEqual(slots1.age_category, "lt9")
+
+        slots2 = SlotFiller.extract("кредит 10 млн на 2 года, работаем 5 месяцев")
+        self.assertEqual(slots2.term_months, 24)
+        self.assertEqual(slots2.age_months, 5)
+
+        slots3 = SlotFiller.extract("нужно 3 млн на закупку, открылись 4 месяца назад")
+        self.assertIsNone(slots3.term_months)
+        self.assertEqual(slots3.age_months, 4)
+
     def test_org_extraction(self):
         self.assertEqual(SlotFiller.extract("мы ООО Ромашка").org, "ooo")
         self.assertEqual(SlotFiller.extract("я юрлицо").org, "ooo")
@@ -57,13 +71,27 @@ class TestSlotFiller(unittest.TestCase):
         slots3 = SlotFiller.extract("у нас молодой бизнес")
         self.assertEqual(slots3.age_category, "lt9")
 
-    def test_purpose_extraction(self):
+    def test_purpose_and_product_extraction(self):
         self.assertEqual(SlotFiller.extract("закупка под маркетплейс wildberries").purpose, "marketplace")
         self.assertEqual(SlotFiller.extract("кассовый разрыв, нечем платить зарплату").purpose, "cashflow_gap")
         self.assertEqual(SlotFiller.extract("покупка грузового автомобиля").purpose, "vehicle")
         self.assertEqual(SlotFiller.extract("купить производственный станок").purpose, "equipment")
         self.assertEqual(SlotFiller.extract("коммерческая ипотека под склад").purpose, "real_estate")
         self.assertEqual(SlotFiller.extract("покупка готового завода").purpose, "business_purchase")
+
+        # Explicit product names
+        self.assertEqual(SlotFiller.extract("хочу автокредит").target_product_id, "auto")
+        self.assertEqual(SlotFiller.extract("нужен овердрафт").target_product_id, "overdraft")
+        self.assertEqual(SlotFiller.extract("кредитная линия вкл").target_product_id, "credit-line")
+
+    def test_intents_detection(self):
+        self.assertEqual(SlotFiller.extract("Чем отличается овердрафт от кредитной линии?").intent, "comparison")
+        self.assertEqual(SlotFiller.extract("Как подписать договор?").intent, "faq_signing")
+        self.assertEqual(SlotFiller.extract("Сколько рассматривают заявку?").intent, "faq_timeline")
+        self.assertEqual(SlotFiller.extract("Связаться с менеджером").intent, "faq_manager")
+        self.assertEqual(SlotFiller.extract("Спасибо за помощь!").intent, "gratitude")
+        self.assertEqual(SlotFiller.extract("Помогите выбрать кредит").intent, "collect_slots")
+        self.assertEqual(SlotFiller.extract("Какие кредитные продукты у вас есть?").intent, "all_products")
 
 
 if __name__ == "__main__":

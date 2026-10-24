@@ -4,7 +4,8 @@ Businesslike, friendly, helpful tone of voice (Alfa-Bank style).
 """
 from __future__ import annotations
 from typing import List, Optional, Dict, Any
-from assistant.domain.models import ProductOffer, ActionCommand
+from assistant.domain.models import ProductOffer, ActionCommand, ProductSpec
+from assistant.domain.catalog import get_all_products, get_product_by_id
 
 
 def format_rubles(val: int) -> str:
@@ -56,6 +57,29 @@ def render_greeting(context_page: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
+def render_collect_slots() -> Dict[str, Any]:
+    text = (
+        "С удовольствием помогу подобрать оптимальный кредит для вашей компании!\n\n"
+        "Чтобы предложить наиболее выгодные условия, уточните, пожалуйста:\n"
+        "• Какая сумма вам необходима?\n"
+        "• На какой срок планируете финансирование?\n"
+        "• Какая цель кредита (закупка товара, кассовый разрыв, маркетплейсы, авто или недвижимость)?"
+    )
+    quick_replies = [
+        "1 млн на 1 год",
+        "3 млн на маркетплейсы",
+        "500 тыс. без залога",
+        "Автокредит",
+    ]
+    return {
+        "reply": text,
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": quick_replies,
+        "dialogue_state": "COLLECTING_SLOTS",
+    }
+
+
 def render_recommendation(
     offers: List[ProductOffer],
     amount: Optional[int],
@@ -79,10 +103,13 @@ def render_recommendation(
     best = offers[0]
     p = best.product
 
+    rec_amount = best.amount
+    rec_term = best.term_months
+
     lines = []
     lines.append(f"Рекомендую обратить внимание на программу **«{p.title}»**.")
     lines.append(f"• **Ставка:** от {p.rate:.1f}% годовых")
-    lines.append(f"• **Ежемесячный платеж:** ~{format_rubles(best.payment)} / мес.")
+    lines.append(f"• **Ежемесячный платеж:** ~{format_rubles(best.payment)} / мес. (при сумме {format_rubles(rec_amount)} на {rec_term} мес.)")
     lines.append(f"• **Срок:** от {p.term[0]} до {p.term[1]} мес.")
     lines.append(f"• **Сумма:** от {format_rubles(p.amount[0])} до {format_rubles(p.amount[1])}")
 
@@ -107,10 +134,6 @@ def render_recommendation(
     lines.append("\nХотите применить эти параметры в калькуляторе или сразу перейти к оформлению?")
 
     actions: List[ActionCommand] = []
-    rec_amount = amount or p.amount[0]
-    rec_term = term or p.term[0]
-    if p.young_max and is_young and rec_amount > p.young_max:
-        rec_amount = p.young_max
 
     actions.append(
         ActionCommand(
@@ -148,6 +171,8 @@ def render_recommendation(
         "Сравнить с другими",
         "Хочу сумму побольше",
         "Изменить срок",
+        "Сколько рассматривают?",
+        "Как подписать договор?",
     ]
 
     return {
@@ -156,6 +181,99 @@ def render_recommendation(
         "actions": actions,
         "quick_replies": quick_replies,
         "dialogue_state": "RECOMMENDATION",
+    }
+
+
+def render_comparison(
+    p1: ProductSpec,
+    p2: ProductSpec,
+    offers: Optional[List[ProductOffer]] = None,
+) -> Dict[str, Any]:
+    lines = [
+        f"**Сравнение программ «{p1.title}» и «{p2.title}»:**\n",
+        f"**1. «{p1.title}»**",
+        f"• Ставка: от {p1.rate:.1f}% годовых",
+        f"• Сумма: {format_rubles(p1.amount[0])} — {format_rubles(p1.amount[1])}",
+        f"• Срок: {p1.term[0]} — {p1.term[1]} мес.",
+        f"• Залог: {'Требуется' if p1.collateral == 'with' else 'Без залога' if p1.collateral == 'without' else 'Любой'}",
+        f"• Стаж бизнеса: {'От 9 месяцев' if p1.needs9 else 'От 0 месяцев (молодой бизнес)'}",
+        f"• Особенность: {p1.desc}\n",
+        f"**2. «{p2.title}»**",
+        f"• Ставка: от {p2.rate:.1f}% годовых",
+        f"• Сумма: {format_rubles(p2.amount[0])} — {format_rubles(p2.amount[1])}",
+        f"• Срок: {p2.term[0]} — {p2.term[1]} мес.",
+        f"• Залог: {'Требуется' if p2.collateral == 'with' else 'Без залога' if p2.collateral == 'without' else 'Любой'}",
+        f"• Стаж бизнеса: {'От 9 месяцев' if p2.needs9 else 'От 0 месяцев (молодой бизнес)'}",
+        f"• Особенность: {p2.desc}",
+    ]
+
+    actions = [
+        ActionCommand(
+            type="apply_calculator",
+            label=f"Выбрать «{p1.title}»",
+            payload={
+                "product_id": p1.id,
+                "amount": p1.amount[0] if p1.amount[0] > 1_000_000 else 1_000_000,
+                "term": p1.term[0] if p1.term[0] > 12 else 12,
+                "org": p1.org_types[0],
+                "collateral": p1.collateral if p1.collateral != "any" else "without",
+                "age": "gte9" if p1.needs9 else "lt9",
+            },
+        ),
+        ActionCommand(
+            type="apply_calculator",
+            label=f"Выбрать «{p2.title}»",
+            payload={
+                "product_id": p2.id,
+                "amount": p2.amount[0] if p2.amount[0] > 1_000_000 else 1_000_000,
+                "term": p2.term[0] if p2.term[0] > 12 else 12,
+                "org": p2.org_types[0],
+                "collateral": p2.collateral if p2.collateral != "any" else "without",
+                "age": "gte9" if p2.needs9 else "lt9",
+            },
+        ),
+    ]
+
+    return {
+        "reply": "\n".join(lines),
+        "recommended_products": offers or [],
+        "actions": actions,
+        "quick_replies": [f"Документы для «{p1.title}»", f"Документы для «{p2.title}»", "Оформить заявку"],
+        "dialogue_state": "COMPARISON",
+    }
+
+
+def render_all_products() -> Dict[str, Any]:
+    lines = [
+        "В линейке Альфа-Банка доступно **14 кредитных продуктов** для малого и среднего бизнеса, сгруппированных по 5 ключевым направлениям:\n",
+        "**1. Оборотное финансирование (Cash Flow):**",
+        "• «Оборотные средства» (от 19.0%, до 30 млн ₽)",
+        "• «Кредит для ООО без залога» (от 20.0%, до 30 млн ₽)",
+        "• «Кредит для ИП без залога» (от 21.0%, до 15 млн ₽)",
+        "• «Кредит для селлеров маркетплейсов» (от 18.5%, до 15 млн ₽)",
+        "• «Экспресс-кредит для бизнеса» (от 20.5%, до 5 млн ₽)",
+        "• «Кредит до 1 млн ₽» (от 22.0%, до 1 млн ₽)",
+        "• «Овердрафт» (от 17.5%, до 15 млн ₽ на срок до 12 мес.)\n",
+        "**2. Кредитные линии:**",
+        "• «Возобновляемая кредитная линия (ВКЛ)» (от 17.0%, до 30 млн ₽)\n",
+        "**3. Инвестиционные кредиты:**",
+        "• «Кредит на оборудование» (от 16.5%, до 30 млн ₽)",
+        "• «Автокредит для бизнеса» (от 15.5%, до 20 млн ₽)\n",
+        "**4. Кредиты под залог недвижимости:**",
+        "• «Кредит под залог недвижимости/оборудования» (от 15.0%, до 30 млн ₽)",
+        "• «Ипотека для ООО» (от 14.5%, до 30 млн ₽)",
+        "• «Ипотека для ИП» (от 14.5%, до 30 млн ₽)\n",
+        "**5. Покупка бизнеса:**",
+        "• «Покупка завода или готового бизнеса» (от 16.0%, до 30 млн ₽)\n",
+        "Расскажите о вашей задаче, и я подберу подходящую программу за пару секунд!",
+    ]
+
+    return {
+        "reply": "\n".join(lines),
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": ["Оборотные средства", "Маркетплейсы", "Без залога до 1 года", "Автокредит"],
+        "dialogue_state": "CATALOG_OVERVIEW",
     }
 
 
@@ -168,13 +286,78 @@ def render_docs(product_title: str, docs: List[str]) -> Dict[str, Any]:
     return {
         "reply": "\n".join(lines),
         "recommended_products": [],
-        "actions": [],
-        "quick_replies": ["Перейти к заявке", "Другой продукт", "Сколько рассматривают?"],
+        "actions": [
+            ActionCommand(
+                type="apply_wizard",
+                label="Перейти к оформлению",
+                payload={"product_title": product_title},
+            )
+        ],
+        "quick_replies": ["Сколько рассматривают?", "Как подписать договор?", "Другой продукт"],
         "dialogue_state": "DOCS_CONSULTATION",
     }
 
 
-def render_status_help(status: Optional[str], missing_fields: Optional[List[str]] = None, missing_docs: Optional[List[str]] = None) -> Dict[str, Any]:
+def render_faq(faq_type: str) -> Dict[str, Any]:
+    if faq_type == "faq_signing":
+        reply = (
+            "**Как подписать кредитный договор:**\n\n"
+            "1. После одобрения заявки кредитный договор формируется в вашем личном кабинете.\n"
+            "2. Вы проверяете финальные условия, график платежей и реквизиты счёта.\n"
+            "3. Подписание происходит онлайн с помощью простой электронной подписи (СМС-код).\n"
+            "4. Сразу после подписания средства зачисляются на ваш расчётный счёт без визита в банк."
+        )
+        quick_replies = ["Связаться с менеджером", "Подать заявку", "Необходимые документы"]
+    elif faq_type == "faq_timeline":
+        reply = (
+            "**Сроки рассмотрения заявок в Альфа-Банке:**\n\n"
+            "• **Экспресс-кредит и Кредит до 1 млн ₽:** от 2 минут в автоматическом скоринге.\n"
+            "• **Селлеры маркетплейсов и Овердрафт:** от 15 минут до 2 часов.\n"
+            "• **Оборотные средства и Кредитная линия:** в течение 1 рабочего дня.\n"
+            "• **Залоговые программы, автокредит и ипотека:** от 1 до 3 рабочих дней (с учётом оценки залога).\n\n"
+            "Статус рассмотрения отображается в режиме реального времени в личном кабинете."
+        )
+        quick_replies = ["Подать экспресс-заявку", "Статус заявки", "Какие документы нужны?"]
+    elif faq_type == "faq_manager":
+        reply = (
+            "**Связь с персональным менеджером:**\n\n"
+            "• Телефон горячей линии для бизнеса: **8 800 200-00-00** (бесплатно по РФ)\n"
+            "• Чат в мобильном приложении и интернет-банке «Альфа-Бизнес»: доступен 24/7\n"
+            "• Кредитный специалист закрепляется за вашей компанией сразу после подачи первой заявки."
+        )
+        quick_replies = ["Подать новую заявку", "Статус заявки", "Подобрать кредит"]
+    else:
+        reply = "Если у вас возникли вопросы по тарифам или оформлению, я готов помочь!"
+        quick_replies = ["Подобрать кредит", "Все программы", "Статус заявки"]
+
+    return {
+        "reply": reply,
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": quick_replies,
+        "dialogue_state": "FAQ",
+    }
+
+
+def render_gratitude() -> Dict[str, Any]:
+    reply = (
+        "Рад был помочь! Если появятся вопросы по кредитным программам, "
+        "расчётам платежей или документам — пишите, я всегда на связи."
+    )
+    return {
+        "reply": reply,
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": ["Подобрать другой кредит", "Все продукты", "Какие документы нужны?"],
+        "dialogue_state": "IDLE",
+    }
+
+
+def render_status_help(
+    status: Optional[str],
+    missing_fields: Optional[List[str]] = None,
+    missing_docs: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     status_upper = (status or "").upper()
     lines = []
 
@@ -213,3 +396,123 @@ def render_status_help(status: Optional[str], missing_fields: Optional[List[str]
         "quick_replies": ["Как подписать договор?", "Связаться с менеджером", "Подать новую заявку"],
         "dialogue_state": "STATUS_HELP",
     }
+
+
+def render_increase_amount(
+    product: Optional[ProductSpec] = None,
+    current_amount: Optional[int] = None,
+    is_young: bool = False,
+) -> Dict[str, Any]:
+    lines = ["**Увеличение суммы финансирования:**\n"]
+    if is_young:
+        lines.append(
+            "ℹ️ Для компаний со стажем **до 9 месяцев** без залога действуют базовые лимиты: "
+            "до **2 млн ₽** (Экспресс) и до **3 млн ₽** (Селлеры маркетплейсов)."
+        )
+        lines.append("\n**Как получить сумму больше прямо сейчас:**")
+        lines.append("1. **Автокредит для бизнеса:** до **5 000 000 ₽** (в залог идёт приобретаемый транспорт).")
+        lines.append("2. **Кредит под залог недвижимости или оборудования:** до **10 000 000 ₽** даже для молодых компаний.")
+        lines.append("3. При стаже бизнеса **от 9 месяцев** лимит без залога возрастает до **30 000 000 ₽**.")
+    else:
+        lines.append("Для действующего бизнеса со стажем от 9 месяцев доступны повышенные лимиты:")
+        lines.append("• **Без залога (ООО):** до **30 000 000 ₽** (Оборотные средства или ВКЛ).")
+        lines.append("• **Без залога (ИП):** до **15 000 000 ₽**.")
+        lines.append("• **С залогом недвижимости/оборудования:** до **30 000 000 ₽** по сниженной ставке от 15.0%.")
+
+    lines.append("\nКакая сумма требуется вашему бизнесу?")
+
+    quick_replies = ["5 млн ₽", "10 млн ₽", "15 млн ₽", "30 млн ₽", "Кредит под залог"]
+    return {
+        "reply": "\n".join(lines),
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": quick_replies,
+        "dialogue_state": "INCREASE_AMOUNT",
+    }
+
+
+def render_change_term(
+    product: Optional[ProductSpec] = None,
+    amount: Optional[int] = None,
+) -> Dict[str, Any]:
+    amt = amount or 1_000_000
+    p = product or get_product_by_id("working-capital")
+    min_t = p.term[0] if p else 3
+    max_t = p.term[1] if p else 36
+    rate = p.rate if p else 19.0
+
+    lines = [
+        f"**Расчет ежемесячного платежа для суммы {format_rubles(amt)}:**",
+        f"Программа: **«{p.title if p else 'Оборотные средства'}»** (ставка от {rate:.1f}%)\n",
+    ]
+
+    terms_to_show = [t for t in [6, 12, 24, 36, 60, 120] if min_t <= t <= max_t]
+    if not terms_to_show:
+        terms_to_show = [min_t, max_t]
+
+    actions: List[ActionCommand] = []
+    quick_replies: List[str] = []
+
+    for t in terms_to_show:
+        r_month = (rate / 100.0) / 12.0
+        pmt = int(round(amt * (r_month * (1 + r_month) ** t) / ((1 + r_month) ** t - 1)))
+        lines.append(f"• **{format_term(t)}:** ~**{format_rubles(pmt)}** / мес.")
+
+        if len(actions) < 2 and p:
+            actions.append(
+                ActionCommand(
+                    type="apply_calculator",
+                    label=f"Выбрать {format_term(t)}",
+                    payload={
+                        "product_id": p.id,
+                        "amount": amt,
+                        "term": t,
+                        "org": p.org_types[0] if p.org_types else "ooo",
+                        "collateral": p.collateral if p.collateral != "any" else "without",
+                        "age": "gte9" if p.needs9 else "lt9",
+                    },
+                )
+            )
+        quick_replies.append(f"Срок {format_term(t)}")
+
+    lines.append("\nВыберите комфортный срок в калькуляторе или нажмите на подходящий вариант ниже:")
+
+    return {
+        "reply": "\n".join(lines),
+        "recommended_products": [],
+        "actions": actions,
+        "quick_replies": quick_replies[:4] + ["Сравнить с другими"],
+        "dialogue_state": "CHANGE_TERM",
+    }
+
+
+def render_qa_answer(qa_item) -> Dict[str, Any]:
+    lines = [f"**{qa_item.question}**\n", qa_item.answer]
+    return {
+        "reply": "\n".join(lines),
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": qa_item.quick_replies,
+        "dialogue_state": "QA_EXPERT",
+    }
+
+
+def render_reset_flow() -> Dict[str, Any]:
+    reply = (
+        "Параметры сброшены. Давайте начнем сначала!\n\n"
+        "Расскажите, на какую цель и какую сумму вы ищете финансирование, "
+        "или выберите одно из популярных направлений ниже:"
+    )
+    return {
+        "reply": reply,
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": [
+            "3 млн на маркетплейсы",
+            "Оборотные средства 1 млн",
+            "Без залога на 1 год",
+            "Автокредит для бизнеса",
+        ],
+        "dialogue_state": "GREETING",
+    }
+

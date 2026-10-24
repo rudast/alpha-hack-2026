@@ -89,15 +89,43 @@ class ProductMatcher:
         amount: Optional[int] = None,
         term_months: Optional[int] = None,
         purpose: Optional[str] = None,
+        target_product_id: Optional[str] = None,
         limit: int = 3,
     ) -> List[ProductOffer]:
         all_products = get_all_products()
 
-        # Defaults for financial calculation
+        # Defaults for financial calculation based on purpose
         calc_amount = amount if amount and amount > 0 else 1_000_000
-        calc_term = term_months if term_months and term_months > 0 else 12
+        if term_months and term_months > 0:
+            calc_term = term_months
+        elif purpose == "marketplace":
+            calc_term = 18
+        elif purpose in ("vehicle", "equipment"):
+            calc_term = 36
+        elif purpose in ("real_estate", "business_purchase"):
+            calc_term = 60
+        else:
+            calc_term = 12
 
         is_young = (age_months is not None and age_months < 9) or (age_category == "lt9")
+
+        # Check if user specifically requested a restricted product
+        requested_product_warning: Optional[str] = None
+        if target_product_id:
+            tp = get_product_by_id(target_product_id)
+            if tp:
+                if is_young and tp.needs9:
+                    requested_product_warning = (
+                        f"Программа «{tp.title}» доступна для бизнеса со стажем от 9 месяцев. "
+                        f"Для вашей компании подобраны лучшие доступные альтернативы."
+                    )
+                elif org and org.lower() not in tp.org_types:
+                    target_org_name = "ООО" if "ooo" in tp.org_types else "ИП"
+                    user_org_name = "ИП" if org.lower() == "ip" else "ООО"
+                    requested_product_warning = (
+                        f"Программа «{tp.title}» предназначена для {target_org_name}, "
+                        f"а для вашей формы ({user_org_name}) подобраны подходящие варианты."
+                    )
 
         # 1. Filter strictly available
         available = [
@@ -107,58 +135,78 @@ class ProductMatcher:
 
         # 2. If nothing fits strictly (e.g. requested amount or term too high/low, or young business requested restricted product),
         # relaxed match with explanations/warnings
-        relaxed = False
         candidates = available
         if not candidates:
-            relaxed = True
             # Relax amount and term constraints, keep org and age restrictions
             candidates = [
                 p for p in all_products
                 if (not org or org.lower() in p.org_types) and (not is_young or not p.needs9)
             ]
             if not candidates:
-                # If still empty (e.g. org doesn't match anything), fallback to all
                 candidates = all_products
 
-        scored: List[Tuple[float, ProductSpec, List[str], List[str]]] = []
+        scored: List[Tuple[float, ProductSpec, List[str], List[str], int, int]] = []
 
         for p in candidates:
             score = 100.0 - p.rate  # lower rate gets higher base score
             why: List[str] = []
             warnings: List[str] = []
 
+            if requested_product_warning:
+                warnings.append(requested_product_warning)
+
+            # Direct product request boost
+            if target_product_id and (p.id == target_product_id or p.backend_id == target_product_id):
+                score += 80.0
+                why.append(f"Вы интересовались программой «{p.title}»")
+
             # Purpose alignment scoring
             if purpose:
                 if purpose == "marketplace":
                     if p.id == "seller":
-                        score += 60.0
+                        score += 65.0
                         why.append("Идеально для продаж на Wildberries, Ozon и других маркетплейсах")
                 elif purpose in ("cashflow_gap", "gap"):
                     if p.id == "overdraft":
-                        score += 60.0
+                        score += 65.0
                         why.append("Специально для быстрого покрытия кассовых разрывов")
                     elif p.id == "credit-line":
-                        score += 40.0
+                        score += 45.0
                         why.append("Кредитная линия позволяет брать транши по мере необходимости")
+                    elif p.id == "express":
+                        score += 35.0
+                        why.append("Быстрое получение средств на покрытие кассового разрыва")
+                elif purpose == "credit_line":
+                    if p.id == "credit-line":
+                        score += 65.0
+                        why.append("Возобновляемая кредитная линия с траншами по запросу")
                 elif purpose == "vehicle":
                     if p.id == "auto":
-                        score += 60.0
+                        score += 65.0
                         why.append("Целевой автокредит с пониженной ставкой")
                 elif purpose == "equipment":
                     if p.id == "equipment":
-                        score += 60.0
+                        score += 65.0
                         why.append("Целевой кредит на покупку производственного оборудования")
                 elif purpose == "real_estate":
                     if p.id in ("mortgage-ooo", "mortgage-ip"):
-                        score += 60.0
+                        score += 65.0
                         why.append("Специальная ипотечная программа для коммерческой недвижимости")
                     elif p.id == "secured-property":
-                        score += 40.0
+                        score += 45.0
                         why.append("Крупный кредит под залог существующей недвижимости")
                 elif purpose == "business_purchase":
                     if p.id == "ready-business":
-                        score += 60.0
+                        score += 65.0
                         why.append("Целевое финансирование покупки действующего бизнеса или завода")
+                elif purpose == "express":
+                    if p.id == "express":
+                        score += 65.0
+                        why.append("Ускоренное онлайн-одобрение за 2 минуты")
+                elif purpose == "small_loan":
+                    if p.id == "small":
+                        score += 65.0
+                        why.append("Быстрый кредит до 1 млн ₽ без залога")
                 elif purpose == "working_capital":
                     if p.id in ("working-capital", "ooo-unsecured", "ip-unsecured"):
                         score += 60.0
@@ -188,40 +236,34 @@ class ProductMatcher:
             elif p.collateral == "any":
                 why.append("Гибкие условия: можно оформить как с залогом, так и без")
 
-            # Check clamp for annuity
-            offer_amount = calc_amount
+            # Compute effective amount and term for this product
             max_limit = cls.max_amount_for(p, age_months, age_category)
-            if offer_amount > max_limit:
-                offer_amount = max_limit
-                warnings.append(f"Сумма скорректирована до максимума по продукту: {max_limit:,} ₽")
-            elif offer_amount < p.amount[0]:
-                offer_amount = p.amount[0]
-                warnings.append(f"Сумма скорректирована до минимальной по продукту: {p.amount[0]:,} ₽")
+            offer_amount = min(max(calc_amount, p.amount[0]), max_limit)
+            if calc_amount > max_limit:
+                warnings.append(f"Сумма скорректирована до максимума по продукту: {max_limit:,} ₽".replace(",", " "))
+            elif calc_amount < p.amount[0]:
+                warnings.append(f"Сумма скорректирована до минимальной по продукту: {p.amount[0]:,} ₽".replace(",", " "))
 
-            offer_term = calc_term
-            if offer_term > p.term[1]:
-                offer_term = p.term[1]
+            offer_term = min(max(calc_term, p.term[0]), p.term[1])
+            if calc_term > p.term[1]:
                 warnings.append(f"Срок ограничен максимальным по продукту: {p.term[1]} мес.")
-            elif offer_term < p.term[0]:
-                offer_term = p.term[0]
+            elif calc_term < p.term[0]:
                 warnings.append(f"Срок увеличен до минимального по продукту: {p.term[0]} мес.")
 
-            payment, overpayment = compute_annuity(offer_amount, p.rate, offer_term)
-
-            scored.append((score, p, why, warnings))
+            scored.append((score, p, why, warnings, offer_amount, offer_term))
 
         # Sort by score descending
         scored.sort(key=lambda x: x[0], reverse=True)
 
         offers: List[ProductOffer] = []
-        for _, product, why, warnings in scored[:limit]:
-            offer_amount = min(max(calc_amount, product.amount[0]), cls.max_amount_for(product, age_months, age_category))
-            offer_term = min(max(calc_term, product.term[0]), product.term[1])
+        for _, product, why, warnings, offer_amount, offer_term in scored[:limit]:
             payment, overpayment = compute_annuity(offer_amount, product.rate, offer_term)
 
             offers.append(
                 ProductOffer(
                     product=product,
+                    amount=offer_amount,
+                    term_months=offer_term,
                     payment=payment,
                     overpayment=overpayment,
                     why_matched=why,

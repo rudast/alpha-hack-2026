@@ -24,6 +24,20 @@
     }
   }
 
+  function findNearestIndex(stops, value) {
+    if (!stops || !stops.length) return 0;
+    var best = 0;
+    var bestDiff = Infinity;
+    for (var i = 0; i < stops.length; i++) {
+      var diff = Math.abs(stops[i] - value);
+      if (diff < bestDiff) {
+        best = i;
+        bestDiff = diff;
+      }
+    }
+    return best;
+  }
+
   function getPageContext() {
     var path = window.location.pathname || '';
     var page = 'landing';
@@ -34,17 +48,25 @@
     }
 
     var calcState = null;
-    // Check if calculator inputs are present on the current page
-    var amountInput = document.getElementById('calc-amount-input') || document.querySelector('input[name="amount"]');
-    var termInput = document.getElementById('calc-term-input') || document.querySelector('input[name="term"]');
+    var amountEl = document.getElementById('amount-input') || document.getElementById('calc-amount-input');
+    var termSlider = document.getElementById('term-range') || document.getElementById('calc-term-slider');
+    var termEl = document.getElementById('calc-term-input');
     var orgRadio = document.querySelector('input[name="org"]:checked');
     var colRadio = document.querySelector('input[name="collateral"]:checked');
     var ageRadio = document.querySelector('input[name="age"]:checked');
 
-    if (amountInput || orgRadio) {
+    if (amountEl || orgRadio || termSlider) {
+      var parsedAmount = amountEl ? parseInt(amountEl.value.replace(/\D/g, ''), 10) : null;
+      var parsedTerm = null;
+      if (termSlider && window.Loans && window.Loans.TERM_STOPS) {
+        parsedTerm = window.Loans.TERM_STOPS[Number(termSlider.value)];
+      } else if (termEl) {
+        parsedTerm = parseInt(termEl.value.replace(/\D/g, ''), 10);
+      }
+
       calcState = {
-        amount: amountInput ? parseInt(amountInput.value.replace(/\D/g, ''), 10) : null,
-        term: termInput ? parseInt(termInput.value.replace(/\D/g, ''), 10) : null,
+        amount: parsedAmount || null,
+        term: parsedTerm || null,
         org: orgRadio ? orgRadio.value : null,
         collateral: colRadio ? colRadio.value : null,
         age: ageRadio ? ageRadio.value : null,
@@ -52,9 +74,17 @@
     }
 
     var appStatus = null;
-    var statusElem = document.querySelector('[data-status]') || document.querySelector('.status-badge');
+    var statusElem = document.querySelector('[data-status]') || document.querySelector('.badge');
     if (statusElem) {
-      appStatus = statusElem.getAttribute('data-status') || statusElem.textContent.trim();
+      appStatus = statusElem.getAttribute('data-status');
+      if (!appStatus) {
+        var txt = statusElem.textContent.trim();
+        if (txt === 'Нужны данные') appStatus = 'INFO_REQUESTED';
+        else if (txt === 'На рассмотрении') appStatus = 'SUBMITTED';
+        else if (txt === 'Проверка') appStatus = 'SCORING';
+        else if (txt === 'Одобрена') appStatus = 'APPROVED';
+        else if (txt === 'Отклонена') appStatus = 'REJECTED';
+      }
     }
 
     return {
@@ -483,41 +513,56 @@
 
       // 4. Sliders and inputs: amount
       if (p.amount) {
-        var amountSlider = document.getElementById('calc-amount-slider');
-        var amountInput = document.getElementById('calc-amount-input');
-        if (amountSlider) {
-          amountSlider.value = p.amount;
-          amountSlider.dispatchEvent(new Event('input', { bubbles: true }));
-          amountSlider.dispatchEvent(new Event('change', { bubbles: true }));
+        var amountRange = document.getElementById('amount-range') || document.getElementById('calc-amount-slider');
+        var amountInput = document.getElementById('amount-input') || document.getElementById('calc-amount-input');
+        if (amountRange && window.Loans && window.Loans.AMOUNT_STOPS) {
+          var idx = findNearestIndex(window.Loans.AMOUNT_STOPS, p.amount);
+          amountRange.value = String(idx);
+          amountRange.dispatchEvent(new Event('input', { bubbles: true }));
+          amountRange.dispatchEvent(new Event('change', { bubbles: true }));
         }
         if (amountInput) {
-          amountInput.value = p.amount;
+          amountInput.value = String(p.amount);
           amountInput.dispatchEvent(new Event('input', { bubbles: true }));
-          amountInput.dispatchEvent(new Event('change', { bubbles: true }));
+          amountInput.dispatchEvent(new Event('blur', { bubbles: true }));
         }
       }
 
       // 5. Sliders and inputs: term
       if (p.term) {
-        var termSlider = document.getElementById('calc-term-slider');
-        var termInput = document.getElementById('calc-term-input');
-        if (termSlider) {
-          termSlider.value = p.term;
-          termSlider.dispatchEvent(new Event('input', { bubbles: true }));
-          termSlider.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        if (termInput) {
-          termInput.value = p.term;
-          termInput.dispatchEvent(new Event('input', { bubbles: true }));
-          termInput.dispatchEvent(new Event('change', { bubbles: true }));
+        var termRange = document.getElementById('term-range') || document.getElementById('calc-term-slider');
+        if (termRange && window.Loans && window.Loans.TERM_STOPS) {
+          var termIdx = findNearestIndex(window.Loans.TERM_STOPS, p.term);
+          termRange.value = String(termIdx);
+          termRange.dispatchEvent(new Event('input', { bubbles: true }));
+          termRange.dispatchEvent(new Event('change', { bubbles: true }));
         }
       }
 
-      // Smooth scroll to calculator
-      var calcBlock = document.getElementById('calculator') || document.querySelector('.calculator-section') || document.getElementById('calc-form');
-      if (calcBlock) {
-        calcBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      // 6. Highlight and scroll to recommended product card in results
+      var targetId = p.product_id;
+      setTimeout(function () {
+        var card = null;
+        if (targetId) {
+          var btn = document.querySelector('[data-action="details"][data-id="' + targetId + '"]') ||
+                    document.querySelector('[data-action="apply"][data-id="' + targetId + '"]');
+          if (btn) {
+            card = btn.closest('.loan-card');
+          }
+        }
+        if (card) {
+          card.classList.add('assistant-highlight');
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(function () {
+            card.classList.remove('assistant-highlight');
+          }, 3500);
+        } else {
+          var calcBlock = document.getElementById('calc-results') || document.getElementById('calculator') || document.getElementById('calc-form');
+          if (calcBlock) {
+            calcBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      }, 100);
 
       // Temporary visual notification in chat
       this.addUserMessage('Параметры успешно применены в калькуляторе!');
@@ -535,15 +580,11 @@
         });
       }
 
-      // If already in cabinet, open wizard directly; otherwise navigate to cabinet
+      // Navigate or switch hash to #new-loan so cabinet.js automatically opens wizard with preloaded draft
       if (window.location.pathname.indexOf('personalAccount') !== -1) {
-        if (window.Wizard && window.Wizard.open) {
-          window.Wizard.open();
-        } else {
-          window.location.reload();
-        }
+        window.location.hash = '#new-loan';
       } else {
-        window.location.href = '/personalAccount/index.html';
+        window.location.href = '/personalAccount/#new-loan';
       }
     },
 
