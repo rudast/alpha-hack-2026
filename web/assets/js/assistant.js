@@ -100,6 +100,16 @@
     sessionId: getSessionId(),
 
     init: function () {
+      // Do not render on login or authorization pages
+      if (
+        window.location.pathname.indexOf('login') !== -1 ||
+        document.querySelector('.auth-card') ||
+        document.querySelector('form[action*="login"]') ||
+        document.getElementById('login-form')
+      ) {
+        return;
+      }
+
       this.loadHistory();
       this.renderWidget();
       this.bindEvents();
@@ -143,13 +153,35 @@
       root.id = 'alfa-assistant-root';
 
       root.innerHTML = [
-        '<div id="alfa-assistant-window" role="dialog" aria-label="Чат с ассистентом Альфа-Банка">',
+        '<div id="alfa-assistant-window" role="dialog" aria-label="Чат с Альфи — бизнес-помощником Альфа-Банка">',
         '  <div class="assistant-header">',
         '    <div class="assistant-header-info">',
-        '      <div class="assistant-avatar">A</div>',
+        '      <div class="assistant-avatar" aria-hidden="true">',
+        '        <svg class="alfi-face-svg" viewBox="0 0 48 48" width="38" height="38" fill="none" xmlns="http://www.w3.org/2000/svg">',
+        '          <circle cx="24" cy="24" r="23" fill="url(#alfi-h-grad)" stroke="#ffffff" stroke-width="1.5"/>',
+        '          <defs>',
+        '            <linearGradient id="alfi-h-grad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">',
+        '              <stop stop-color="#FF4B3E"/>',
+        '              <stop offset="1" stop-color="#D31D12"/>',
+        '            </linearGradient>',
+        '            <linearGradient id="alfi-h-screen" x1="12" y1="14" x2="36" y2="34" gradientUnits="userSpaceOnUse">',
+        '              <stop stop-color="#1A1F26"/>',
+        '              <stop offset="1" stop-color="#0E1217"/>',
+        '            </linearGradient>',
+        '          </defs>',
+        '          <rect x="11" y="14" width="26" height="19" rx="8" fill="url(#alfi-h-screen)" stroke="#ffffff" stroke-width="1.2"/>',
+        '          <ellipse class="alfi-eye alfi-eye-left" cx="19" cy="22" rx="2.5" ry="3.2" fill="#00E5FF"/>',
+        '          <ellipse class="alfi-eye alfi-eye-right" cx="29" cy="22" rx="2.5" ry="3.2" fill="#00E5FF"/>',
+        '          <path d="M21 27C22 28.5 26 28.5 27 27" stroke="#00E5FF" stroke-width="1.5" stroke-linecap="round"/>',
+        '          <circle cx="24" cy="8.5" r="2.5" fill="#FFD200"/>',
+        '          <path d="M24 11V14" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>',
+        '          <rect x="8.5" y="18" width="3" height="8" rx="1.5" fill="#FFD200"/>',
+        '          <rect x="36.5" y="18" width="3" height="8" rx="1.5" fill="#FFD200"/>',
+        '        </svg>',
+        '      </div>',
         '      <div class="assistant-title-wrap">',
-        '        <span class="assistant-title">Кредитный куратор</span>',
-        '        <span class="assistant-subtitle">Альфа-Банк • Онлайн</span>',
+        '        <span class="assistant-title">Альфи</span>',
+        '        <span class="assistant-subtitle">Бизнес-помощник • Альфа-Банк</span>',
         '      </div>',
         '    </div>',
         '    <div class="assistant-header-controls">',
@@ -164,14 +196,31 @@
         '  <div class="assistant-messages" id="assistant-messages-list"></div>',
         '  <div class="assistant-quick-replies" id="assistant-quick-replies"></div>',
         '  <form class="assistant-input-wrap" id="assistant-input-form">',
-        '    <input type="text" class="assistant-input" id="assistant-input-text" placeholder="Задайте вопрос или сумму..." autocomplete="off">',
+        '    <input type="text" class="assistant-input" id="assistant-input-text" placeholder="Спросите Альфи о кредитах..." autocomplete="off">',
         '    <button type="submit" class="assistant-send-btn" id="assistant-send-btn" title="Отправить">',
         '      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>',
         '    </button>',
         '  </form>',
         '</div>',
-        '<button id="alfa-assistant-fab" aria-label="Открыть помощника по кредитам" title="Помощник по кредитам">',
-        '  <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>',
+        '<button id="alfa-assistant-fab" aria-label="Открыть помощника Альфи" title="Альфи — ваш бизнес-помощник">',
+        '  <div class="fab-avatar-wrap">',
+        '    <svg class="fab-alfi-svg" viewBox="0 0 48 48" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">',
+        '      <defs>',
+        '        <linearGradient id="alfi-fab-screen" x1="12" y1="14" x2="36" y2="34" gradientUnits="userSpaceOnUse">',
+        '          <stop stop-color="#1A1F26"/>',
+        '          <stop offset="1" stop-color="#0E1217"/>',
+        '        </linearGradient>',
+        '      </defs>',
+        '      <rect x="11" y="14" width="26" height="19" rx="8" fill="url(#alfi-fab-screen)" stroke="#ffffff" stroke-width="1.4"/>',
+        '      <ellipse class="alfi-eye" cx="19" cy="22" rx="2.5" ry="3.2" fill="#00E5FF"/>',
+        '      <ellipse class="alfi-eye" cx="29" cy="22" rx="2.5" ry="3.2" fill="#00E5FF"/>',
+        '      <path d="M21 27C22 28.5 26 28.5 27 27" stroke="#00E5FF" stroke-width="1.5" stroke-linecap="round"/>',
+        '      <circle cx="24" cy="8.5" r="2.5" fill="#FFD200"/>',
+        '      <path d="M24 11V14" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>',
+        '      <rect x="8.5" y="18" width="3" height="8" rx="1.5" fill="#FFD200"/>',
+        '      <rect x="36.5" y="18" width="3" height="8" rx="1.5" fill="#FFD200"/>',
+        '    </svg>',
+        '  </div>',
         '  <span class="fab-badge"></span>',
         '</button>',
       ].join('\n');
@@ -229,8 +278,12 @@
 
     open: function () {
       var win = document.getElementById('alfa-assistant-window');
+      var fab = document.getElementById('alfa-assistant-fab');
+      var root = document.getElementById('alfa-assistant-root');
       if (win) {
         win.classList.add('is-open');
+        if (fab) fab.classList.add('is-hidden');
+        if (root) root.classList.add('has-open-window');
         this.isOpen = true;
         try {
           sessionStorage.setItem(STORAGE_KEY_STATE, 'open');
@@ -243,8 +296,12 @@
 
     close: function () {
       var win = document.getElementById('alfa-assistant-window');
+      var fab = document.getElementById('alfa-assistant-fab');
+      var root = document.getElementById('alfa-assistant-root');
       if (win) {
         win.classList.remove('is-open');
+        if (fab) fab.classList.remove('is-hidden');
+        if (root) root.classList.remove('has-open-window');
         this.isOpen = false;
         try {
           sessionStorage.setItem(STORAGE_KEY_STATE, 'closed');
@@ -273,8 +330,8 @@
         self.handleResponse(res);
       }).catch(function () {
         self.addBotMessage({
-          reply: 'Здравствуйте! Я онлайн-куратор по кредитам для бизнеса. Чем могу помочь?',
-          quick_replies: ['Оборотные средства', 'Кредит для селлеров', 'Без залога на 1 год'],
+          reply: 'Привет! Я Альфи — ваш персональный помощник по кредитам для бизнеса. Чем могу помочь?',
+          quick_replies: ['Оборотные средства 1 млн', '3 млн на маркетплейсы', 'Без залога на 1 год'],
         });
       });
     },

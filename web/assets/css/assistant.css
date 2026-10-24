@@ -20,8 +20,8 @@
 
 #alfa-assistant-root {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 20px;
+  right: 20px;
   z-index: 99999;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   box-sizing: border-box;
@@ -35,42 +35,63 @@
 
 /* Floating Action Button (FAB) */
 #alfa-assistant-fab {
-  width: 60px;
-  height: 60px;
+  width: 62px;
+  height: 62px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--alfa-red) 0%, var(--alfa-red-hover) 100%);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--alfa-shadow-fab);
+  box-shadow: 0 8px 24px rgba(239, 49, 36, 0.4);
   cursor: pointer;
   border: none;
   outline: none;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              opacity 0.22s ease,
+              visibility 0.22s,
+              box-shadow 0.25s ease;
   position: relative;
 }
 
+#alfa-assistant-fab.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.35) translateY(24px) !important;
+  pointer-events: none;
+}
+
+#alfa-assistant-fab:not(.is-hidden) {
+  animation: alfi-fab-float 3.5s ease-in-out infinite;
+}
+
+@keyframes alfi-fab-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
 #alfa-assistant-fab:hover {
-  transform: scale(1.06);
-  box-shadow: 0 12px 28px rgba(239, 49, 36, 0.45);
+  animation-play-state: paused;
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 12px 30px rgba(239, 49, 36, 0.55);
 }
 
 #alfa-assistant-fab:active {
-  transform: scale(0.96);
+  transform: scale(0.95);
 }
 
-#alfa-assistant-fab svg {
-  width: 28px;
-  height: 28px;
-  fill: currentColor;
-  transition: transform 0.2s ease;
+.fab-avatar-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
 #alfa-assistant-fab .fab-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: 0px;
+  right: 0px;
   width: 14px;
   height: 14px;
   background-color: #22c55e;
@@ -85,24 +106,38 @@
   100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
 }
 
-/* Main Chat Window */
+/* Alfi Character Eye Blink Animation */
+@keyframes alfi-blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.12); }
+}
+
+.alfi-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: alfi-blink 3.8s infinite ease-in-out;
+}
+
+/* Main Chat Window (Positioned Lower, Bottom Corner) */
 #alfa-assistant-window {
-  width: 380px;
-  height: 580px;
-  max-height: calc(100vh - 100px);
+  width: 384px;
+  height: 560px;
+  max-height: calc(100vh - 40px);
   background: #ffffff;
-  border-radius: var(--alfa-radius);
-  box-shadow: var(--alfa-shadow-window);
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2), 0 4px 14px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   position: absolute;
-  bottom: 74px;
+  bottom: 0;
   right: 0;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(20px) scale(0.96);
-  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s;
+  transform: translateY(24px) scale(0.94);
+  transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.28s;
   border: 1px solid var(--alfa-gray-border);
 }
 
@@ -114,9 +149,9 @@
 
 /* Header */
 .assistant-header {
-  background: linear-gradient(135deg, #1f242d 0%, #15181e 100%);
+  background: linear-gradient(135deg, #1e232c 0%, #111419 100%);
   color: #ffffff;
-  padding: 14px 18px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -130,17 +165,21 @@
 }
 
 .assistant-avatar {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: var(--alfa-red);
-  color: #ffffff;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 18px;
-  box-shadow: 0 2px 8px rgba(239, 49, 36, 0.4);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.assistant-avatar .alfi-face-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 6px rgba(239, 49, 36, 0.35));
 }
 
 .assistant-title-wrap {
@@ -399,13 +438,15 @@
   color: #334155;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .assistant-chip:hover {
   background: var(--alfa-red-light);
   border-color: var(--alfa-red);
   color: var(--alfa-red-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(239, 49, 36, 0.18);
 }
 
 /* Input area */

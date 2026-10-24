@@ -3,6 +3,8 @@ services:
     build: .
     ports:
       - "${APP_PORT:-8080}:8080"
+    volumes:
+      - ./web:/app/web:ro
     environment:
       HTTP_ADDR: ":8080"
       WEB_DIR: /app/web
