@@ -38,6 +38,7 @@ class FakeRedis:
     def __init__(self):
         self.pipelines = []
         self.acks = []
+        self.added = []
 
     def pipeline(self, transaction=True):
         assert transaction
@@ -47,6 +48,17 @@ class FakeRedis:
 
     def xack(self, *args):
         self.acks.append(args)
+
+    def xadd(self, stream, fields):
+        self.added.append((stream, fields))
+        return f"{len(self.added)}-0"
+
+    def xinfo_groups(self, stream):
+        assert stream == RESULT_STREAM
+        return [{"name": "api", "last-delivered-id": "999-0"}]
+
+    def xpending_range(self, *args):
+        return []
 
 
 def submission(**extra):
@@ -79,23 +91,23 @@ class BackendProtocolTests(unittest.TestCase):
         ]))
         worker._application("1-0", fields)
         first = client.pipelines[0].calls
-        self.assertEqual(first[0][1], RESULT_STREAM)
-        self.assertEqual(first[0][2]["from"], "SUBMITTED")
-        self.assertEqual(first[0][2]["to"], "DATA_CHECK")
-        self.assertIn(":1-0:DATA_CHECK", first[0][2]["event_id"])
-        self.assertEqual(first[1][1], SLOW_STREAM)
-        self.assertEqual(first[2], ("xack", APPLICATION_STREAM, FAST_GROUP, "1-0"))
+        self.assertEqual(client.added[0][0], RESULT_STREAM)
+        self.assertEqual(client.added[0][1]["from"], "SUBMITTED")
+        self.assertEqual(client.added[0][1]["to"], "DATA_CHECK")
+        self.assertIn(":1-0:DATA_CHECK", client.added[0][1]["event_id"])
+        self.assertEqual(first[0][1], SLOW_STREAM)
+        self.assertEqual(first[0][2]["after_result_id"], "1-0")
+        self.assertEqual(first[1], ("xack", APPLICATION_STREAM, FAST_GROUP, "1-0"))
 
-        worker._slow("2-0", first[1][2])
-        calls = client.pipelines[1].calls
-        events = [call[2] for call in calls if call[0] == "xadd"]
+        worker._slow("2-0", first[0][2])
+        events = [event for stream, event in client.added[1:] if stream == RESULT_STREAM]
         self.assertEqual([(e["from"], e["to"]) for e in events], [
             ("DATA_CHECK", "SCORING"), ("SCORING", "MANUAL_REVIEW"),
         ])
         self.assertTrue(all(":1-0:" in event["event_id"] for event in events))
         decision = json.loads(events[-1]["decision"])
         self.assertEqual(decision["documents"][0]["status"], "CONTENT_UNAVAILABLE")
-        self.assertEqual(calls[-2], ("xack", SLOW_STREAM, SLOW_GROUP, "2-0"))
+        self.assertEqual(client.acks[-1], (SLOW_STREAM, SLOW_GROUP, "2-0"))
 
     def test_missing_consent_is_requested_in_comment_and_decision(self):
         events = completion_events(submission())
@@ -126,6 +138,21 @@ class BackendProtocolTests(unittest.TestCase):
         events = completion_events(submission(company="{"))
         self.assertEqual(events[0]["to"], "INFO_REQUESTED")
         self.assertEqual(json.loads(events[0]["decision"])["missing_fields"], ["application_data"])
+
+    def test_older_pending_slow_task_can_complete(self):
+        client = FakeRedis()
+        fields = submission()
+        BackendWorker(client)._slow("old-1", {"task": json.dumps(fields)})
+        self.assertEqual(client.added[0][1]["to"], "INFO_REQUESTED")
+        self.assertEqual(client.acks[-1], (SLOW_STREAM, SLOW_GROUP, "old-1"))
+
+    def test_corrupt_slow_task_requests_review(self):
+        client = FakeRedis()
+        BackendWorker(client)._slow("bad-1", {
+            "task": "{", "application_id": str(uuid4()), "after_result_id": "1-0",
+        })
+        self.assertEqual(client.added[0][1]["to"], "INFO_REQUESTED")
+        self.assertEqual(client.acks[-1], (SLOW_STREAM, SLOW_GROUP, "bad-1"))
 
 
 if __name__ == "__main__":

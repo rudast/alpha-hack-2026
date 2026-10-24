@@ -7,6 +7,7 @@ import logging
 import os
 import socket
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from uuid import UUID
@@ -29,6 +30,8 @@ SLOW_WORKERS = 2
 HISTORY_REPLY_TTL = 60
 FAST_IDLE_MS = 30_000
 SLOW_IDLE_MS = 15 * 60_000
+RESULT_GROUP = "api"
+RESULT_ACK_TIMEOUT = 60
 
 log = logging.getLogger(__name__)
 
@@ -221,12 +224,15 @@ class BackendWorker:
             log.warning("application request %s has invalid application_id", message_id)
             self.redis.xack(APPLICATION_STREAM, FAST_GROUP, message_id)
             return
-        pipe = self.redis.pipeline(transaction=True)
-        pipe.xadd(RESULT_STREAM, result_event(
+        first_result_id = self.redis.xadd(RESULT_STREAM, result_event(
             application_id, "SUBMITTED", "DATA_CHECK", "Заявка принята воркером",
             source_id=message_id))
-        pipe.xadd(SLOW_STREAM, {"task": json.dumps({**fields, "__source_message_id": message_id},
-                                                 ensure_ascii=False)})
+        pipe = self.redis.pipeline(transaction=True)
+        pipe.xadd(SLOW_STREAM, {
+            "task": json.dumps({**fields, "__source_message_id": message_id}, ensure_ascii=False),
+            "after_result_id": first_result_id,
+            "application_id": application_id,
+        })
         pipe.xack(APPLICATION_STREAM, FAST_GROUP, message_id)
         pipe.execute()
 
@@ -238,13 +244,46 @@ class BackendWorker:
             events = completion_events(task)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             log.error("invalid slow task %s: %s", message_id, exc)
+            application_id = fields.get("application_id", "")
+            if application_id:
+                previous_id = fields.get("after_result_id")
+                if previous_id:
+                    self._wait_for_result_ack(previous_id)
+                self.redis.xadd(RESULT_STREAM, result_event(
+                    application_id, "DATA_CHECK", "INFO_REQUESTED",
+                    "Ошибка данных задания; требуется повторная проверка",
+                    {"outcome": "INFO_REQUESTED", "error": "invalid worker task"},
+                    {"missing_fields": ["application_data"]},
+                    source_id=message_id,
+                ))
             self.redis.xack(SLOW_STREAM, SLOW_GROUP, message_id)
             return
-        pipe = self.redis.pipeline(transaction=True)
+        previous_id = fields.get("after_result_id")
         for event in events:
-            pipe.xadd(RESULT_STREAM, event)
-        pipe.xack(SLOW_STREAM, SLOW_GROUP, message_id)
-        pipe.execute()
+            if previous_id:
+                self._wait_for_result_ack(previous_id)
+            previous_id = self.redis.xadd(RESULT_STREAM, event)
+        self.redis.xack(SLOW_STREAM, SLOW_GROUP, message_id)
+
+    @staticmethod
+    def _stream_id(value: str) -> tuple[int, int]:
+        milliseconds, sequence = value.split("-", 1)
+        return int(milliseconds), int(sequence)
+
+    def _result_acknowledged(self, message_id: str) -> bool:
+        groups = self.redis.xinfo_groups(RESULT_STREAM)
+        group = next((item for item in groups if item["name"] == RESULT_GROUP), None)
+        if group is None or self._stream_id(group["last-delivered-id"]) < self._stream_id(message_id):
+            return False
+        return not self.redis.xpending_range(RESULT_STREAM, RESULT_GROUP, message_id, message_id, 1)
+
+    def _wait_for_result_ack(self, message_id: str) -> None:
+        deadline = time.monotonic() + RESULT_ACK_TIMEOUT
+        while not self.stop.is_set() and time.monotonic() < deadline:
+            if self._result_acknowledged(message_id):
+                return
+            self.stop.wait(0.2)
+        raise TimeoutError(f"API did not acknowledge result {message_id}")
 
     def _reclaim(self, stream: str, group: str, consumer: str, idle_ms: int,
                  handle: Any) -> None:
@@ -253,7 +292,10 @@ class BackendWorker:
             cursor, messages, _ = self.redis.xautoclaim(
                 stream, group, consumer, min_idle_time=idle_ms, start_id=cursor, count=10)
             for message_id, fields in messages:
-                handle(message_id, fields)
+                try:
+                    handle(message_id, fields)
+                except Exception:
+                    log.exception("reclaimed task %s failed and remains pending", message_id)
             if cursor in ("", "0-0"):
                 return
 
@@ -265,7 +307,10 @@ class BackendWorker:
                 count=10, block=1000)
             for stream, messages in batches:
                 for message_id, fields in messages:
-                    handlers[stream](message_id, fields)
+                    try:
+                        handlers[stream](message_id, fields)
+                    except Exception:
+                        log.exception("fast task %s failed unexpectedly and remains pending", message_id)
             if not batches:
                 for stream, handle in handlers.items():
                     self._reclaim(stream, FAST_GROUP, consumer, FAST_IDLE_MS, handle)
@@ -276,7 +321,10 @@ class BackendWorker:
                 SLOW_GROUP, consumer, {SLOW_STREAM: ">"}, count=1, block=1000)
             for _, messages in batches:
                 for message_id, fields in messages:
-                    self._slow(message_id, fields)
+                    try:
+                        self._slow(message_id, fields)
+                    except Exception:
+                        log.exception("slow task %s failed unexpectedly and remains pending", message_id)
             if not batches:
                 self._reclaim(SLOW_STREAM, SLOW_GROUP, consumer, SLOW_IDLE_MS, self._slow)
 

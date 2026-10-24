@@ -162,6 +162,10 @@ class Worker:
                             self._application_result(stream, group, message_id, task, None, str(exc))
                         else:
                             self._reply(stream, group, message_id, task_id, error=str(exc))
+                    except Exception:
+                        # The message stays pending for XAUTOCLAIM. A broken
+                        # document must not terminate the whole execution pool.
+                        log.exception("task %s failed unexpectedly and will be retried", message_id)
 
     def run(self) -> None:
         self.redis.ping()
