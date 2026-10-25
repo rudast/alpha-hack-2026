@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -16,7 +16,10 @@ type DemoPackage struct {
 	Auth        *DemoAuth
 	Sessions    *DemoAuth
 	Trust       *DemoTrust
+	Offers      *DemoOffers
+	Profiles    *DemoProfiles
 	Apps        *DemoApplications
+	Loans       *DemoLoans
 	Idempotency *DemoIdempotency
 }
 
@@ -39,7 +42,7 @@ func NewDemoPackage() *DemoPackage {
 		Purpose:     "Пополнение оборотных средств",
 		Status:      domain.StatusApproved,
 		Form:        map[string]any{"org": "ooo", "purpose": "Пополнение оборотных средств"},
-		Documents:   json.RawMessage(`[]`),
+		Documents:   []domain.Document{},
 		History:     []domain.HistoryEntry{{From: domain.StatusDraft, To: domain.StatusApproved, At: submittedAt, By: "system"}},
 		SubmittedAt: &submittedAt,
 		CreatedAt:   now,
@@ -55,7 +58,7 @@ func NewDemoPackage() *DemoPackage {
 		Purpose:     "Закупка оборудования",
 		Status:      domain.StatusManualReview,
 		Form:        map[string]any{"org": "ooo", "purpose": "Закупка оборудования"},
-		Documents:   json.RawMessage(`[]`),
+		Documents:   []domain.Document{},
 		History:     []domain.HistoryEntry{{From: domain.StatusDraft, To: domain.StatusManualReview, At: submittedAt, By: "system"}},
 		SubmittedAt: &submittedAt,
 		CreatedAt:   now,
@@ -71,7 +74,7 @@ func NewDemoPackage() *DemoPackage {
 		Purpose:     "Строительство склада",
 		Status:      domain.StatusDraft,
 		Form:        map[string]any{"org": "ooo", "purpose": "Строительство склада"},
-		Documents:   json.RawMessage(`[]`),
+		Documents:   []domain.Document{},
 		History:     []domain.HistoryEntry{{From: domain.StatusDraft, To: domain.StatusDraft, At: now, By: "system"}},
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -86,7 +89,7 @@ func NewDemoPackage() *DemoPackage {
 		Purpose:     "Кассовый разрыв",
 		Status:      domain.StatusRejected,
 		Form:        map[string]any{"org": "ooo", "purpose": "Кассовый разрыв"},
-		Documents:   json.RawMessage(`[]`),
+		Documents:   []domain.Document{},
 		History:     []domain.HistoryEntry{{From: domain.StatusDraft, To: domain.StatusRejected, At: submittedAt, By: "system"}},
 		SubmittedAt: &submittedAt,
 		CreatedAt:   now,
@@ -102,7 +105,7 @@ func NewDemoPackage() *DemoPackage {
 		Purpose:     "Материалы и расходники",
 		Status:      domain.StatusApproved,
 		Form:        map[string]any{"org": "ip", "purpose": "Материалы и расходники"},
-		Documents:   json.RawMessage(`[]`),
+		Documents:   []domain.Document{},
 		History:     []domain.HistoryEntry{{From: domain.StatusDraft, To: domain.StatusApproved, At: submittedAt, By: "system"}},
 		SubmittedAt: &submittedAt,
 		CreatedAt:   now,
@@ -118,7 +121,10 @@ func NewDemoPackage() *DemoPackage {
 		Auth:        auth,
 		Sessions:    auth,
 		Trust:       &DemoTrust{},
+		Offers:      &DemoOffers{},
+		Profiles:    &DemoProfiles{},
 		Apps:        &DemoApplications{applications: apps, idCounter: 105},
+		Loans:       &DemoLoans{},
 		Idempotency: &DemoIdempotency{},
 	}
 }
@@ -248,6 +254,137 @@ func (t *DemoTrust) EnsureTrustRatio(ctx context.Context, inn string) (domain.Co
 	}, nil
 }
 
+// ------------------- DemoOffers -------------------
+
+type DemoOffers struct{}
+
+func (o *DemoOffers) Current(ctx context.Context, inn string) (*domain.Offer, string, error) {
+	now := time.Now()
+	validUntil := now.Add(30 * 24 * time.Hour)
+	return &domain.Offer{
+		ID:         "offer_demo_1",
+		CompanyINN: inn,
+		ProductID:  "working-capital",
+		MaxAmount:  5000000,
+		TermMonths: 36,
+		RateFrom:   12.5,
+		Status:     domain.OfferActive,
+		ValidUntil: validUntil,
+		CreatedAt:  now.Add(-24 * time.Hour),
+	}, "", nil
+}
+
+func (o *DemoOffers) ProductName(id string) string {
+	switch id {
+	case "working-capital":
+		return "Оборотный кредит"
+	case "equipment-leasing":
+		return "Лизинг оборудования"
+	case "investment":
+		return "Инвестиционный кредит"
+	default:
+		return "Кредит для бизнеса"
+	}
+}
+
+// ------------------- DemoProfiles -------------------
+
+type DemoProfiles struct{}
+
+func (p *DemoProfiles) Profile(ctx context.Context, pr domain.Principal) (Profile, error) {
+	phone := "+7 (999) 000-00-01"
+	email := "demo@example.com"
+	pos := "Генеральный директор"
+	name := "ООО «Демо Торг»"
+	orgType := "OOO"
+	if pr.CompanyINN == "770000000005" {
+		name = "ИП Иванов Демо"
+		orgType = "IP"
+		pos = "Индивидуальный предприниматель"
+	}
+	debt := int64(3000000)
+	equity := int64(5000000)
+	ratio := float64(0.6)
+	now := time.Now()
+	ogrn := "1027700000001"
+	director := "Иванов Иван Иванович"
+	address := "г. Москва, ул. Ленина, д. 10"
+	status := "Действующая"
+
+	return Profile{
+		User: domain.User{
+			ID:       pr.UserID,
+			Role:     pr.Role,
+			FullName: "Иванов Иван Иванович",
+			Phone:    phone,
+			Email:    email,
+			Position: &pos,
+		},
+		Company: domain.Company{
+			INN:          pr.CompanyINN,
+			OrgType:      orgType,
+			Name:         name,
+			OGRN:         &ogrn,
+			OKVED:        "47.19",
+			TotalDebt:    &debt,
+			Equity:       &equity,
+			DebtToEquity: &ratio,
+			FetchedAt:    &now,
+		},
+		Director: director,
+		Address:  address,
+		Status:   status,
+	}, nil
+}
+
+// ------------------- DemoLoans -------------------
+
+type DemoLoans struct{}
+
+func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
+	now := time.Now()
+	issued := now.Add(-60 * 24 * time.Hour)
+	maturity := issued.Add(24 * 30 * 24 * time.Hour)
+	nextDate := now.Add(10 * 24 * time.Hour)
+
+	return Loans{
+		Active: []Loan{
+			{
+				ID:             "loan_demo_1",
+				ProductID:      "working-capital",
+				ProductName:    "Оборотный кредит",
+				ContractNumber: "КР-2026/01-001",
+				Amount:         2000000,
+				Rate:           14.5,
+				TermMonths:     24,
+				IssuedAt:       issued,
+				MaturityDate:   maturity,
+				Status:         domain.StatusActive,
+				MonthlyPayment: 96500,
+				PrincipalLeft:  1850000,
+				PaidTotal:      193000,
+				PaymentsMade:   2,
+				NextPayment: &Payment{
+					Number:       3,
+					Date:         nextDate,
+					Amount:       96500,
+					Principal:    74000,
+					Interest:     22500,
+					BalanceAfter: 1776000,
+					Status:       PaymentNext,
+				},
+				Schedule: []Payment{
+					{Number: 1, Date: issued.Add(30 * 24 * time.Hour), Amount: 96500, Principal: 72000, Interest: 24500, BalanceAfter: 1928000, Status: PaymentPaid},
+					{Number: 2, Date: issued.Add(60 * 24 * time.Hour), Amount: 96500, Principal: 73000, Interest: 23500, BalanceAfter: 1855000, Status: PaymentPaid},
+					{Number: 3, Date: nextDate, Amount: 96500, Principal: 74000, Interest: 22500, BalanceAfter: 1781000, Status: PaymentNext},
+				},
+			},
+		},
+		Closed:     []Loan{},
+		OtherBanks: []OtherBankLoan{},
+	}, nil
+}
+
 // ------------------- DemoApplications -------------------
 
 type DemoApplications struct {
@@ -291,7 +428,7 @@ func (a *DemoApplications) Create(ctx context.Context, p domain.Principal, in do
 		Purpose:    purpose,
 		Status:     domain.StatusDraft,
 		Form:       in.Form,
-		Documents:  json.RawMessage(`[]`),
+		Documents:  []domain.Document{},
 		History:    []domain.HistoryEntry{{From: domain.StatusDraft, To: domain.StatusDraft, At: now, By: p.UserID}},
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -299,6 +436,14 @@ func (a *DemoApplications) Create(ctx context.Context, p domain.Principal, in do
 
 	a.applications[id] = app
 	return *app, nil
+}
+
+func (a *DemoApplications) CreateFromOffer(ctx context.Context, p domain.Principal, offerID string, in domain.DraftPatch) (domain.Application, bool, error) {
+	app, err := a.Create(ctx, p, in)
+	if err != nil {
+		return domain.Application{}, false, err
+	}
+	return app, true, nil
 }
 
 func (a *DemoApplications) Update(ctx context.Context, p domain.Principal, id string, version int, in domain.DraftPatch) (domain.Application, error) {
@@ -382,6 +527,71 @@ func (a *DemoApplications) Submit(ctx context.Context, p domain.Principal, id st
 		By:   p.UserID,
 	})
 	return *app, nil
+}
+
+func (a *DemoApplications) Accept(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	app, ok := a.applications[id]
+	if !ok {
+		return domain.Application{}, domain.ErrNotFound
+	}
+	now := time.Now()
+	app.Status = domain.StatusActive
+	app.UpdatedAt = now
+	return *app, nil
+}
+
+func (a *DemoApplications) Decline(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	app, ok := a.applications[id]
+	if !ok {
+		return domain.Application{}, domain.ErrNotFound
+	}
+	now := time.Now()
+	app.Status = domain.StatusDraft
+	app.UpdatedAt = now
+	return *app, nil
+}
+
+func (a *DemoApplications) UploadDocument(ctx context.Context, p domain.Principal, id, kind, filename string, content io.Reader) (domain.Document, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	app, ok := a.applications[id]
+	if !ok {
+		return domain.Document{}, domain.ErrNotFound
+	}
+	doc := domain.Document{
+		ID:         fmt.Sprintf("doc_%d", time.Now().UnixNano()),
+		Kind:       kind,
+		Filename:   filename,
+		Size:       1024,
+		Status:     domain.DocumentUploaded,
+		UploadedAt: time.Now(),
+	}
+	app.Documents = append(app.Documents, doc)
+	return doc, nil
+}
+
+func (a *DemoApplications) DeleteDocument(ctx context.Context, p domain.Principal, id, documentID string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	app, ok := a.applications[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	for i, doc := range app.Documents {
+		if doc.ID == documentID {
+			app.Documents = append(app.Documents[:i], app.Documents[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrDocumentNotFound
 }
 
 // ------------------- DemoIdempotency -------------------

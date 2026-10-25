@@ -117,10 +117,13 @@ func Run(ctx context.Context, cfg config.Config) error {
 			authStore = demo.Sessions
 		}
 		if meHandler == nil {
-			meHandler = handler.NewMeHandler(demo.Trust, nil, nil)
+			meHandler = handler.NewMeHandler(demo.Trust, demo.Offers, demo.Profiles)
 		}
 		if appHandler == nil {
 			appHandler = handler.NewApplicationHandler(demo.Apps)
+		}
+		if loanHandler == nil {
+			loanHandler = handler.NewLoanHandler(demo.Loans)
 		}
 		if idempotency == nil {
 			idempotency = demo.Idempotency
