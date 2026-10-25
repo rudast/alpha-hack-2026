@@ -93,6 +93,31 @@ class TestSlotFiller(unittest.TestCase):
         self.assertEqual(SlotFiller.extract("Помогите выбрать кредит").intent, "collect_slots")
         self.assertEqual(SlotFiller.extract("Какие кредитные продукты у вас есть?").intent, "all_products")
 
+    def test_easter_eggs_intents(self):
+        self.assertEqual(SlotFiller.extract("welldone").intent, "easter_egg_welldone")
+        self.assertEqual(SlotFiller.extract("WellDone").intent, "easter_egg_welldone")
+        self.assertEqual(SlotFiller.extract("well done").intent, "easter_egg_welldone")
+        self.assertEqual(SlotFiller.extract("Артем").intent, "easter_egg_artem")
+        self.assertEqual(SlotFiller.extract("артём").intent, "easter_egg_artem")
+        self.assertEqual(SlotFiller.extract("Руслан").intent, "easter_egg_ruslan")
+        self.assertEqual(SlotFiller.extract("руслан").intent, "easter_egg_ruslan")
+        self.assertEqual(SlotFiller.extract("52").intent, "easter_egg_ruslan")
+        self.assertEqual(SlotFiller.extract("Саня").intent, "easter_egg_sanya")
+        self.assertEqual(SlotFiller.extract("саня").intent, "easter_egg_sanya")
+        self.assertEqual(SlotFiller.extract("Макс").intent, "easter_egg_max")
+        self.assertEqual(SlotFiller.extract("макс").intent, "easter_egg_max")
+
+    def test_chit_chat_intents(self):
+        self.assertEqual(SlotFiller.extract("Как дела?").intent, "chit_chat_how_are_you")
+        self.assertEqual(SlotFiller.extract("Как поживаешь?").intent, "chit_chat_how_are_you")
+        self.assertEqual(SlotFiller.extract("Кто ты?").intent, "chit_chat_who_are_you")
+        self.assertEqual(SlotFiller.extract("Кто тебя создал?").intent, "chit_chat_who_are_you")
+        self.assertEqual(SlotFiller.extract("Расскажи анекдот").intent, "chit_chat_joke")
+        self.assertEqual(SlotFiller.extract("Пошути").intent, "chit_chat_joke")
+        self.assertEqual(SlotFiller.extract("Дай совет для бизнеса").intent, "chit_chat_advice")
+        self.assertEqual(SlotFiller.extract("Пока!").intent, "chit_chat_farewell")
+        self.assertEqual(SlotFiller.extract("До свидания").intent, "chit_chat_farewell")
+
 
 if __name__ == "__main__":
     unittest.main()

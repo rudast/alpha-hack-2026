@@ -60,6 +60,7 @@ class ClientContext(BaseModel):
     application_status: Optional[str] = None
     missing_fields: Optional[List[str]] = None
     missing_docs: Optional[List[str]] = None
+    is_authenticated: Optional[bool] = False
 
 
 class ActionCommand(BaseModel):

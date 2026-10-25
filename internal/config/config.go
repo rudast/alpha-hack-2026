@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -20,17 +19,41 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	httpAddr := os.Getenv("HTTP_ADDR")
+	if httpAddr == "" {
+		if port := os.Getenv("PORT"); port != "" {
+			httpAddr = ":" + port
+		} else {
+			httpAddr = ":8080"
+		}
+	}
+
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = os.Getenv("POSTGRES_URL")
+	}
+
+	webDir := os.Getenv("WEB_DIR")
+	if webDir == "" {
+		for _, c := range []string{"web", "./web", "../web", "../../web"} {
+			if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+				webDir = c
+				break
+			}
+		}
+		if webDir == "" {
+			webDir = "web"
+		}
+	}
+
 	cfg := Config{
-		HTTPAddr:             getenv("HTTP_ADDR", ":8080"),
-		WebDir:               getenv("WEB_DIR", "web"),
-		DatabaseURL:          os.Getenv("DATABASE_URL"),
+		HTTPAddr:             httpAddr,
+		WebDir:               webDir,
+		DatabaseURL:          dbURL,
 		RedisAddr:            getenv("REDIS_ADDR", "localhost:6379"),
 		OTPStubCode:          getenv("OTP_STUB_CODE", "000000"),
 		AssistantURL:         getenv("ASSISTANT_URL", "http://assistant:8081"),
 		DocumentsDir:         getenv("DOCUMENTS_DIR", "data/documents"),
-	}
-	if cfg.DatabaseURL == "" {
-		return Config{}, errors.New("DATABASE_URL is required")
 	}
 
 	var err error

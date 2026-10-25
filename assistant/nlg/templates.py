@@ -90,6 +90,7 @@ def render_recommendation(
     org: Optional[str],
     age_category: Optional[str],
     is_young: bool = False,
+    is_authenticated: bool = False,
 ) -> Dict[str, Any]:
     if not offers:
         return {
@@ -134,40 +135,39 @@ def render_recommendation(
         other_titles = ", ".join(f"«{o.product.title}» ({o.product.rate:.1f}%)" for o in offers[1:])
         lines.append(f"\nТакже доступны альтернативы: {other_titles}.")
 
-    lines.append("\nХотите применить эти параметры в калькуляторе или сразу перейти к оформлению?")
+    if is_authenticated:
+        lines.append("\nВы можете сразу перейти к оформлению кредита онлайн:")
+    else:
+        lines.append("\nХотите вставить эти параметры в калькулятор или сразу оформить заявку?")
 
-    actions: List[ActionCommand] = []
-
-    actions.append(
-        ActionCommand(
-            type="apply_calculator",
-            label=f"Выставить {format_rubles(rec_amount)} в калькуляторе",
-            payload={
-                "product_id": p.id,
-                "amount": rec_amount,
-                "term": rec_term,
-                "org": org or (p.org_types[0] if p.org_types else "ooo"),
-                "collateral": p.collateral if p.collateral != "any" else "without",
-                "age": "lt9" if is_young else "gte9",
-            },
-        )
+    calc_action = ActionCommand(
+        type="apply_calculator",
+        label=f"Вставить {format_rubles(rec_amount)} в калькулятор",
+        payload={
+            "product_id": p.id,
+            "amount": rec_amount,
+            "term": rec_term,
+            "org": org or (p.org_types[0] if p.org_types else "ooo"),
+            "collateral": p.collateral if p.collateral != "any" else "without",
+            "age": "lt9" if is_young else "gte9",
+        },
     )
 
-    actions.append(
-        ActionCommand(
-            type="apply_wizard",
-            label="Оформить заявку",
-            payload={
-                "product_id": p.id,
-                "backend_id": p.backend_id,
-                "amount": rec_amount,
-                "term": rec_term,
-                "org": org or (p.org_types[0] if p.org_types else "ooo"),
-                "collateral": p.collateral if p.collateral != "any" else "without",
-                "age": "lt9" if is_young else "gte9",
-            },
-        )
+    wizard_action = ActionCommand(
+        type="apply_wizard",
+        label="Оформить кредит",
+        payload={
+            "product_id": p.id,
+            "backend_id": p.backend_id,
+            "amount": rec_amount,
+            "term": rec_term,
+            "org": org or (p.org_types[0] if p.org_types else "ooo"),
+            "collateral": p.collateral if p.collateral != "any" else "without",
+            "age": "lt9" if is_young else "gte9",
+        },
     )
+
+    actions = [wizard_action, calc_action] if is_authenticated else [calc_action, wizard_action]
 
     quick_replies = [
         "Какие документы нужны?",
@@ -457,8 +457,11 @@ def render_change_term(
     quick_replies: List[str] = []
 
     for t in terms_to_show:
-        r_month = (rate / 100.0) / 12.0
-        pmt = int(round(amt * (r_month * (1 + r_month) ** t) / ((1 + r_month) ** t - 1)))
+        if rate > 0:
+            r_month = (rate / 100.0) / 12.0
+            pmt = int(round(amt * (r_month * (1 + r_month) ** t) / ((1 + r_month) ** t - 1)))
+        else:
+            pmt = int(round(amt / max(t, 1)))
         lines.append(f"• **{format_term(t)}:** ~**{format_rubles(pmt)}** / мес.")
 
         if len(actions) < 2 and p:
@@ -518,4 +521,108 @@ def render_reset_flow() -> Dict[str, Any]:
         ],
         "dialogue_state": "GREETING",
     }
+
+
+EASTER_EGG_REPLIES = {
+    "welldone": "туймазы🍚",
+    "artem": "（ ͜.人 ͜.）",
+    "ruslan": "52",
+    "sanya": "🦍",
+    "max": "🤠",
+}
+
+
+def render_easter_egg(egg_key: str) -> Dict[str, Any]:
+    text = EASTER_EGG_REPLIES.get(egg_key, "✨")
+    return {
+        "reply": text,
+        "dialogue_state": "CHIT_CHAT",
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": [
+            "3 млн на маркетплейсы",
+            "Оборотные средства 1 млн",
+            "Что ты умеешь?",
+            "Подобрать кредит",
+        ],
+    }
+
+
+def render_chit_chat(intent: str) -> Dict[str, Any]:
+    if intent == "chit_chat_how_are_you":
+        reply = (
+            "У меня всё отлично! Анализирую кредитные предложения, слежу за ставками "
+            "и помогаю предпринимателям развивать бизнес.\n\n"
+            "А как ваши дела? Какая сумма или задача сейчас актуальна?"
+        )
+        quick_replies = [
+            "Оборотные средства 1 млн",
+            "3 млн на маркетплейсы",
+            "Что ты умеешь?",
+            "Расскажи анекдот",
+        ]
+    elif intent == "chit_chat_who_are_you":
+        reply = (
+            "Я **Альфи** — ваш персональный виртуальный кредитный куратор и AI-помощник Альфа-Банка.\n\n"
+            "Меня разработали специально для **Альфа-Хакатона 2026**. Я умею:\n"
+            "• Мгновенно подбирать программы из 14 кредитных продуктов;\n"
+            "• Рассчитывать платежи и выставлять параметры прямо в калькулятор;\n"
+            "• Консультировать по более чем 50 финансовым и юридическим вопросам бизнеса."
+        )
+        quick_replies = [
+            "Что ты умеешь?",
+            "Подобрать кредит",
+            "Сравнить с другими",
+            "Дай совет",
+        ]
+    elif intent == "chit_chat_joke":
+        reply = (
+            "— Здравствуйте, я хочу взять кредит на открытие бизнеса.\n"
+            "— А бизнес-план у вас есть?\n"
+            "— Конечно! Беру кредит, открываю точку, получаю прибыль, отдаю кредит.\n"
+            "— Гениально! А если прибыли не будет?\n"
+            "— Ну тогда вы мне поможете оформить кредитные каникулы! 😄\n\n"
+            "А если серьезно — у нас честные ставки и прозрачные условия без скрытых комиссий. Рассчитаем платеж?"
+        )
+        quick_replies = [
+            "Без залога на 1 год",
+            "Оборотные средства 1 млн",
+            "Что ты умеешь?",
+        ]
+    elif intent == "chit_chat_advice":
+        reply = (
+            "💡 **Финансовый совет от Альфи для бизнеса:**\n\n"
+            "1. **Не закрывайте овердрафтом долгосрочные проекты** — овердрафт идеален для кассовых разрывов до 60 дней, а для оборудования выбирайте целевой кредит на 3–5 лет.\n"
+            "2. **Используйте транши кредитной линии (ВКЛ)** — проценты начисляются только на фактически используемую часть лимита.\n"
+            "3. **Гасите досрочно** — в Альфа-Банке частичное и полное досрочное погашение осуществляется без комиссий и штрафов в любой день!"
+        )
+        quick_replies = [
+            "Овердрафт для бизнеса",
+            "Возобновляемая линия",
+            "Подобрать кредит",
+            "Сравнить с другими",
+        ]
+    elif intent == "chit_chat_farewell":
+        reply = (
+            "До свидания! Всегда рад помочь вашему делу расти. "
+            "Если понадобятся расчеты или консультация — я всегда на связи в правом нижнем углу.\n\n"
+            "Успехов вашему бизнесу и отличного дня! 🚀"
+        )
+        quick_replies = [
+            "Подобрать кредит",
+            "Что ты умеешь?",
+            "Начать сначала",
+        ]
+    else:
+        reply = "Всегда к вашим услугам! Чем могу помочь по кредитованию бизнеса?"
+        quick_replies = ["Подобрать кредит", "Что ты умеешь?"]
+
+    return {
+        "reply": reply,
+        "dialogue_state": "CHIT_CHAT",
+        "recommended_products": [],
+        "actions": [],
+        "quick_replies": quick_replies,
+    }
+
 

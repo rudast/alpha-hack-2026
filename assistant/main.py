@@ -3,7 +3,27 @@ FastAPI Microservice for the Credit Assistant Curator.
 Provides REST API endpoints for chat, product recommendation, and catalog queries.
 """
 from __future__ import annotations
+import sys
+import types
+from pathlib import Path
 from typing import List
+
+# Ensure assistant package is importable whether run from repo root or assistant root (e.g. Vercel)
+_current_dir = Path(__file__).resolve().parent
+_parent_dir = _current_dir.parent
+for _p in [str(_parent_dir), str(_current_dir)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+if "assistant" not in sys.modules:
+    try:
+        import assistant
+    except ImportError:
+        pkg = types.ModuleType("assistant")
+        pkg.__path__ = [str(_current_dir)]
+        pkg.__file__ = str(_current_dir / "__init__.py")
+        sys.modules["assistant"] = pkg
+
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 

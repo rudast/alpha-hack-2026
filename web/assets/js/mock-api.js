@@ -13,7 +13,8 @@
  *
  * Предлагаемые бэкенду ответы (их форма — это и есть ТЗ):
  *   GET /me        — { user: {...}, company: {...} }        профиль пользователя и компании
- *   GET /loans     — { loans: [...], other_banks: [...] }    кредиты в нашем банке с графиком и долги в других банках
+ *   GET /loans     — { loans: [...], closed_loans: [...], other_banks: [...] }
+ *                    действующие и закрытые кредиты в нашем банке с графиком, долги в других банках
  *   GET /me/offer  — { preapproved_limit, rate_from, ... }   предодобренный лимит для баннера
  *
  * Данные синтетические и зависят от ИНН демо-компании. Долг в других банках считается как
@@ -51,6 +52,12 @@
         { id: 'L-1002', product_id: 'auto_loan', product_name: 'Автокредит для бизнеса',
           contract_number: '0АК-2025/0342', amount: 1500000, rate: 15.5, term_months: 36, paid_payments: 20, pay_day: 5 },
       ],
+      closed_loans: [
+        { id: 'C-1001', product_id: 'working_capital', product_name: 'Кредит на пополнение оборотных средств',
+          contract_number: '0ОС-2023/0412', amount: 1500000, rate: 18, term_months: 18, issued_at: '2023-04-12' },
+        { id: 'C-1002', product_id: 'express', product_name: 'Экспресс-кредит для бизнеса',
+          contract_number: '0ЭК-2024/1120', amount: 500000, rate: 21, term_months: 12, issued_at: '2024-11-20', closed_after: 7 },
+      ],
       other_banks: [{ bank: 'Сбербанк', kind: 'Кредит на оборотные средства' }],
     },
     '7700000002': {
@@ -62,6 +69,10 @@
         address: 'г. Москва, ул. Демонстрационная, д. 2', account_number: '40702810900000000002',
       },
       loans: [],
+      closed_loans: [
+        { id: 'C-2001', product_id: 'ooo_loan', product_name: 'Кредит для ООО',
+          contract_number: '0КО-2023/0905', amount: 800000, rate: 20, term_months: 12, issued_at: '2023-09-05' },
+      ],
       other_banks: [{ bank: 'ВТБ', kind: 'Инвестиционный кредит' }],
     },
     '7700000003': {
@@ -75,6 +86,12 @@
       loans: [
         { id: 'L-3001', product_id: 'equipment_loan', product_name: 'Кредит на оборудование',
           contract_number: '0ОБ-2024/2210', amount: 2400000, rate: 16.5, term_months: 48, paid_payments: 26, pay_day: 20 },
+      ],
+      closed_loans: [
+        { id: 'C-3001', product_id: 'auto_loan', product_name: 'Автокредит для бизнеса',
+          contract_number: '0АК-2020/1015', amount: 2000000, rate: 14.5, term_months: 36, issued_at: '2020-10-15' },
+        { id: 'C-3002', product_id: 'loan_up_to_1m', product_name: 'Кредит до 1 млн ₽',
+          contract_number: '0КМ-2023/0301', amount: 900000, rate: 21.5, term_months: 12, issued_at: '2023-03-01', closed_after: 9 },
       ],
       other_banks: [{ bank: 'Т-Банк', kind: 'Овердрафт' }],
     },
@@ -92,6 +109,10 @@
         { id: 'L-4002', product_id: 'credit_line', product_name: 'Возобновляемая кредитная линия (ВКЛ)',
           contract_number: '0ВКЛ-2026/0098', amount: 1500000, rate: 17, term_months: 24, paid_payments: 8, pay_day: 25 },
       ],
+      closed_loans: [
+        { id: 'C-4001', product_id: 'working_capital', product_name: 'Кредит на пополнение оборотных средств',
+          contract_number: '0ОС-2022/0718', amount: 2500000, rate: 17, term_months: 24, issued_at: '2022-07-18', late_payments: 2 },
+      ],
       other_banks: [
         { bank: 'Сбербанк', kind: 'Кредит под залог недвижимости' },
         { bank: 'ВТБ', kind: 'Оборотный кредит' },
@@ -108,6 +129,10 @@
       loans: [
         { id: 'L-5001', product_id: 'express', product_name: 'Экспресс-кредит для бизнеса',
           contract_number: '0ЭК-2026/0731', amount: 600000, rate: 20.5, term_months: 12, paid_payments: 4, pay_day: 12 },
+      ],
+      closed_loans: [
+        { id: 'C-5001', product_id: 'ip_loan', product_name: 'Кредит для ИП',
+          contract_number: '0КИ-2024/0210', amount: 400000, rate: 22, term_months: 12, issued_at: '2024-02-10' },
       ],
       other_banks: [{ bank: 'Совкомбанк', kind: 'Кредит для ИП' }],
     },
@@ -221,6 +246,62 @@
     };
   }
 
+  // Закрытый кредит: все платежи внесены. closed_after — номер платежа, которым кредит погасили досрочно
+  // (в нём внесён весь остаток). late_payments — сколько платежей было внесено с опозданием.
+  function buildClosedLoan(spec) {
+    var r = spec.rate / 100 / 12;
+    var payment = round((spec.amount * r) / (1 - Math.pow(1 + r, -spec.term_months)));
+    var ymd = spec.issued_at.split('-'); // местная дата, не UTC
+    var issued = new Date(+ymd[0], +ymd[1] - 1, +ymd[2]);
+    var payDay = issued.getDate();
+    var last = spec.closed_after || spec.term_months;
+
+    var balance = spec.amount;
+    var schedule = [];
+    var paidTotal = 0;
+    for (var n = 1; n <= last; n++) {
+      var interest = round(balance * r);
+      var amount = n === last ? round(balance + interest) : payment;
+      var principal = round(amount - interest);
+      balance = Math.max(0, round(balance - principal));
+      paidTotal += amount;
+      schedule.push({
+        number: n,
+        date: isoDate(shiftMonths(issued, n, payDay)),
+        amount: amount,
+        principal: principal,
+        interest: interest,
+        balance_after: balance,
+        status: 'PAID',
+      });
+    }
+
+    return {
+      id: spec.id,
+      product_id: spec.product_id,
+      product_name: spec.product_name,
+      contract_number: spec.contract_number,
+      amount: spec.amount,
+      rate: spec.rate,
+      term_months: spec.term_months,
+      issued_at: spec.issued_at,
+      closed_at: schedule[schedule.length - 1].date,
+      maturity_date: isoDate(shiftMonths(issued, spec.term_months, payDay)),
+      status: 'CLOSED',
+      closed_early: last < spec.term_months,
+      months_early: spec.term_months - last,
+      monthly_payment: payment,
+      principal_left: 0,
+      paid_total: Math.round(paidTotal),
+      overpayment: Math.round(paidTotal - spec.amount),
+      payments_made: last,
+      payments_total: last,
+      late_payments: spec.late_payments || 0,
+      next_payment: null,
+      schedule: schedule,
+    };
+  }
+
   // ---------- Обработчики ----------
 
   function respond(status, data) {
@@ -265,7 +346,10 @@
             others.push({ bank: o.bank, kind: o.kind, debt: debt });
           });
         }
-        return respond(200, { loans: loans, other_banks: others });
+        var closedLoans = (c.closed_loans || []).map(buildClosedLoan).sort(function (a, b) {
+          return a.closed_at < b.closed_at ? 1 : -1;
+        });
+        return respond(200, { loans: loans, closed_loans: closedLoans, other_banks: others });
       });
     },
 
