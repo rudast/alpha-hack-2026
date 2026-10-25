@@ -15,9 +15,11 @@ import (
 )
 
 const (
-	requestStream  = "worker:requests"
-	replyKeyPrefix = "worker:reply:"
-	defaultWait    = 10 * time.Second
+	requestStream             = "worker:requests"
+	replyKeyPrefix            = "worker:reply:"
+	defaultWait               = 10 * time.Second
+	backendHistoryStream      = "credit-history:requests"
+	backendHistoryReplyPrefix = "credit-history:reply:"
 
 	KindCreditHistory      = "credit_history"
 	KindVerifyApplication  = "verify_application"
@@ -112,15 +114,40 @@ func (c *Client) Await(ctx context.Context, id string, dst any) error {
 }
 
 func (c *Client) FetchHistory(ctx context.Context, inn string) (History, error) {
-	id, err := c.Submit(ctx, KindCreditHistory, struct {
-		INN string `json:"inn"`
-	}{INN: inn})
+	id, err := newID()
 	if err != nil {
 		return History{}, err
 	}
-	var h History
-	err = c.Await(ctx, id, &h)
-	return h, err
+	if err := c.rdb.XAdd(ctx, &redis.XAddArgs{
+		Stream: backendHistoryStream,
+		MaxLen: 10000,
+		Approx: true,
+		Values: map[string]any{"request_id": id, "inn": inn},
+	}).Err(); err != nil {
+		return History{}, mapTimeout(err)
+	}
+	wait := defaultWait
+	if deadline, ok := ctx.Deadline(); ok {
+		wait = time.Until(deadline)
+		if wait <= 0 {
+			return History{}, domain.ErrUpstreamTimeout
+		}
+	}
+	values, err := c.rdb.BLPop(ctx, wait, backendHistoryReplyPrefix+id).Result()
+	if err != nil {
+		return History{}, mapTimeout(err)
+	}
+	var response struct {
+		History
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(values[1]), &response); err != nil {
+		return History{}, fmt.Errorf("%w: decode reply: %v", domain.ErrUpstreamFailed, err)
+	}
+	if response.Error != "" {
+		return History{}, fmt.Errorf("%w: %s", domain.ErrUpstreamFailed, response.Error)
+	}
+	return response.History, nil
 }
 
 func mapTimeout(err error) error {

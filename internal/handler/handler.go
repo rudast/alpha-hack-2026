@@ -31,6 +31,8 @@ func New(d Deps) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID, chimw.Recoverer, chimw.Logger)
 	r.Get("/healthz", health)
+	r.Get("/docs", apiDocs)
+	r.Get("/openapi.yaml", openAPISpec)
 
 	if d.AssistantURL != "" {
 		if u, err := url.Parse(d.AssistantURL); err == nil {
