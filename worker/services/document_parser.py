@@ -11,6 +11,8 @@ from worker.services.document_readers import READABLE_TYPES, extract_text
 from worker.services.bank_statement_1c import Unsupported1CFormat, parse_1c_statement
 from worker.services.account_statement_csv import UnsupportedStatementFormat, parse_csv_statement
 from worker.services.marketplace_csv import parse_marketplace_csv
+from worker.services.financial_report_text import parse_financial_text
+from worker.services.registry_text import parse_egrul_text, parse_egrn_text, parse_vehicle_text
 
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 MAX_BASE64_CHARS = ((MAX_DOCUMENT_BYTES + 2) // 3) * 4
@@ -107,13 +109,23 @@ def parse_documents(payload: dict[str, Any]) -> dict[str, Any]:
                 item["status"] = "PARSED"
             elif media_type in READABLE_TYPES:
                 extracted = extract_text(raw, media_type)
-                item["extracted_fields"] = {
+                fields = {
                     "document_text": {
                         **_field(extracted.text, document.get("id"), None),
                         "extraction_method": extracted.method,
                         "truncated": extracted.truncated,
                     }
                 }
+                if not extracted.truncated:
+                    if kind in ("financial_statements", "target_financial_statements"):
+                        fields.update(parse_financial_text(extracted.text, document.get("id")))
+                    elif kind == "egrul_extract":
+                        fields.update(parse_egrul_text(extracted.text, document.get("id")))
+                    elif kind == "egrn_extract":
+                        fields.update(parse_egrn_text(extracted.text, document.get("id")))
+                    elif kind == "vehicle_registration":
+                        fields.update(parse_vehicle_text(extracted.text, document.get("id")))
+                item["extracted_fields"] = fields
                 item["status"] = "TEXT_EXTRACTED"
             else:
                 item["error"] = "this document kind or media type is not parsed yet"
@@ -138,7 +150,10 @@ def parse_documents(payload: dict[str, Any]) -> dict[str, Any]:
             reason = {
                 "passport": "PASSPORT_NOT_VERIFIED",
                 "bki_consent": "BKI_CONSENT_NOT_VERIFIED",
-            }.get(item["kind"], "FIELDS_NOT_EXTRACTED")
+            }.get(item["kind"])
+            if reason is None:
+                reason = ("FIELDS_UNVERIFIED" if len(item["extracted_fields"]) > 1
+                          else "FIELDS_NOT_EXTRACTED")
         review_reasons.append({"document_id": item["id"], "reason": reason})
     return {"application_id": application_id,
             "status": "REVIEW_REQUIRED" if review_reasons else "DONE",
