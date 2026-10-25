@@ -51,6 +51,16 @@ class LegacyRedisTests(unittest.TestCase):
             self.assertEqual(parsed["documents"][0]["status"], "PARSED")
             self.assertEqual(parsed["documents"][0]["extracted_fields"]["closing_balance"]["value"],
                              "1100.50")
+            valuation = request("parse_documents", {"application_id": str(uuid4()), "documents": [{
+                "id": "valuation-1", "kind": "valuation_report", "filename": "report.txt",
+                "media_type": "text/plain", "content_text":
+                "Отчет об оценке\nДата оценки: 20.10.2026\n"
+                "Рыночная стоимость объекта оценки: 12 345 678,90 руб.\n",
+            }]})
+            self.assertEqual(valuation["documents"][0]["status"], "TEXT_EXTRACTED")
+            self.assertEqual(
+                valuation["documents"][0]["extracted_fields"]["appraised_value"]["value"],
+                "12345678.90")
             self.assertEqual(errors, [])
         finally:
             worker.stop.set()

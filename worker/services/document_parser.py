@@ -12,7 +12,10 @@ from worker.services.bank_statement_1c import Unsupported1CFormat, parse_1c_stat
 from worker.services.account_statement_csv import UnsupportedStatementFormat, parse_csv_statement
 from worker.services.marketplace_csv import parse_marketplace_csv
 from worker.services.financial_report_text import parse_financial_text
-from worker.services.registry_text import parse_egrul_text, parse_egrn_text, parse_vehicle_text
+from worker.services.registry_text import (parse_egrul_text, parse_egrn_text,
+                                           parse_vehicle_text, parse_technical_passport)
+from worker.services.valuation_text import parse_valuation_text
+from worker.services.contract_text import parse_purchase_contract
 
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 MAX_BASE64_CHARS = ((MAX_DOCUMENT_BYTES + 2) // 3) * 4
@@ -123,8 +126,15 @@ def parse_documents(payload: dict[str, Any]) -> dict[str, Any]:
                         fields.update(parse_egrul_text(extracted.text, document.get("id")))
                     elif kind == "egrn_extract":
                         fields.update(parse_egrn_text(extracted.text, document.get("id")))
+                    elif kind == "technical_passport":
+                        fields.update(parse_technical_passport(extracted.text, document.get("id")))
                     elif kind == "vehicle_registration":
                         fields.update(parse_vehicle_text(extracted.text, document.get("id")))
+                    elif kind == "valuation_report":
+                        fields.update(parse_valuation_text(extracted.text, document.get("id")))
+                    elif kind in ("preliminary_purchase_contract", "business_purchase_contract",
+                                  "equipment_purchase_contract"):
+                        fields.update(parse_purchase_contract(kind, extracted.text, document.get("id")))
                 item["extracted_fields"] = fields
                 item["status"] = "TEXT_EXTRACTED"
             else:

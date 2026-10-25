@@ -83,6 +83,17 @@ def parse_egrn_text(text: str, document_id: str | None) -> dict[str, Any]:
     return {"cadastral_number": _field(candidates[0], document_id)} if len(unique) == 1 else {}
 
 
+def parse_technical_passport(text: str, document_id: str | None) -> dict[str, Any]:
+    if "технический паспорт" not in text.casefold():
+        return {}
+    candidates = []
+    for match in re.finditer(r"кадастровый\s+номер\s*[:№]?\s*([^\n]{1,80})", text, re.I):
+        cadastre = CADASTRE.search(match.group(1))
+        if cadastre:
+            candidates.append(cadastre.group())
+    return {"cadastral_number": _field(candidates[0], document_id)} if candidates and len(set(candidates)) == 1 else {}
+
+
 VIN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b", re.I)
 
 

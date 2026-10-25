@@ -118,6 +118,60 @@ VIN: XTA210990Y1234567
         bad = parse("vehicle_registration", text.replace("XTA210990Y1234567", "XTA21099OY1234567"))
         self.assertNotIn("vin", bad["documents"][0]["extracted_fields"])
 
+    def test_valuation_uses_market_value_and_explicit_valuation_date(self):
+        text = """Отчет об оценке недвижимости
+Дата оценки: 20.10.2026
+Рыночная стоимость объекта оценки: 12 345 678,90 руб.
+Заявленная заказчиком цена: 15 000 000 руб.
+"""
+        result = parse("valuation_report", text)
+        value = result["documents"][0]["extracted_fields"]["appraised_value"]
+        self.assertEqual(value["value"], "12345678.90")
+        self.assertEqual(value["period"], "2026-10-20")
+        self.assertEqual(result["status"], "REVIEW_REQUIRED")
+
+    def test_valuation_without_date_or_unique_value_requires_review(self):
+        text = """Отчет об оценке
+Рыночная стоимость: 100 000 руб.
+"""
+        fields = parse("valuation_report", text)["documents"][0]["extracted_fields"]
+        self.assertNotIn("appraised_value", fields)
+
+    def test_contract_price_does_not_replace_appraised_value(self):
+        text = """Предварительный договор купли-продажи нежилого помещения
+Цена договора: 15 000 000 руб.
+Первоначальный взнос: 3 000 000 руб.
+"""
+        result = parse("preliminary_purchase_contract", text)
+        fields = result["documents"][0]["extracted_fields"]
+        self.assertEqual(fields["contract_price"]["value"], "15000000.00")
+        self.assertEqual(fields["down_payment"]["value"], "3000000.00")
+        self.assertNotIn("appraised_value", fields)
+        self.assertEqual(result["status"], "REVIEW_REQUIRED")
+
+    def test_business_contract_price_needs_specific_title_and_label(self):
+        text = """Договор купли-продажи доли
+Цена договора: 7 500 000,50 руб.
+"""
+        fields = parse("business_purchase_contract", text)["documents"][0]["extracted_fields"]
+        self.assertEqual(fields["contract_price"]["value"], "7500000.50")
+        unrelated = parse("business_purchase_contract", "Цена договора: 7 500 000 руб.")
+        self.assertNotIn("contract_price", unrelated["documents"][0]["extracted_fields"])
+
+    def test_equipment_contract_price(self):
+        text = """Договор купли-продажи оборудования
+Стоимость договора: 2 400 000 руб.
+"""
+        fields = parse("equipment_purchase_contract", text)["documents"][0]["extracted_fields"]
+        self.assertEqual(fields["contract_price"]["value"], "2400000.00")
+
+    def test_technical_passport_cadastral_number(self):
+        text = """Технический паспорт
+Кадастровый номер: 77:01:0004012:1234
+"""
+        fields = parse("technical_passport", text)["documents"][0]["extracted_fields"]
+        self.assertEqual(fields["cadastral_number"]["value"], "77:01:0004012:1234")
+
 
 if __name__ == "__main__":
     unittest.main()
