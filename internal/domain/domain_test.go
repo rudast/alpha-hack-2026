@@ -84,15 +84,46 @@ func TestCanTransition(t *testing.T) {
 	}
 }
 
-func TestWorkerMaySet(t *testing.T) {
-	for _, s := range []Status{StatusDataCheck, StatusInfoRequested, StatusScoring, StatusManualReview, StatusApproved, StatusCounterOffer} {
-		if !WorkerMaySet(s) {
-			t.Errorf("the worker must be able to set %s", s)
+func TestWorkerMayTransition(t *testing.T) {
+	allowed := [][2]Status{
+		{StatusSubmitted, StatusDataCheck},
+		{StatusDataCheck, StatusInfoRequested},
+		{StatusDataCheck, StatusScoring},
+		{StatusScoring, StatusApproved},
+		{StatusScoring, StatusCounterOffer},
+		{StatusScoring, StatusManualReview},
+	}
+	for _, p := range allowed {
+		if !WorkerMayTransition(p[0], p[1]) {
+			t.Errorf("the worker must be able to move %s -> %s", p[0], p[1])
 		}
 	}
-	for _, s := range []Status{StatusRejected, StatusDraft, StatusSubmitted, StatusSigning, StatusClosed} {
-		if WorkerMaySet(s) {
-			t.Errorf("the worker must not set %s", s)
+
+	forbidden := [][2]Status{
+		// решения после ручной проверки принимает сотрудник
+		{StatusManualReview, StatusApproved},
+		{StatusManualReview, StatusCounterOffer},
+		{StatusManualReview, StatusRejected},
+		// возврат после ответа клиента и действия клиента — не шаги воркера
+		{StatusInfoRequested, StatusDataCheck},
+		{StatusApproved, StatusSigning},
+		{StatusCounterOffer, StatusDraft},
+		{StatusDraft, StatusSubmitted},
+	}
+	for _, p := range forbidden {
+		if WorkerMayTransition(p[0], p[1]) {
+			t.Errorf("the worker must not move %s -> %s", p[0], p[1])
+		}
+	}
+}
+
+// Каждый переход воркера должен быть и в общей диаграмме состояний.
+func TestWorkerTransitionsAreInTheDiagram(t *testing.T) {
+	for from, targets := range workerTransitions {
+		for _, to := range targets {
+			if !CanTransition(from, to) {
+				t.Errorf("worker transition %s -> %s is not in the state diagram", from, to)
+			}
 		}
 	}
 }

@@ -54,7 +54,8 @@ func (p *ResultProcessor) Process(ctx context.Context, res domain.ApplicationRes
 }
 
 // validateResult проверяет то, что можно проверить без обращения к базе: переход допустим по диаграмме
-// состояний, воркеру разрешён целевой статус, решение (если есть) это JSON-объект.
+// состояний и разрешён именно воркеру (решения по ручной проверке и отказ принимает сотрудник),
+// решение (если есть) это JSON-объект.
 func validateResult(res domain.ApplicationResult) error {
 	switch {
 	case res.ApplicationID == "":
@@ -63,10 +64,10 @@ func validateResult(res domain.ApplicationResult) error {
 		return fmt.Errorf("unknown status %q", res.From)
 	case !domain.KnownStatus(res.To):
 		return fmt.Errorf("unknown status %q", res.To)
-	case !domain.WorkerMaySet(res.To):
-		return fmt.Errorf("the worker may not set status %s", res.To)
 	case !domain.CanTransition(res.From, res.To):
 		return fmt.Errorf("transition %s to %s is not allowed", res.From, res.To)
+	case !domain.WorkerMayTransition(res.From, res.To):
+		return fmt.Errorf("transition %s to %s is not the worker's to make", res.From, res.To)
 	}
 	if len(res.Decision) > 0 {
 		var decision map[string]any

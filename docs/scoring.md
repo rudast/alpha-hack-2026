@@ -943,7 +943,7 @@ sequenceDiagram
 | API → воркер | Заявка (продукт, сумма, срок, форма, документы), показатели компании (долг, капитал, D/E) и блок `company` (тип организации, ОКВЭД, дата регистрации, `registry`, `credit_history`, `financials`) | [worker-protocol.md](worker-protocol.md), раздел «Задачи по заявкам» |
 | Воркер → API | Переход статуса (`from`, `to`), решение `decision` в формате раздела 11, комментарий | [worker-protocol.md](worker-protocol.md), раздел «Результаты воркера скоринга» |
 
-API проверяет только допустимость перехода по [state-diagram.md](state-diagram.md): воркер не может выставить `REJECTED`, состав полей `decision` не проверяется.
+API проверяет, что переход есть в [state-diagram.md](state-diagram.md) и входит в список переходов воркера ([worker-protocol.md](worker-protocol.md)): воркер не выставляет `REJECTED` и не меняет заявку в `MANUAL_REVIEW`. Состав полей `decision` не проверяется.
 
 ### 15.3. Рекомендуемая структура кода воркера
 

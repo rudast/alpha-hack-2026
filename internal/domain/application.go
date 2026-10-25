@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 )
 
@@ -62,19 +63,20 @@ func KnownStatus(s Status) bool {
 	return s == StatusClosed
 }
 
-// workerStatuses — статусы, которые вправе выставлять воркер скоринга. REJECTED среди них нет:
-// отказ выносит только сотрудник.
-var workerStatuses = map[Status]bool{
-	StatusDataCheck:     true,
-	StatusInfoRequested: true,
-	StatusScoring:       true,
-	StatusManualReview:  true,
-	StatusApproved:      true,
-	StatusCounterOffer:  true,
+// workerTransitions — переходы, которые вправе выполнять воркер скоринга: автоматическая проверка
+// данных и скоринг. Права заданы переходами, а не целевыми статусами: APPROVED воркер может выставить
+// только по итогам скоринга, а не вместо сотрудника из MANUAL_REVIEW. Всё, что начинается
+// с MANUAL_REVIEW, решает сотрудник; отказ (REJECTED) воркер не выносит вовсе.
+var workerTransitions = map[Status][]Status{
+	StatusSubmitted: {StatusDataCheck},
+	StatusDataCheck: {StatusInfoRequested, StatusScoring},
+	StatusScoring:   {StatusApproved, StatusCounterOffer, StatusManualReview},
 }
 
-// WorkerMaySet сообщает, может ли воркер перевести заявку в статус s.
-func WorkerMaySet(s Status) bool { return workerStatuses[s] }
+// WorkerMayTransition сообщает, может ли воркер перевести заявку из статуса from в статус to.
+func WorkerMayTransition(from, to Status) bool {
+	return slices.Contains(workerTransitions[from], to)
+}
 
 // HistoryEntry — один переход статуса; By — кто его выполнил (идентификатор пользователя, позже воркер).
 type HistoryEntry struct {
@@ -102,6 +104,9 @@ type Application struct {
 	SubmittedAt *time.Time      `json:"submitted_at"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
+
+	// OfferID — предварительное предложение, по которому создана заявка; nil у обычной заявки.
+	OfferID *string `json:"offer_id"`
 }
 
 // ApplicationSummary — строка списка заявок в кабинете.

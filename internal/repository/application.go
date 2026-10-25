@@ -14,7 +14,7 @@ import (
 )
 
 const applicationColumns = `id::text, version, company_inn, product_id, amount, term_months, purpose, status,
-	form, documents, history, decision, submitted_at, created_at, updated_at`
+	form, documents, history, decision, submitted_at, created_at, updated_at, offer_id::text`
 
 type ApplicationRepo struct {
 	db *pgxpool.Pool
@@ -36,6 +36,29 @@ func (r *ApplicationRepo) Create(ctx context.Context, a domain.Application, crea
 		RETURNING `+applicationColumns,
 		a.CompanyINN, createdBy, a.ProductID, a.Amount, a.TermMonths, a.Purpose, form)
 	return scanApplication(row)
+}
+
+// CreateFromOffer создаёт черновик по предварительному предложению (a.OfferID). По одному предложению
+// бывает не больше одной заявки (уникальный индекс): если она уже есть, возвращается она и false.
+func (r *ApplicationRepo) CreateFromOffer(ctx context.Context, a domain.Application, createdBy string) (domain.Application, bool, error) {
+	form, err := formJSON(a.Form)
+	if err != nil {
+		return domain.Application{}, false, err
+	}
+	row := r.db.QueryRow(ctx, `
+		INSERT INTO applications (company_inn, created_by, product_id, amount, term_months, purpose, form, offer_id)
+		VALUES ($1, $2::text::uuid, $3, $4, $5, $6, $7::jsonb, $8::text::uuid)
+		ON CONFLICT (offer_id) WHERE offer_id IS NOT NULL DO NOTHING
+		RETURNING `+applicationColumns,
+		a.CompanyINN, createdBy, a.ProductID, a.Amount, a.TermMonths, a.Purpose, form, a.OfferID)
+	created, err := scanApplication(row)
+	if !errors.Is(err, domain.ErrNotFound) {
+		return created, err == nil, err
+	}
+	row = r.db.QueryRow(ctx,
+		`SELECT `+applicationColumns+` FROM applications WHERE offer_id = $1::text::uuid AND company_inn = $2`, a.OfferID, a.CompanyINN)
+	existing, err := scanApplication(row)
+	return existing, false, err
 }
 
 // GetForCompany возвращает заявку, только если она принадлежит компании. Владелец проверяется
@@ -71,8 +94,9 @@ func (r *ApplicationRepo) ListByCompany(ctx context.Context, inn string) ([]doma
 // UpdateDraft меняет только переданные поля черновика (COALESCE оставляет прежнее значение, если параметр NULL).
 // Изменение применяется, только если version совпадает с текущей версией заявки, и увеличивает её на 1:
 // так запрос, составленный по устаревшим данным, не затрёт чужие изменения.
+// unlinkOffer отвязывает заявку от предварительного предложения (клиент сменил продукт).
 // Не черновик: ErrConflict, устаревшая версия: ErrVersionConflict, чужая или несуществующая заявка: ErrNotFound.
-func (r *ApplicationRepo) UpdateDraft(ctx context.Context, id, inn string, version int, p domain.DraftPatch) (domain.Application, error) {
+func (r *ApplicationRepo) UpdateDraft(ctx context.Context, id, inn string, version int, p domain.DraftPatch, unlinkOffer bool) (domain.Application, error) {
 	var form any
 	if p.Form != nil {
 		b, err := formJSON(p.Form)
@@ -88,26 +112,52 @@ func (r *ApplicationRepo) UpdateDraft(ctx context.Context, id, inn string, versi
 			term_months = COALESCE($5, term_months),
 			purpose     = COALESCE($6, purpose),
 			form        = COALESCE($7::jsonb, form),
+			offer_id    = CASE WHEN $9 THEN NULL ELSE offer_id END,
 			version     = version + 1,
 			updated_at  = now()
 		WHERE id = $1::text::uuid AND company_inn = $2 AND status = 'DRAFT' AND version = $8
 		RETURNING `+applicationColumns,
-		id, inn, p.ProductID, p.Amount, p.TermMonths, p.Purpose, form, version)
+		id, inn, p.ProductID, p.Amount, p.TermMonths, p.Purpose, form, version, unlinkOffer)
 	return r.afterConditionalUpdate(ctx, row, id, inn)
 }
 
 // Submit переводит черновик в SUBMITTED и дописывает переход в history. Условие status = 'DRAFT'
 // в самом запросе гарантирует, что при двойной отправке выиграет только один запрос.
+// Если заявка создана по предварительному предложению, в той же транзакции предложение становится USED;
+// если оно уже не действует (истекло, отозвано), отправка откатывается с domain.ErrOfferInvalid.
 func (r *ApplicationRepo) Submit(ctx context.Context, id, inn, by string, at time.Time) (domain.Application, error) {
-	row := r.db.QueryRow(ctx, `
-		UPDATE applications SET
-			status = 'SUBMITTED', submitted_at = $3, version = version + 1, updated_at = now(),
-			history = history || jsonb_build_array(jsonb_build_object(
-				'from', 'DRAFT', 'to', 'SUBMITTED', 'at', $3::timestamptz, 'by', $4::text))
-		WHERE id = $1::text::uuid AND company_inn = $2 AND status = 'DRAFT'
-		RETURNING `+applicationColumns,
-		id, inn, at, by)
-	return r.afterConditionalUpdate(ctx, row, id, inn)
+	var submitted domain.Application
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `
+			UPDATE applications SET
+				status = 'SUBMITTED', submitted_at = $3, version = version + 1, updated_at = now(),
+				history = history || jsonb_build_array(jsonb_build_object(
+					'from', 'DRAFT', 'to', 'SUBMITTED', 'at', $3::timestamptz, 'by', $4::text))
+			WHERE id = $1::text::uuid AND company_inn = $2 AND status = 'DRAFT'
+			RETURNING `+applicationColumns,
+			id, inn, at, by)
+		a, err := scanApplication(row)
+		if err != nil {
+			return err
+		}
+		if a.OfferID != nil {
+			tag, err := tx.Exec(ctx, `
+				UPDATE offers SET status = 'USED', used_at = $2
+				WHERE id = $1::text::uuid AND status = 'ACTIVE' AND valid_until > $2`, *a.OfferID, at)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() != 1 {
+				return domain.ErrOfferInvalid
+			}
+		}
+		submitted = a
+		return nil
+	})
+	if errors.Is(err, domain.ErrNotFound) {
+		return r.conflictReason(ctx, id, inn)
+	}
+	return submitted, err
 }
 
 // ApplyResult применяет результат воркера: переводит заявку из res.From в res.To, дописывает переход
@@ -200,6 +250,11 @@ func (r *ApplicationRepo) afterConditionalUpdate(ctx context.Context, row pgx.Ro
 	if !errors.Is(err, domain.ErrNotFound) {
 		return a, err
 	}
+	return r.conflictReason(ctx, id, inn)
+}
+
+// conflictReason объясняет, почему условный UPDATE не изменил строку (см. afterConditionalUpdate).
+func (r *ApplicationRepo) conflictReason(ctx context.Context, id, inn string) (domain.Application, error) {
 	current, err := r.GetForCompany(ctx, id, inn)
 	if err != nil {
 		return domain.Application{}, err
@@ -215,7 +270,7 @@ func scanApplication(row pgx.Row) (domain.Application, error) {
 	var status string
 	var form, history, documents, decision []byte
 	err := row.Scan(&a.ID, &a.Version, &a.CompanyINN, &a.ProductID, &a.Amount, &a.TermMonths, &a.Purpose, &status,
-		&form, &documents, &history, &decision, &a.SubmittedAt, &a.CreatedAt, &a.UpdatedAt)
+		&form, &documents, &history, &decision, &a.SubmittedAt, &a.CreatedAt, &a.UpdatedAt, &a.OfferID)
 	if err != nil {
 		return domain.Application{}, mapNotFound(err)
 	}

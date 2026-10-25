@@ -14,6 +14,7 @@ import (
 
 type ApplicationService interface {
 	Create(ctx context.Context, p domain.Principal, in domain.DraftPatch) (domain.Application, error)
+	CreateFromOffer(ctx context.Context, p domain.Principal, offerID string, in domain.DraftPatch) (domain.Application, bool, error)
 	Update(ctx context.Context, p domain.Principal, id string, version int, in domain.DraftPatch) (domain.Application, error)
 	Get(ctx context.Context, p domain.Principal, id string) (domain.Application, error)
 	List(ctx context.Context, p domain.Principal) ([]domain.ApplicationSummary, error)
@@ -30,8 +31,10 @@ func NewApplicationHandler(svc ApplicationService) *ApplicationHandler {
 
 // draftRequest описывает тело создания и изменения черновика. Любое поле можно не передавать:
 // указатель (или nil у form) означает «не менять». Version обязательна только при изменении.
+// OfferID учитывается только при создании: продукт, сумма и срок тогда берутся из предложения.
 type draftRequest struct {
 	Version    *int           `json:"version"`
+	OfferID    *string        `json:"offer_id"`
 	ProductID  *string        `json:"product_id"`
 	Amount     *int64         `json:"amount"`
 	TermMonths *int           `json:"term_months"`
@@ -52,6 +55,20 @@ func (h *ApplicationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := middleware.PrincipalFrom(r.Context())
+	if req.OfferID != nil {
+		// По предварительному предложению: повторное «Оформить» возвращает уже созданный черновик (200).
+		a, created, err := h.svc.CreateFromOffer(r.Context(), p, *req.OfferID, req.patch())
+		if err != nil {
+			h.fail(w, err)
+			return
+		}
+		status := http.StatusOK
+		if created {
+			status = http.StatusCreated
+		}
+		writeJSON(w, status, a)
+		return
+	}
 	a, err := h.svc.Create(r.Context(), p, req.patch())
 	if err != nil {
 		h.fail(w, err)
@@ -126,6 +143,16 @@ func (h *ApplicationHandler) fail(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusUnprocessableEntity, "product is not available for this company or parameters")
 	case errors.As(err, &validation):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"missing_fields": validation.Fields})
+	case errors.Is(err, domain.ErrOfferNotFound):
+		writeError(w, http.StatusNotFound, "offer not found")
+	case errors.Is(err, domain.ErrOfferUsed):
+		writeError(w, http.StatusConflict, "offer was already used or revoked")
+	case errors.Is(err, domain.ErrOfferExpired):
+		writeError(w, http.StatusGone, "offer has expired")
+	case errors.Is(err, domain.ErrOfferInvalid):
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "offer is no longer valid", "reason": "offer_expired"})
+	case errors.Is(err, domain.ErrOfferAmountExceeded):
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "amount exceeds the offer limit", "reason": "offer_amount_exceeded"})
 	default:
 		log.Printf("applications: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")

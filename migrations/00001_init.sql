@@ -49,12 +49,32 @@ CREATE TABLE users (
 
 CREATE UNIQUE INDEX users_email_lower_idx ON users (lower(email));
 
+-- Предварительные предложения (баннер в кабинете), docs/preapproved-offer.md. Предложение фиксируется
+-- при расчёте: заявка по нему берёт сумму, срок и продукт отсюда, а не из запроса клиента.
+CREATE TABLE offers (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_inn text NOT NULL REFERENCES companies (inn),
+    product_id  text NOT NULL,
+    max_amount  bigint NOT NULL CHECK (max_amount > 0),
+    term_months integer NOT NULL CHECK (term_months > 0),
+    rate_from   numeric(5, 2) NOT NULL,
+    status      text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'USED', 'EXPIRED', 'REVOKED')),
+    basis       jsonb NOT NULL,           -- снимок данных компании, по которым посчитано предложение
+    valid_until timestamptz NOT NULL,     -- задаётся при расчёте и дальше не меняется
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    used_at     timestamptz
+);
+
+-- У компании не больше одного действующего предложения.
+CREATE UNIQUE INDEX offers_one_active_idx ON offers (company_inn) WHERE status = 'ACTIVE';
+
 CREATE TABLE applications (
     id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     version      integer NOT NULL DEFAULT 1, -- растёт при каждом изменении; PATCH принимает только актуальную версию (защита от перезаписи)
     company_inn  text NOT NULL REFERENCES companies (inn),
     created_by   uuid REFERENCES users (id),
     assigned_to  uuid REFERENCES users (id), -- сотрудник, ведущий заявку на ручной проверке
+    offer_id     uuid REFERENCES offers (id), -- предварительное предложение, по которому создана заявка
     product_id   text NOT NULL DEFAULT '',   -- идентификатор из каталога продуктов
     amount       bigint NOT NULL DEFAULT 0 CHECK (amount >= 0),
     term_months  integer NOT NULL DEFAULT 0 CHECK (term_months >= 0),
@@ -80,8 +100,11 @@ CREATE TABLE applications (
 
 CREATE INDEX applications_status_submitted_idx ON applications (status, submitted_at);
 CREATE INDEX applications_company_created_idx ON applications (company_inn, created_at DESC);
+-- По одному предложению создаётся не больше одной заявки: повторное «Оформить» возвращает её же.
+CREATE UNIQUE INDEX applications_offer_idx ON applications (offer_id) WHERE offer_id IS NOT NULL;
 
 -- +goose Down
 DROP TABLE applications;
+DROP TABLE offers;
 DROP TABLE users;
 DROP TABLE companies;

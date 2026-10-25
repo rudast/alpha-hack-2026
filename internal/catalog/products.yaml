@@ -96,12 +96,34 @@ field_groups:
 # collateral: none — залога нет, optional — можно предложить, required — обязателен.
 # org_types пуст — продукт доступен и ИП, и ООО.
 # scoring — входные данные скоринга сверх базовых; расчёт делает код скоринга.
+# min_amount, max_amount — границы суммы, ₽; base_rate — базовая ставка продукта, % годовых
+# (её видит клиент в калькуляторе; значения перенесены из web/assets/js/loans.js).
+# min_business_age_months — минимальный возраст бизнеса; без поля продукт доступен любому бизнесу.
+# young_max_amount — потолок суммы для бизнеса младше offer.young_business_months; без поля потолка нет.
+
+# Предварительное предложение (docs/preapproved-offer.md): упрощённая проверка по данным компании,
+# окончательное решение принимает скоринг.
+offer:
+  products: [working_capital, ooo_loan, ip_loan, express, loan_up_to_1m]  # из каких продуктов выбирать
+  max_debt_to_equity: 2.0    # порог долговой нагрузки, как в скоринге и кабинете
+  headroom_share: 0.5        # какую долю запаса до порога предлагаем
+  min_amount: 300000         # меньше — предложения нет
+  no_bki_cap: 1000000        # потолок, если нет кредитной истории
+  round_to: 100000           # лимит округляется вниз до этого шага
+  term_months: 12            # типовой срок (в пределах продукта)
+  rate_discount: 1.5         # rate_from = base_rate − rate_discount: лучшая ставка, которую может дать скоринг
+  validity_days: 30
+  young_business_months: 9
+
 products:
   # Беззалоговые
   - id: overdraft
     name: Овердрафт
     min_term_months: 1
     max_term_months: 12
+    min_amount: 50000
+    max_amount: 15000000
+    base_rate: 17.5
     collateral: none
     field_groups: [account, rko]
     documents: [account_statement]
@@ -111,6 +133,10 @@ products:
     name: Возобновляемая кредитная линия (ВКЛ)
     min_term_months: 1
     max_term_months: 24
+    min_amount: 300000
+    max_amount: 30000000
+    base_rate: 17.0
+    min_business_age_months: 9
     collateral: optional
     field_groups: [account, credit_line]
     documents: [account_statement]
@@ -120,6 +146,10 @@ products:
     name: Экспресс-кредит для бизнеса
     min_term_months: 1
     max_term_months: 18
+    min_amount: 50000
+    max_amount: 5000000
+    base_rate: 20.5
+    young_max_amount: 2000000
     collateral: none
     scoring: [credit_history, registry]
 
@@ -128,6 +158,10 @@ products:
     name: Кредит на пополнение оборотных средств
     min_term_months: 3
     max_term_months: 36
+    min_amount: 100000
+    max_amount: 30000000
+    base_rate: 19.0
+    min_business_age_months: 9
     collateral: none
     documents: [financial_statements]
     scoring: [equity, total_debt, debt_to_equity, turnover]
@@ -136,6 +170,10 @@ products:
     name: Кредит для селлеров маркетплейсов
     min_term_months: 3
     max_term_months: 18
+    min_amount: 50000
+    max_amount: 15000000
+    base_rate: 18.5
+    young_max_amount: 3000000
     collateral: none
     field_groups: [marketplace]
     documents: [marketplace_sales_report]
@@ -145,6 +183,10 @@ products:
     name: Кредит для ИП
     min_term_months: 3
     max_term_months: 36
+    min_amount: 50000
+    max_amount: 15000000
+    base_rate: 21.0
+    min_business_age_months: 9
     collateral: none
     org_types: [IP]
 
@@ -152,6 +194,10 @@ products:
     name: Кредит для ООО
     min_term_months: 3
     max_term_months: 36
+    min_amount: 300000
+    max_amount: 30000000
+    base_rate: 20.0
+    min_business_age_months: 9
     collateral: none
     org_types: [OOO]
 
@@ -159,7 +205,9 @@ products:
     name: Кредит до 1 млн ₽
     min_term_months: 1
     max_term_months: 24
+    min_amount: 50000
     max_amount: 1000000
+    base_rate: 22.0
     collateral: none
     documents: [account_statement]
     scoring: [turnover]
@@ -169,6 +217,10 @@ products:
     name: Кредит на оборудование
     min_term_months: 24
     max_term_months: 84
+    min_amount: 500000
+    max_amount: 30000000
+    base_rate: 16.5
+    min_business_age_months: 9
     collateral: required
     field_groups: [collateral, supply]
     documents: [title_documents, equipment_purchase_contract, equipment_specification]
@@ -178,6 +230,10 @@ products:
     name: Автокредит для бизнеса
     min_term_months: 12
     max_term_months: 60
+    min_amount: 500000
+    max_amount: 20000000
+    base_rate: 15.5
+    young_max_amount: 5000000
     collateral: required
     field_groups: [collateral, vehicle]
     documents: [title_documents, vehicle_registration]
@@ -188,6 +244,10 @@ products:
     name: Кредит под залог недвижимости или оборудования
     min_term_months: 6
     max_term_months: 120
+    min_amount: 500000
+    max_amount: 30000000
+    base_rate: 15.0
+    young_max_amount: 10000000
     collateral: required
     field_groups: [collateral, property]
     documents: [title_documents, egrn_extract, technical_passport, valuation_report]
@@ -197,6 +257,10 @@ products:
     name: Кредит на покупку завода или готового бизнеса
     min_term_months: 24
     max_term_months: 84
+    min_amount: 5000000
+    max_amount: 30000000
+    base_rate: 16.0
+    min_business_age_months: 9
     collateral: required
     field_groups: [collateral, target_business]
     documents: [title_documents, business_plan, target_financial_statements, business_purchase_contract]
@@ -206,6 +270,10 @@ products:
     name: Ипотека для ИП
     min_term_months: 24
     max_term_months: 120
+    min_amount: 1500000
+    max_amount: 30000000
+    base_rate: 14.5
+    min_business_age_months: 9
     collateral: required
     org_types: [IP]
     field_groups: [collateral, property, mortgage]
@@ -216,6 +284,10 @@ products:
     name: Ипотека для бизнеса (коммерческая недвижимость)
     min_term_months: 24
     max_term_months: 120
+    min_amount: 2000000
+    max_amount: 30000000
+    base_rate: 14.5
+    min_business_age_months: 9
     collateral: required
     field_groups: [collateral, property, mortgage]
     documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]

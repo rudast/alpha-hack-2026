@@ -1,12 +1,14 @@
 # Модель данных
 
-В PostgreSQL три таблицы: компании, пользователи и заявки. Всё, что принадлежит заявке (история статусов, документы, решение, данные формы), хранится в ней самой, без отдельных таблиц. Каталог продуктов лежит в приложении ([internal/catalog/products.yaml](../internal/catalog/products.yaml)). Временные данные и обмен с воркером живут в Redis.
+В PostgreSQL четыре таблицы: компании, пользователи, заявки и предварительные предложения. Всё, что принадлежит заявке (история статусов, документы, решение, данные формы), хранится в ней самой, без отдельных таблиц. Каталог продуктов лежит в приложении ([internal/catalog/products.yaml](../internal/catalog/products.yaml)). Временные данные и обмен с воркером живут в Redis.
 
 Схема целиком создаётся миграцией [`00001_init.sql`](../migrations/00001_init.sql), демо-данные загружает [`00002_seed_demo_data.sql`](../migrations/00002_seed_demo_data.sql).
 ```mermaid
 erDiagram
     COMPANY ||--o{ USER : "работает в"
     COMPANY ||--o{ APPLICATION : "подаёт"
+    COMPANY ||--o{ OFFER : "получает"
+    OFFER |o--o| APPLICATION : "оформлено как"
     USER ||--o{ APPLICATION : "создал (created_by)"
     USER ||--o{ APPLICATION : "ведёт (assigned_to)"
 
@@ -44,6 +46,7 @@ erDiagram
         string company_inn FK
         uuid created_by FK
         uuid assigned_to FK
+        uuid offer_id FK "предварительное предложение, если заявка по нему"
         string product_id "из каталога продуктов"
         bigint amount "рубли"
         int term_months
@@ -67,6 +70,7 @@ erDiagram
 | `companies` | Организация клиента, данные из реестров (`registry`), БКИ (`credit_history`) и показатели долговой нагрузки |
 | `users` | Клиенты и сотрудники банка; войти можно и по телефону, и по почте; отключённые (`is_active = false`) войти не могут |
 | `applications` | Заявка с данными формы (`form`), историей статусов (`history`), списком документов (`documents`) и решением (`decision`) |
+| `offers` | Предварительное предложение компании (баннер «до X ₽»): продукт, лимит, срок, ставка «от», статус, срок действия и снимок данных, по которым посчитано (`basis`). У компании не больше одного `ACTIVE`; подробно в [preapproved-offer.md](preapproved-offer.md) |
 
 ### Ограничения
 - ИНН: 10 цифр у ООО, 12 цифр у ИП (`companies_inn_format_check`).
@@ -77,6 +81,8 @@ erDiagram
 ### Индексы
 - `applications (status, submitted_at)` для очереди сотрудника.
 - `applications (company_inn, created_at DESC)` для списка заявок в кабинете.
+- `applications (offer_id)`, уникальный: по одному предложению не больше одной заявки.
+- `offers (company_inn) WHERE status = 'ACTIVE'`, уникальный: одно действующее предложение на компанию.
 
 ### Коэффициент долговой нагрузки
 - `debt_to_equity` = `total_debt` / `equity`. Чем больше значение, тем выше риск; значение больше 2 ухудшает скоринг.

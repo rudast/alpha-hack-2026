@@ -57,6 +57,19 @@ Idempotency-Key: {{$guid}}
   "form": { "applicant": { "position": "Директор", "has_collateral": false } }
 }
 
+### Предварительное предложение для баннера
+# @name offer
+GET {{host}}/api/v1/me/offer
+Authorization: Bearer {{clientVerify.response.body.token}}
+
+### Создать черновик по предложению (кнопка «Оформить»): продукт, сумма и срок берутся из предложения
+POST {{host}}/api/v1/applications
+Authorization: Bearer {{clientVerify.response.body.token}}
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+
+{ "offer_id": "{{offer.response.body.offer.id}}" }
+
 ### Список заявок компании
 GET {{host}}/api/v1/applications
 Authorization: Bearer {{clientVerify.response.body.token}}

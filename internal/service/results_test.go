@@ -44,12 +44,16 @@ func TestProcess_AppliesAValidResult(t *testing.T) {
 
 func TestProcess_RejectsInvalidResultsWithoutTouchingTheDatabase(t *testing.T) {
 	cases := map[string]domain.ApplicationResult{
-		"worker sets REJECTED":      result(domain.StatusManualReview, domain.StatusRejected),
-		"transition not in diagram": result(domain.StatusSubmitted, domain.StatusScoring),
-		"unknown from":              result("NOPE", domain.StatusScoring),
-		"unknown to":                result(domain.StatusDataCheck, "NOPE"),
-		"worker sets SIGNING":       result(domain.StatusApproved, domain.StatusSigning),
-		"empty application id":      {From: domain.StatusSubmitted, To: domain.StatusDataCheck},
+		"worker sets REJECTED": result(domain.StatusManualReview, domain.StatusRejected),
+		// решения после ручной проверки принимает сотрудник, даже если сам переход есть в диаграмме
+		"worker approves instead of the employee":       result(domain.StatusManualReview, domain.StatusApproved),
+		"worker counter-offers instead of the employee": result(domain.StatusManualReview, domain.StatusCounterOffer),
+		"worker resumes after the client's answer":      result(domain.StatusInfoRequested, domain.StatusDataCheck),
+		"transition not in diagram":                     result(domain.StatusSubmitted, domain.StatusScoring),
+		"unknown from":                                  result("NOPE", domain.StatusScoring),
+		"unknown to":                                    result(domain.StatusDataCheck, "NOPE"),
+		"worker sets SIGNING":                           result(domain.StatusApproved, domain.StatusSigning),
+		"empty application id":                          {From: domain.StatusSubmitted, To: domain.StatusDataCheck},
 	}
 	bad := result(domain.StatusScoring, domain.StatusApproved)
 	bad.Decision = json.RawMessage(`[1,2]`)

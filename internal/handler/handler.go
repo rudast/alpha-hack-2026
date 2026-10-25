@@ -53,6 +53,7 @@ func New(d Deps) http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(domain.RoleClient))
 				r.Post("/me/bootstrap", d.Me.Bootstrap)
+				r.Get("/me/offer", d.Me.Offer)
 
 				// Изменяющие запросы по заявкам идемпотентны: нужен заголовок Idempotency-Key.
 				idempotent := middleware.Idempotency(d.Idempotency)

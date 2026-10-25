@@ -46,7 +46,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	applicationRepo := repository.NewApplicationRepo(pool)
 	applicationPublisher := queue.NewApplicationPublisher(rdb)
-	applications := service.NewApplicationService(applicationRepo, companies, products, applicationPublisher)
+	offerRepo := repository.NewOfferRepo(pool)
+	offers := service.NewOfferService(offerRepo, companies, products)
+	applications := service.NewApplicationService(applicationRepo, companies, offerRepo, products, applicationPublisher)
 
 	// Сборщик: раз в минуту повторно отправляет воркеру заявки, которые больше 2 минут остаются в SUBMITTED.
 	sweeper := service.NewApplicationSweeper(applicationRepo, companies, applicationPublisher, time.Minute, 2*time.Minute)
@@ -66,7 +68,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			WebDir:       cfg.WebDir,
 			Sessions:     authStore,
 			Auth:         handler.NewAuthHandler(auth),
-			Me:           handler.NewMeHandler(trust),
+			Me:           handler.NewMeHandler(trust, offers),
 			Applications: handler.NewApplicationHandler(applications),
 			Idempotency:  repository.NewIdempotencyStore(rdb),
 			AssistantURL: cfg.AssistantURL,

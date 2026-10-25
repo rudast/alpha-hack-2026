@@ -34,16 +34,34 @@ type Group struct {
 }
 
 type Product struct {
-	ID            string   `yaml:"id" json:"id"`
-	Name          string   `yaml:"name" json:"name"`
-	MinTermMonths int      `yaml:"min_term_months" json:"min_term_months"`
-	MaxTermMonths int      `yaml:"max_term_months" json:"max_term_months"`
-	MaxAmount     int64    `yaml:"max_amount" json:"max_amount,omitempty"`
-	Collateral    string   `yaml:"collateral" json:"collateral"`
-	OrgTypes      []string `yaml:"org_types" json:"org_types,omitempty"`
-	FieldGroups   []string `yaml:"field_groups" json:"field_groups,omitempty"`
-	Documents     []string `yaml:"documents" json:"documents,omitempty"`
-	Scoring       []string `yaml:"scoring" json:"scoring,omitempty"`
+	ID                   string   `yaml:"id" json:"id"`
+	Name                 string   `yaml:"name" json:"name"`
+	MinTermMonths        int      `yaml:"min_term_months" json:"min_term_months"`
+	MaxTermMonths        int      `yaml:"max_term_months" json:"max_term_months"`
+	MinAmount            int64    `yaml:"min_amount" json:"min_amount"`
+	MaxAmount            int64    `yaml:"max_amount" json:"max_amount"`
+	BaseRate             float64  `yaml:"base_rate" json:"base_rate"`
+	MinBusinessAgeMonths int      `yaml:"min_business_age_months" json:"min_business_age_months,omitempty"`
+	YoungMaxAmount       int64    `yaml:"young_max_amount" json:"young_max_amount,omitempty"`
+	Collateral           string   `yaml:"collateral" json:"collateral"`
+	OrgTypes             []string `yaml:"org_types" json:"org_types,omitempty"`
+	FieldGroups          []string `yaml:"field_groups" json:"field_groups,omitempty"`
+	Documents            []string `yaml:"documents" json:"documents,omitempty"`
+	Scoring              []string `yaml:"scoring" json:"scoring,omitempty"`
+}
+
+// OfferRules — правила предварительного предложения (секция offer в products.yaml).
+type OfferRules struct {
+	Products            []string `yaml:"products"`
+	MaxDebtToEquity     float64  `yaml:"max_debt_to_equity"`
+	HeadroomShare       float64  `yaml:"headroom_share"`
+	MinAmount           int64    `yaml:"min_amount"`
+	NoBKICap            int64    `yaml:"no_bki_cap"`
+	RoundTo             int64    `yaml:"round_to"`
+	TermMonths          int      `yaml:"term_months"`
+	RateDiscount        float64  `yaml:"rate_discount"`
+	ValidityDays        int      `yaml:"validity_days"`
+	YoungBusinessMonths int      `yaml:"young_business_months"`
 }
 
 type file struct {
@@ -52,6 +70,7 @@ type file struct {
 	BaseOptionalDocuments []string          `yaml:"base_optional_documents"`
 	Documents             map[string]string `yaml:"documents"`
 	FieldGroups           map[string]Group  `yaml:"field_groups"`
+	Offer                 OfferRules        `yaml:"offer"`
 	Products              []Product         `yaml:"products"`
 }
 
@@ -103,6 +122,15 @@ func (c *Catalog) validate() error {
 		if p.MinTermMonths <= 0 || p.MaxTermMonths < p.MinTermMonths {
 			return fmt.Errorf("product %q: invalid term range %d–%d", p.ID, p.MinTermMonths, p.MaxTermMonths)
 		}
+		if p.MinAmount <= 0 || p.MaxAmount < p.MinAmount {
+			return fmt.Errorf("product %q: invalid amount range %d–%d", p.ID, p.MinAmount, p.MaxAmount)
+		}
+		if p.BaseRate <= 0 {
+			return fmt.Errorf("product %q: base rate must be positive", p.ID)
+		}
+		if p.MinBusinessAgeMonths < 0 || p.YoungMaxAmount < 0 {
+			return fmt.Errorf("product %q: business age rules must not be negative", p.ID)
+		}
 		switch p.Collateral {
 		case CollateralNone, CollateralOptional, CollateralRequired:
 		default:
@@ -125,7 +153,39 @@ func (c *Catalog) validate() error {
 		}
 		c.byID[p.ID] = p
 	}
+	return c.validateOffer()
+}
+
+func (c *Catalog) validateOffer() error {
+	o := c.f.Offer
+	if len(o.Products) == 0 {
+		return fmt.Errorf("offer: no products")
+	}
+	for _, id := range o.Products {
+		p, ok := c.byID[id]
+		if !ok {
+			return fmt.Errorf("offer: unknown product %q", id)
+		}
+		if p.Collateral != CollateralNone {
+			return fmt.Errorf("offer: product %q requires collateral, the offer is only for unsecured products", id)
+		}
+	}
+	switch {
+	case o.MaxDebtToEquity <= 0, o.HeadroomShare <= 0, o.HeadroomShare > 1:
+		return fmt.Errorf("offer: max_debt_to_equity must be positive and headroom_share in (0; 1]")
+	case o.MinAmount <= 0, o.NoBKICap < o.MinAmount, o.RoundTo <= 0:
+		return fmt.Errorf("offer: invalid amounts (min_amount, no_bki_cap, round_to)")
+	case o.TermMonths <= 0, o.ValidityDays <= 0, o.YoungBusinessMonths <= 0, o.RateDiscount < 0:
+		return fmt.Errorf("offer: term_months, validity_days and young_business_months must be positive, rate_discount not negative")
+	}
 	return nil
+}
+
+// OfferRules возвращает правила предварительного предложения.
+func (c *Catalog) OfferRules() OfferRules {
+	o := c.f.Offer
+	o.Products = slices.Clone(o.Products)
+	return o
 }
 
 func (c *Catalog) Products() []Product { return slices.Clone(c.f.Products) }

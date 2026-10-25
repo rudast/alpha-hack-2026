@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -12,9 +13,10 @@ import (
 
 type ApplicationRepository interface {
 	Create(ctx context.Context, a domain.Application, createdBy string) (domain.Application, error)
+	CreateFromOffer(ctx context.Context, a domain.Application, createdBy string) (domain.Application, bool, error)
 	GetForCompany(ctx context.Context, id, inn string) (domain.Application, error)
 	ListByCompany(ctx context.Context, inn string) ([]domain.ApplicationSummary, error)
-	UpdateDraft(ctx context.Context, id, inn string, version int, p domain.DraftPatch) (domain.Application, error)
+	UpdateDraft(ctx context.Context, id, inn string, version int, p domain.DraftPatch, unlinkOffer bool) (domain.Application, error)
 	Submit(ctx context.Context, id, inn, by string, at time.Time) (domain.Application, error)
 	// MarkEnqueued запоминает, что задача по заявке отправлена воркеру, чтобы сборщик не отправил её повторно сразу же.
 	MarkEnqueued(ctx context.Context, id string) error
@@ -22,6 +24,10 @@ type ApplicationRepository interface {
 
 type CompanyGetter interface {
 	GetByINN(ctx context.Context, inn string) (domain.Company, error)
+}
+
+type OfferGetter interface {
+	GetForCompany(ctx context.Context, id, inn string) (domain.Offer, error)
 }
 
 // dispatchTimeout ограничивает отправку задачи воркеру при отправке заявки.
@@ -32,13 +38,46 @@ const dispatchTimeout = 5 * time.Second
 type ApplicationService struct {
 	apps      ApplicationRepository
 	companies CompanyGetter
+	offers    OfferGetter
 	catalog   *catalog.Catalog
 	publisher ApplicationPublisher
 	now       func() time.Time
 }
 
-func NewApplicationService(apps ApplicationRepository, companies CompanyGetter, cat *catalog.Catalog, publisher ApplicationPublisher) *ApplicationService {
-	return &ApplicationService{apps: apps, companies: companies, catalog: cat, publisher: publisher, now: time.Now}
+func NewApplicationService(apps ApplicationRepository, companies CompanyGetter, offers OfferGetter, cat *catalog.Catalog, publisher ApplicationPublisher) *ApplicationService {
+	return &ApplicationService{apps: apps, companies: companies, offers: offers, catalog: cat, publisher: publisher, now: time.Now}
+}
+
+// CreateFromOffer создаёт черновик по предварительному предложению: продукт, сумму и срок берёт
+// из сохранённого предложения, а не из запроса (in используется только для цели и формы).
+// Если черновик по этому предложению уже есть, возвращает его и false.
+func (s *ApplicationService) CreateFromOffer(ctx context.Context, p domain.Principal, offerID string, in domain.DraftPatch) (domain.Application, bool, error) {
+	o, err := s.offers.GetForCompany(ctx, offerID, p.CompanyINN)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.Application{}, false, domain.ErrOfferNotFound
+	}
+	if err != nil {
+		return domain.Application{}, false, err
+	}
+	switch {
+	case o.Status == domain.OfferUsed || o.Status == domain.OfferRevoked:
+		return domain.Application{}, false, domain.ErrOfferUsed
+	case !o.Usable(s.now()):
+		return domain.Application{}, false, domain.ErrOfferExpired
+	}
+
+	a := domain.Application{
+		CompanyINN: p.CompanyINN,
+		ProductID:  o.ProductID,
+		Amount:     o.MaxAmount,
+		TermMonths: o.TermMonths,
+		Form:       in.Form,
+		OfferID:    &o.ID,
+	}
+	if in.Purpose != nil {
+		a.Purpose = *in.Purpose
+	}
+	return s.apps.CreateFromOffer(ctx, a, p.UserID)
 }
 
 // Create создаёт черновик из первого сохранения формы.
@@ -64,11 +103,45 @@ func (s *ApplicationService) Create(ctx context.Context, p domain.Principal, in 
 
 // Update сохраняет изменения черновика (автосохранение формы). version — версия заявки, которую
 // клиент видел последней; если заявка с тех пор менялась, возвращается domain.ErrVersionConflict.
+// У заявки по предложению сумма не может превышать его лимит, а смена продукта отвязывает предложение.
 func (s *ApplicationService) Update(ctx context.Context, p domain.Principal, id string, version int, in domain.DraftPatch) (domain.Application, error) {
 	if err := s.validatePatch(in); err != nil {
 		return domain.Application{}, err
 	}
-	return s.apps.UpdateDraft(ctx, id, p.CompanyINN, version, in)
+	unlink, err := s.checkOfferPatch(ctx, p, id, in)
+	if err != nil {
+		return domain.Application{}, err
+	}
+	return s.apps.UpdateDraft(ctx, id, p.CompanyINN, version, in, unlink)
+}
+
+// checkOfferPatch проверяет изменение заявки, созданной по предложению. Возвращает true, если
+// предложение нужно отвязать (клиент сменил продукт: заявка становится обычной).
+func (s *ApplicationService) checkOfferPatch(ctx context.Context, p domain.Principal, id string, in domain.DraftPatch) (bool, error) {
+	if in.ProductID == nil && in.Amount == nil {
+		return false, nil
+	}
+	current, err := s.apps.GetForCompany(ctx, id, p.CompanyINN)
+	if err != nil {
+		return false, err
+	}
+	if current.OfferID == nil {
+		return false, nil
+	}
+	if in.ProductID != nil && *in.ProductID != current.ProductID {
+		return true, nil
+	}
+	if in.Amount == nil {
+		return false, nil
+	}
+	o, err := s.offers.GetForCompany(ctx, *current.OfferID, p.CompanyINN)
+	if err != nil {
+		return false, err
+	}
+	if *in.Amount > o.MaxAmount {
+		return false, domain.ErrOfferAmountExceeded
+	}
+	return false, nil
 }
 
 func (s *ApplicationService) Get(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
@@ -129,7 +202,20 @@ func (s *ApplicationService) Submit(ctx context.Context, p domain.Principal, id 
 	if !s.catalog.Available(product, company.OrgType, a.Amount, a.TermMonths) {
 		return domain.Application{}, domain.ErrProductUnavailable
 	}
+	if a.OfferID != nil {
+		o, err := s.offers.GetForCompany(ctx, *a.OfferID, p.CompanyINN)
+		if err != nil {
+			return domain.Application{}, err
+		}
+		if !o.Usable(s.now()) {
+			return domain.Application{}, domain.ErrOfferInvalid
+		}
+		if a.Amount > o.MaxAmount {
+			return domain.Application{}, domain.ErrOfferAmountExceeded
+		}
+	}
 
+	// Предложение становится USED в той же транзакции, что и отправка (см. ApplicationRepo.Submit).
 	submitted, err := s.apps.Submit(ctx, id, p.CompanyINN, p.UserID, s.now())
 	if err != nil {
 		return domain.Application{}, err

@@ -158,6 +158,33 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/me/offer:
+    get:
+      tags: [client]
+      summary: Предварительное предложение для баннера в кабинете
+      description: >
+        Возвращает действующее предварительное предложение компании («до X ₽, ставка от Y %»).
+        Если его нет, оно истекло или данные компании обновились после расчёта (новый `/me/bootstrap`),
+        сервер считает новое по сохранённым данным компании и каталогу продуктов; воркер не вызывается.
+        Окончательное решение принимает скоринг при подаче заявки. Подробно: docs/preapproved-offer.md.
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: Предложение (`offer`) либо `offer = null` и причина (`reason`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfferResponse"
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/products:
     get:
       tags: [client]
@@ -207,6 +234,10 @@ paths:
         Черновик создаётся при первом сохранении, а не при открытии формы, поэтому все поля
         необязательны. Компания и автор берутся из сессии. Брошенные черновики будут удаляться
         через 30 дней (пока не реализовано). Запрос идемпотентен: нужен заголовок `Idempotency-Key`.
+
+        По предварительному предложению (кнопка «Оформить»): в теле передаётся `offer_id`. Продукт,
+        сумма и срок берутся из предложения, `product_id`, `amount` и `term_months` из тела игнорируются.
+        Если черновик по этому предложению уже есть, возвращается он (ответ 200).
       security: [{ bearer: [] }]
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -217,6 +248,12 @@ paths:
             schema:
               $ref: "#/components/schemas/DraftInput"
       responses:
+        "200":
+          description: Черновик по этому предложению уже был создан (передан `offer_id`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
         "201":
           description: Черновик создан
           headers:
@@ -240,8 +277,18 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Предложение `offer_id` не найдено или принадлежит другой компании
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: Запрос с этим Idempotency-Key ещё выполняется
+          description: Запрос с этим Idempotency-Key ещё выполняется либо предложение уже использовано или отозвано
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "410":
+          description: Срок действия предложения истёк; перезапросите `GET /me/offer`
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -366,7 +413,9 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Idempotency-Key уже использован для другого запроса
+          description: >
+            Idempotency-Key уже использован для другого запроса либо сумма заявки по предложению больше
+            его лимита (`reason: offer_amount_exceeded`). Смена продукта отвязывает заявку от предложения.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -426,7 +475,9 @@ paths:
           description: >
             Не заполнены обязательные поля (тело `{"missing_fields": [...]}`, поля формы
             в виде `группа.поле`), либо продукт недоступен компании или параметрам, либо Idempotency-Key
-            уже использован для другого запроса (тело `{"error": "..."}`)
+            уже использован для другого запроса (тело `{"error": "..."}`). Для заявки по предложению ещё:
+            предложение истекло или отозвано (`reason: offer_expired`), сумма больше лимита
+            (`reason: offer_amount_exceeded`). При успешной отправке предложение становится использованным.
           content:
             application/json:
               schema:
@@ -539,6 +590,9 @@ components:
         error:
           type: string
           example: invalid credentials
+        reason:
+          type: string
+          description: Машиночитаемая причина, если она есть (например, `offer_expired`, `offer_amount_exceeded`)
     Bootstrap:
       type: object
       properties:
@@ -582,6 +636,24 @@ components:
         monthly_payment: { type: number }
         total_payment: { type: number }
         rate: { type: number }
+    OfferResponse:
+      type: object
+      properties:
+        offer:
+          nullable: true
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            product_id: { type: string }
+            product_name: { type: string }
+            max_amount: { type: integer, format: int64, description: Лимит, рубли }
+            term_months: { type: integer }
+            rate_from: { type: number, description: "Ставка «от», % годовых" }
+            valid_until: { type: string, format: date, description: Последний день действия }
+        reason:
+          type: string
+          enum: [no_data, no_equity, overdue, registry_flags, no_product, high_debt_load]
+          description: Почему предложения нет (только при `offer = null`); в баннере не показывается
     DraftInput:
       type: object
       description: >
@@ -592,6 +664,10 @@ components:
           type: integer
           minimum: 1
           description: Версия заявки, которую клиент видел последней (только для PATCH)
+        offer_id:
+          type: string
+          format: uuid
+          description: Предварительное предложение (только при создании); продукт, сумма и срок берутся из него
         product_id: { type: string, description: Идентификатор продукта из каталога }
         amount: { type: integer, format: int64, minimum: 0, description: Сумма, рубли }
         term_months: { type: integer, minimum: 0 }
@@ -646,6 +722,7 @@ components:
               by: { type: string, description: Кто выполнил переход (идентификатор пользователя либо `worker`) }
               comment: { type: string, description: Пояснение к переходу (необязательное) }
         decision: { type: object, description: Решение по заявке; появится после скоринга }
+        offer_id: { type: string, format: uuid, nullable: true, description: Предварительное предложение, по которому создана заявка }
         submitted_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }

@@ -22,6 +22,12 @@ var (
 	ErrInvalidInput       = errors.New("invalid field value")
 	ErrUnknownProduct     = errors.New("unknown product")
 	ErrProductUnavailable = errors.New("product is not available for this company or parameters")
+
+	ErrOfferNotFound       = errors.New("offer not found")
+	ErrOfferUsed           = errors.New("offer was already used or revoked")
+	ErrOfferExpired        = errors.New("offer has expired")
+	ErrOfferInvalid        = errors.New("offer is no longer valid")
+	ErrOfferAmountExceeded = errors.New("amount exceeds the offer limit")
 )
 
 // ValidationError перечисляет обязательные поля, которые ещё не заполнены.

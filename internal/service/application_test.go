@@ -41,6 +41,16 @@ func (f *fakeApps) Create(_ context.Context, a domain.Application, by string) (d
 	return a, nil
 }
 
+func (f *fakeApps) CreateFromOffer(ctx context.Context, a domain.Application, by string) (domain.Application, bool, error) {
+	for _, existing := range f.items {
+		if existing.OfferID != nil && *existing.OfferID == *a.OfferID {
+			return existing, false, nil
+		}
+	}
+	created, err := f.Create(ctx, a, by)
+	return created, true, err
+}
+
 func (f *fakeApps) GetForCompany(_ context.Context, id, inn string) (domain.Application, error) {
 	a, ok := f.items[id]
 	if !ok || a.CompanyINN != inn {
@@ -59,7 +69,7 @@ func (f *fakeApps) ListByCompany(_ context.Context, inn string) ([]domain.Applic
 	return list, nil
 }
 
-func (f *fakeApps) UpdateDraft(ctx context.Context, id, inn string, version int, p domain.DraftPatch) (domain.Application, error) {
+func (f *fakeApps) UpdateDraft(ctx context.Context, id, inn string, version int, p domain.DraftPatch, unlinkOffer bool) (domain.Application, error) {
 	a, err := f.GetForCompany(ctx, id, inn)
 	if err != nil {
 		return domain.Application{}, err
@@ -85,6 +95,9 @@ func (f *fakeApps) UpdateDraft(ctx context.Context, id, inn string, version int,
 	}
 	if p.Form != nil {
 		a.Form = p.Form
+	}
+	if unlinkOffer {
+		a.OfferID = nil
 	}
 	f.items[id] = a
 	return a, nil
@@ -120,10 +133,13 @@ func newApplications(t *testing.T, orgType string) (*ApplicationService, *fakeAp
 	}
 	repo := newFakeApps()
 	companies := &fakeCompanies{c: domain.Company{INN: clientA.CompanyINN, OrgType: orgType}}
-	s := NewApplicationService(repo, companies, cat, &fakePublisher{})
+	s := NewApplicationService(repo, companies, newFakeOffers(), cat, &fakePublisher{})
 	s.now = func() time.Time { return testNow }
 	return s, repo
 }
+
+// offersOf возвращает хранилище предложений сервиса, чтобы положить в него предложение для теста.
+func offersOf(s *ApplicationService) *fakeOffers { return s.offers.(*fakeOffers) }
 
 // publishedBy возвращает очередь-пустышку, в которую сервис отправляет задачи воркеру.
 func publishedBy(s *ApplicationService) *fakePublisher { return s.publisher.(*fakePublisher) }
@@ -421,4 +437,110 @@ func TestApplicationList_FillsProductNames(t *testing.T) {
 	if list[0].ProductName != "Экспресс-кредит для бизнеса" {
 		t.Fatalf("product name %q", list[0].ProductName)
 	}
+}
+
+// activeOffer — действующее предложение компании clientA: оборотный кредит до 1 млн на 12 месяцев.
+func activeOffer(s *ApplicationService) domain.Offer {
+	return offersOf(s).put(domain.Offer{
+		CompanyINN: clientA.CompanyINN, ProductID: "working_capital", MaxAmount: 1_000_000, TermMonths: 12,
+		RateFrom: 17.5, Status: domain.OfferActive, ValidUntil: testNow.AddDate(0, 0, 30),
+	})
+}
+
+func TestApplicationCreateFromOffer(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("product, amount and term come from the offer, not from the request", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		o := activeOffer(s)
+		a, created, err := s.CreateFromOffer(ctx, clientA, o.ID, domain.DraftPatch{
+			ProductID: str("express"), Amount: i64(9_000_000), TermMonths: num(3), Purpose: str("Закупка"),
+		})
+		if err != nil || !created {
+			t.Fatalf("got %v, created %v", err, created)
+		}
+		if a.ProductID != "working_capital" || a.Amount != 1_000_000 || a.TermMonths != 12 || a.Purpose != "Закупка" || a.OfferID == nil || *a.OfferID != o.ID {
+			t.Fatalf("got %+v", a)
+		}
+	})
+
+	t.Run("pressing the button twice returns the same draft", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		o := activeOffer(s)
+		first, _, _ := s.CreateFromOffer(ctx, clientA, o.ID, domain.DraftPatch{})
+		second, created, err := s.CreateFromOffer(ctx, clientA, o.ID, domain.DraftPatch{})
+		if err != nil || created || second.ID != first.ID || len(repo.items) != 1 {
+			t.Fatalf("got %s (created %v, %v), want the same draft %s", second.ID, created, err, first.ID)
+		}
+	})
+
+	t.Run("unusable offers", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		used := offersOf(s).put(domain.Offer{CompanyINN: clientA.CompanyINN, Status: domain.OfferUsed, ValidUntil: testNow.AddDate(0, 0, 1)})
+		revoked := offersOf(s).put(domain.Offer{CompanyINN: clientA.CompanyINN, Status: domain.OfferRevoked, ValidUntil: testNow.AddDate(0, 0, 1)})
+		expired := offersOf(s).put(domain.Offer{CompanyINN: clientA.CompanyINN, Status: domain.OfferActive, ValidUntil: testNow.Add(-time.Minute)})
+		foreign := offersOf(s).put(domain.Offer{CompanyINN: clientB.CompanyINN, Status: domain.OfferActive, ValidUntil: testNow.AddDate(0, 0, 1)})
+
+		for id, want := range map[string]error{
+			used.ID:    domain.ErrOfferUsed,
+			revoked.ID: domain.ErrOfferUsed,
+			expired.ID: domain.ErrOfferExpired,
+			foreign.ID: domain.ErrOfferNotFound,
+			"nope":     domain.ErrOfferNotFound,
+		} {
+			if _, _, err := s.CreateFromOffer(ctx, clientA, id, domain.DraftPatch{}); !errors.Is(err, want) {
+				t.Errorf("offer %s: got %v, want %v", id, err, want)
+			}
+		}
+	})
+}
+
+func TestApplicationUpdate_ByOffer(t *testing.T) {
+	ctx := context.Background()
+	s, _ := newApplications(t, "OOO")
+	o := activeOffer(s)
+	a, _, _ := s.CreateFromOffer(ctx, clientA, o.ID, domain.DraftPatch{})
+
+	if _, err := s.Update(ctx, clientA, a.ID, a.Version, domain.DraftPatch{Amount: i64(1_500_000)}); !errors.Is(err, domain.ErrOfferAmountExceeded) {
+		t.Fatalf("amount above the limit: got %v, want ErrOfferAmountExceeded", err)
+	}
+	a, err := s.Update(ctx, clientA, a.ID, a.Version, domain.DraftPatch{Amount: i64(700_000)})
+	if err != nil || a.Amount != 700_000 || a.OfferID == nil {
+		t.Fatalf("a smaller amount keeps the offer: got %+v, %v", a, err)
+	}
+	a, err = s.Update(ctx, clientA, a.ID, a.Version, domain.DraftPatch{ProductID: str("express"), Amount: i64(3_000_000)})
+	if err != nil || a.OfferID != nil || a.ProductID != "express" {
+		t.Fatalf("changing the product unlinks the offer: got %+v, %v", a, err)
+	}
+}
+
+func TestApplicationSubmit_ByOffer(t *testing.T) {
+	ctx := context.Background()
+	fill := domain.DraftPatch{
+		Purpose: str("Пополнение оборотных средств"),
+		Form:    map[string]any{"applicant": map[string]any{"position": "Директор", "has_collateral": false}},
+	}
+
+	t.Run("a valid offer is submitted", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		o := activeOffer(s)
+		a, _, _ := s.CreateFromOffer(ctx, clientA, o.ID, fill)
+		if got, err := s.Submit(ctx, clientA, a.ID); err != nil || got.Status != domain.StatusSubmitted {
+			t.Fatalf("got %v, %v", got.Status, err)
+		}
+	})
+
+	t.Run("the offer expired while the form was being filled", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		o := activeOffer(s)
+		a, _, _ := s.CreateFromOffer(ctx, clientA, o.ID, fill)
+		s.now = func() time.Time { return testNow.AddDate(0, 0, 31) }
+
+		if _, err := s.Submit(ctx, clientA, a.ID); !errors.Is(err, domain.ErrOfferInvalid) {
+			t.Fatalf("got %v, want ErrOfferInvalid", err)
+		}
+		if repo.submits != 0 {
+			t.Fatal("must not be submitted")
+		}
+	})
 }
