@@ -90,6 +90,7 @@ def render_recommendation(
     org: Optional[str],
     age_category: Optional[str],
     is_young: bool = False,
+    is_authenticated: bool = False,
 ) -> Dict[str, Any]:
     if not offers:
         return {
@@ -134,40 +135,39 @@ def render_recommendation(
         other_titles = ", ".join(f"«{o.product.title}» ({o.product.rate:.1f}%)" for o in offers[1:])
         lines.append(f"\nТакже доступны альтернативы: {other_titles}.")
 
-    lines.append("\nХотите применить эти параметры в калькуляторе или сразу перейти к оформлению?")
+    if is_authenticated:
+        lines.append("\nВы можете сразу перейти к оформлению кредита онлайн:")
+    else:
+        lines.append("\nХотите вставить эти параметры в калькулятор или сразу оформить заявку?")
 
-    actions: List[ActionCommand] = []
-
-    actions.append(
-        ActionCommand(
-            type="apply_calculator",
-            label=f"Выставить {format_rubles(rec_amount)} в калькуляторе",
-            payload={
-                "product_id": p.id,
-                "amount": rec_amount,
-                "term": rec_term,
-                "org": org or (p.org_types[0] if p.org_types else "ooo"),
-                "collateral": p.collateral if p.collateral != "any" else "without",
-                "age": "lt9" if is_young else "gte9",
-            },
-        )
+    calc_action = ActionCommand(
+        type="apply_calculator",
+        label=f"Вставить {format_rubles(rec_amount)} в калькулятор",
+        payload={
+            "product_id": p.id,
+            "amount": rec_amount,
+            "term": rec_term,
+            "org": org or (p.org_types[0] if p.org_types else "ooo"),
+            "collateral": p.collateral if p.collateral != "any" else "without",
+            "age": "lt9" if is_young else "gte9",
+        },
     )
 
-    actions.append(
-        ActionCommand(
-            type="apply_wizard",
-            label="Оформить заявку",
-            payload={
-                "product_id": p.id,
-                "backend_id": p.backend_id,
-                "amount": rec_amount,
-                "term": rec_term,
-                "org": org or (p.org_types[0] if p.org_types else "ooo"),
-                "collateral": p.collateral if p.collateral != "any" else "without",
-                "age": "lt9" if is_young else "gte9",
-            },
-        )
+    wizard_action = ActionCommand(
+        type="apply_wizard",
+        label="Оформить кредит",
+        payload={
+            "product_id": p.id,
+            "backend_id": p.backend_id,
+            "amount": rec_amount,
+            "term": rec_term,
+            "org": org or (p.org_types[0] if p.org_types else "ooo"),
+            "collateral": p.collateral if p.collateral != "any" else "without",
+            "age": "lt9" if is_young else "gte9",
+        },
     )
+
+    actions = [wizard_action, calc_action] if is_authenticated else [calc_action, wizard_action]
 
     quick_replies = [
         "Какие документы нужны?",
@@ -528,7 +528,7 @@ EASTER_EGG_REPLIES = {
     "artem": "（ ͜.人 ͜.）",
     "ruslan": "52",
     "sanya": "🦍",
-    "max": "🍑",
+    "max": "🤠",
 }
 
 

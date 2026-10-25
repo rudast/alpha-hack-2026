@@ -187,8 +187,8 @@ class TestDialogueManager(unittest.TestCase):
             ("52", "52"),
             ("Саня", "🦍"),
             ("саня", "🦍"),
-            ("Макс", "🍑"),
-            ("макс", "🍑"),
+            ("Макс", "🤠"),
+            ("макс", "🤠"),
         ]
         for msg, expected_reply in cases:
             req = ChatRequest(session_id="test-egg", message=msg)
@@ -221,6 +221,34 @@ class TestDialogueManager(unittest.TestCase):
         resp_bye = self.dm.process(req_bye)
         self.assertEqual(resp_bye.dialogue_state, "CHIT_CHAT")
         self.assertIn("свидания", resp_bye.reply.lower())
+
+    def test_recommendation_authenticated_vs_unauthenticated_actions(self):
+        # 1. Unauthenticated client
+        req_unauth = ChatRequest(
+            session_id="test-unauth-actions",
+            message="Хочу кредит 1 млн на оборотку",
+            context=ClientContext(is_authenticated=False),
+        )
+        resp_unauth = self.dm.process(req_unauth)
+        self.assertEqual(resp_unauth.dialogue_state, "RECOMMENDATION")
+        self.assertEqual(len(resp_unauth.actions), 2)
+        self.assertEqual(resp_unauth.actions[0].type, "apply_calculator")
+        self.assertIn("Вставить", resp_unauth.actions[0].label)
+        self.assertEqual(resp_unauth.actions[1].type, "apply_wizard")
+        self.assertEqual(resp_unauth.actions[1].label, "Оформить кредит")
+
+        # 2. Authenticated client
+        req_auth = ChatRequest(
+            session_id="test-auth-actions",
+            message="Хочу кредит 1 млн на оборотку",
+            context=ClientContext(is_authenticated=True),
+        )
+        resp_auth = self.dm.process(req_auth)
+        self.assertEqual(resp_auth.dialogue_state, "RECOMMENDATION")
+        self.assertEqual(len(resp_auth.actions), 2)
+        self.assertEqual(resp_auth.actions[0].type, "apply_wizard")
+        self.assertEqual(resp_auth.actions[0].label, "Оформить кредит")
+        self.assertEqual(resp_auth.actions[1].type, "apply_calculator")
 
 
 if __name__ == "__main__":

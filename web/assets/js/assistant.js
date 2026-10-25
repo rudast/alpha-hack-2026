@@ -87,10 +87,16 @@
       }
     }
 
+    var isAuth = false;
+    try {
+      isAuth = !!(window.Auth && typeof window.Auth.token === 'function' && window.Auth.token());
+    } catch (e) {}
+
     return {
       page: page,
       calculator_state: calcState,
       application_status: appStatus,
+      is_authenticated: isAuth,
     };
   }
 
@@ -506,9 +512,9 @@
         'саня': '🦍',
         'саша': '🦍',
         'sanya': '🦍',
-        'макс': '🍑',
-        'максим': '🍑',
-        'max': '🍑',
+        'макс': '🤠',
+        'максим': '🤠',
+        'max': '🤠',
       };
       if (easterEggs.hasOwnProperty(tLower)) {
         this.addBotMessage({
@@ -638,11 +644,29 @@
       if (msg.actions && msg.actions.length > 0) {
         var actionsWrap = document.createElement('div');
         actionsWrap.className = 'assistant-actions';
+        var isAuth = false;
+        try {
+          isAuth = !!(window.Auth && typeof window.Auth.token === 'function' && window.Auth.token());
+        } catch (e) {}
+
         for (var a = 0; a < msg.actions.length; a++) {
-          var btn = this.createActionButton(msg.actions[a]);
+          var act = msg.actions[a];
+          // If authenticated: only show "Оформить кредит" (apply_wizard)
+          if (isAuth && act.type === 'apply_calculator') {
+            var hasWizard = msg.actions.some(function (x) { return x.type === 'apply_wizard'; });
+            if (hasWizard) continue;
+          }
+          // If NOT authenticated: only show "Вставить ... в калькулятор" (apply_calculator)
+          if (!isAuth && act.type === 'apply_wizard') {
+            var hasCalc = msg.actions.some(function (x) { return x.type === 'apply_calculator'; });
+            if (hasCalc) continue;
+          }
+          var btn = this.createActionButton(act);
           actionsWrap.appendChild(btn);
         }
-        bubble.appendChild(actionsWrap);
+        if (actionsWrap.children.length > 0) {
+          bubble.appendChild(actionsWrap);
+        }
       }
 
       wrap.appendChild(bubble);
@@ -684,13 +708,37 @@
 
     createActionButton: function (action) {
       var self = this;
+      var isAuth = false;
+      try {
+        isAuth = !!(window.Auth && typeof window.Auth.token === 'function' && window.Auth.token());
+      } catch (e) {}
+
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'assistant-action-btn' + (action.type === 'apply_wizard' ? ' secondary' : '');
-      btn.textContent = action.label;
+
+      var effectiveAction = action;
+      if (isAuth && action.type === 'apply_calculator') {
+        effectiveAction = {
+          type: 'apply_wizard',
+          label: 'Оформить кредит',
+          payload: action.payload,
+        };
+      } else if (!isAuth && action.type === 'apply_wizard') {
+        var amtStr = (action.payload && action.payload.amount)
+          ? (window.Loans && window.Loans.fmt ? window.Loans.fmt.rub(action.payload.amount) : action.payload.amount + ' ₽')
+          : '1 млн ₽';
+        effectiveAction = {
+          type: 'apply_calculator',
+          label: 'Вставить ' + amtStr + ' в калькулятор',
+          payload: action.payload,
+        };
+      }
+
+      btn.className = 'assistant-action-btn' + (effectiveAction.type === 'apply_wizard' ? ' primary' : '');
+      btn.textContent = effectiveAction.label;
 
       btn.addEventListener('click', function () {
-        self.executeAction(action);
+        self.executeAction(effectiveAction);
       });
 
       return btn;
@@ -702,6 +750,7 @@
       if (action.type === 'apply_calculator') {
         this.applyToCalculator(p);
       } else if (action.type === 'apply_wizard') {
+        this.close();
         this.applyToWizard(p);
       }
     },
@@ -839,11 +888,29 @@
         });
       }
 
-      // Navigate or switch hash to #new-loan so cabinet.js automatically opens wizard with preloaded draft
-      if (window.location.pathname.indexOf('personalAccount') !== -1) {
-        window.location.hash = '#new-loan';
+      var isAuth = false;
+      try {
+        isAuth = !!(window.Auth && typeof window.Auth.token === 'function' && window.Auth.token());
+      } catch (e) {}
+
+      // If user is authenticated, open cabinet loan application wizard directly
+      if (isAuth) {
+        if (window.location.pathname.indexOf('personalAccount') !== -1) {
+          if (window.location.hash === '#new-loan') {
+            window.dispatchEvent(new Event('hashchange'));
+          } else {
+            window.location.hash = '#new-loan';
+          }
+        } else {
+          window.location.href = '/personalAccount/#new-loan';
+        }
       } else {
-        window.location.href = '/personalAccount/#new-loan';
+        // If not authenticated, route through login so draft carries over
+        if (window.location.pathname.indexOf('personalAccount') === -1) {
+          window.location.hash = '#login';
+        } else {
+          window.location.href = '/login/';
+        }
       }
     },
 

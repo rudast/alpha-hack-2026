@@ -241,6 +241,7 @@ class DialogueManager:
         if offers:
             session.last_product_id = offers[0].product.id
 
+        is_auth = bool(ctx.is_authenticated) if ctx else False
         res = templates.render_recommendation(
             offers=offers,
             amount=session.slots.amount,
@@ -248,6 +249,7 @@ class DialogueManager:
             org=session.slots.org,
             age_category=session.slots.age_category,
             is_young=is_young,
+            is_authenticated=is_auth,
         )
 
         session.dialogue_state = res["dialogue_state"]
