@@ -193,11 +193,20 @@
     return d;
   }
 
+  function localDate(value) {
+    var p = value.split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]);
+  }
+
   function buildLoan(spec) {
     var r = spec.rate / 100 / 12;
     var payment = round((spec.amount * r) / (1 - Math.pow(1 + r, -spec.term_months)));
-    var anchor = anchorDate(spec.pay_day, spec.overdue);
     var nextNumber = spec.paid_payments + 1; // номер ближайшего (или просроченного) платежа
+    // Кредит, выданный по заявке в демо (mock-review.js), знает дату выдачи; демо-кредиты — только день платежа
+    var anchor = spec.issued_at
+      ? shiftMonths(localDate(spec.issued_at), nextNumber, localDate(spec.issued_at).getDate())
+      : anchorDate(spec.pay_day, spec.overdue);
+    if (spec.issued_at) spec.pay_day = localDate(spec.issued_at).getDate();
 
     var balance = spec.amount;
     var schedule = [];
@@ -332,7 +341,9 @@
 
     'GET /loans': function () {
       return withCompany(function (c, b) {
-        var loans = c.loans.map(buildLoan);
+        // Кредиты, выданные по заявкам в демо (клиент принял одобрение), — из mock-review.js
+        var issued = window.MockReview ? window.MockReview.issuedLoans(b.inn) : [];
+        var loans = c.loans.concat(issued).map(buildLoan);
         var ours = loans.reduce(function (s, l) { return s + l.principal_left; }, 0);
         var rest = Math.max(0, (b.total_debt || 0) - ours);
         // Долг в других банках: первому 60% (если банков два), последнему — остаток
@@ -389,4 +400,11 @@
   };
 
   window.api = mockedApi;
+
+  // Для mock-review.js: данные демо-компаний и показатели клиента, который вошёл
+  window.MockData = {
+    companies: COMPANIES,
+    bootstrap: loadBootstrap,
+    isoDate: isoDate,
+  };
 })();

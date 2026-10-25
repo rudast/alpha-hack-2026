@@ -389,7 +389,7 @@
     DATA_CHECK: { label: 'Проверка данных', tone: 'progress', step: 2, text: 'Проверяем сведения о компании в ЕГРЮЛ, ФНС и БКИ.' },
     INFO_REQUESTED: { label: 'Нужны данные', tone: 'warning', step: 2, text: 'Банку нужны дополнительные сведения или документы.' },
     SCORING: { label: 'Оценка', tone: 'progress', step: 2, text: 'Оцениваем финансовое положение и кредитную историю.' },
-    MANUAL_REVIEW: { label: 'У андеррайтера', tone: 'progress', step: 3, text: 'Заявку проверяет специалист банка.' },
+    MANUAL_REVIEW: { label: 'У специалиста', tone: 'progress', step: 3, text: 'Заявку проверяет специалист банка.' },
     APPROVED: { label: 'Одобрена', tone: 'success', step: 3, text: 'Кредит одобрен. Осталось подписать договор.' },
     COUNTER_OFFER: { label: 'Встречное предложение', tone: 'warning', step: 3, text: 'Банк готов выдать кредит на других условиях.' },
     REJECTED: { label: 'Отказ', tone: 'danger', step: 3, text: 'К сожалению, банк не может выдать кредит на этих условиях.' },
@@ -400,6 +400,29 @@
     OVERDUE: { label: 'Просрочка', tone: 'danger', step: 5, text: 'Есть просроченный платёж.' },
     CLOSED: { label: 'Закрыт', tone: 'neutral', step: 5, text: 'Кредит полностью погашен.' },
   };
+
+  // Подписи событий истории заявки (кроме смены статуса — для неё подпись статуса)
+  var EVENTS = {
+    TAKEN: 'Заявку взял в работу специалист банка',
+    DOCS_PROVIDED: 'Клиент дослал документы',
+    POSTPONED: 'Заявка отложена',
+    RESUMED: 'Работа над заявкой продолжена',
+  };
+
+  function eventLabel(e) {
+    if (e.type && e.type !== 'STATUS') return EVENTS[e.type] || e.type;
+    if (e.to === 'INFO_REQUESTED') return 'Банк запросил документы';
+    if (e.to === 'COUNTER_OFFER') return 'Банк предложил другие условия';
+    if (e.to === 'APPROVED') return 'Заявка одобрена';
+    if (e.to === 'REJECTED') return 'Банк отказал';
+    if (e.to === 'SUBMITTED') return 'Заявка отправлена в банк';
+    if (e.to === 'DRAFT' && e.from === 'COUNTER_OFFER') return 'Клиент отказался от предложенных условий';
+    return status(e.to).label;
+  }
+
+  function documentTitle(kind) {
+    return DOCUMENTS[kind] || kind;
+  }
 
   function status(code) {
     return STATUS[code] || { label: code, tone: 'neutral', step: 0, text: '' };
@@ -424,5 +447,8 @@
     composeForm: composeForm,
     decomposeForm: decomposeForm,
     status: status,
+    eventLabel: eventLabel,
+    documentTitle: documentTitle,
+    DOCUMENTS: DOCUMENTS,
   };
 })();

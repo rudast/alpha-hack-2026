@@ -6,16 +6,26 @@
  *   Auth.save(session)   — сохранить токен после входа
  *   Auth.token()         — токен или null, если его нет или он истёк
  *   Auth.clear()         — выйти (бэкенд не имеет метода выхода, поэтому просто забываем токен)
- *   Auth.requireLogin()  — на закрытых страницах: если токена нет, отправляет на страницу входа (/login/)
+ *   Auth.role()          — роль вошедшего: 'client' | 'employee' | null
+ *   Auth.requireLogin(role) — на закрытых страницах: если токена нет, отправляет на страницу входа;
+ *                          если вошёл пользователь другой роли — в его кабинет
  *   api(path, options)   — fetch к /api/v1 с токеном; при 401 сам выходит на страницу входа
  *   api.newKey()         — новый ключ для заголовка Idempotency-Key
  */
 (function () {
   'use strict';
 
-  var KEY = 'auth_session';
+  // У страниц сотрудника своя сессия: в одном браузере можно одновременно быть клиентом и сотрудником
+  // (на демо — две вкладки рядом)
+  var IS_EMPLOYEE_PAGE = window.location.pathname.indexOf('/employee') === 0;
+  var KEY = IS_EMPLOYEE_PAGE ? 'auth_session_employee' : 'auth_session';
   var SESSION_TTL_MS = 8 * 60 * 60 * 1000; // сессия на бэкенде живёт 8 часов
-  var LOGIN_URL = '/login/'; // отдельная страница входа
+  var HOME = { client: '/personalAccount/', employee: '/employee/' };
+
+  // Страница входа: у сотрудников своя
+  function loginUrl() {
+    return IS_EMPLOYEE_PAGE ? '/employee/login/' : '/login/';
+  }
 
   var Auth = {
     save: function (session) {
@@ -84,9 +94,23 @@
       }
     },
 
-    requireLogin: function () {
+    role: function () {
+      try {
+        var data = JSON.parse(localStorage.getItem(KEY) || 'null');
+        return data && Auth.token() ? data.role || null : null;
+      } catch (e) {
+        return null;
+      }
+    },
+
+    requireLogin: function (role) {
       if (!Auth.token()) {
-        window.location.replace(LOGIN_URL);
+        window.location.replace(loginUrl());
+        return false;
+      }
+      var current = Auth.role();
+      if (role && current && current !== role && HOME[current]) {
+        window.location.replace(HOME[current]);
         return false;
       }
       return true;
@@ -134,7 +158,7 @@
     // Сессия истекла или токен недействителен на закрытой странице — возвращаем на вход.
     if (response.status === 401 && options.auth !== false) {
       Auth.clear();
-      window.location.replace(LOGIN_URL);
+      window.location.replace(loginUrl());
     }
 
     return { ok: response.ok, status: response.status, data: data, headers: response.headers };

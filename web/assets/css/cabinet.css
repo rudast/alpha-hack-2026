@@ -3029,3 +3029,197 @@ select.text-input {
 .block-head .block-action:hover {
   background: var(--color-bg-tertiary);
 }
+
+/* ==========================================================================
+   Решение банка в окне заявки
+   ========================================================================== */
+
+.decision {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-radius: var(--radius-l);
+  border: 1.5px solid transparent;
+}
+
+.decision-success {
+  background: var(--color-success-bg);
+  border-color: #b5e2c8;
+}
+
+.decision-warning {
+  background: var(--color-warning-bg);
+  border-color: #f1d3a0;
+}
+
+.decision-danger {
+  background: var(--color-danger-bg);
+  border-color: var(--color-error-border);
+}
+
+.decision-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.decision-success .decision-title svg {
+  color: var(--color-success);
+}
+
+.decision-warning .decision-title svg {
+  color: var(--color-warning);
+}
+
+.decision-danger .decision-title svg {
+  color: var(--color-danger);
+}
+
+.decision-text {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.t-list {
+  margin-top: 12px;
+  padding: 4px 14px;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-primary);
+}
+
+.t-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.t-row + .t-row {
+  border-top: 1px solid var(--color-bg-tertiary);
+}
+
+.t-row span {
+  flex: 1;
+  color: var(--color-text-secondary);
+}
+
+.t-row strong {
+  font-weight: 800;
+}
+
+.t-row s {
+  order: 1;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+}
+
+.t-row strong {
+  order: 2;
+}
+
+.bank-comment {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-primary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.bank-comment span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  margin-bottom: 2px;
+}
+
+.decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.decision-actions .btn {
+  text-decoration: none;
+}
+
+.decision-fine {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.decision-confirm {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e3c48c;
+  font-size: 14px;
+}
+
+.req-docs {
+  margin-top: 12px;
+  background: var(--color-bg-primary);
+}
+
+.history-comment {
+  margin: 2px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.history-docs {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.app-error {
+  margin: 12px 0 0;
+}
+
+/* Кредит выдан */
+
+.issued {
+  text-align: center;
+  padding: 16px 0 8px;
+}
+
+.issued-icon {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.issued h3 {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.issued p {
+  max-width: 46ch;
+  margin: 8px auto 18px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.app .app-continue {
+  pointer-events: none; /* кнопка в карточке — подсказка: открывает окно клик по всей карточке */
+}
+
+.app a.app-continue {
+  pointer-events: auto;
+}
