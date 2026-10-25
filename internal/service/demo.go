@@ -557,6 +557,20 @@ func (a *DemoApplications) Decline(ctx context.Context, p domain.Principal, id s
 	return *app, nil
 }
 
+func (a *DemoApplications) Resume(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	app, ok := a.applications[id]
+	if !ok {
+		return domain.Application{}, domain.ErrNotFound
+	}
+	now := time.Now()
+	app.Status = domain.StatusDataCheck
+	app.UpdatedAt = now
+	return *app, nil
+}
+
 func (a *DemoApplications) UploadDocument(ctx context.Context, p domain.Principal, id, kind, filename string, content io.Reader) (domain.Document, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed index.html assets login personalAccount
+//go:embed index.html assets login personalAccount employee
 var embeddedFS embed.FS
 
 // Handler returns an http.Handler that serves web assets.
