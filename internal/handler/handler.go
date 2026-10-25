@@ -88,10 +88,17 @@ func New(d Deps) http.Handler {
 					})
 				})
 
-				// Рабочее место сотрудника: заявки на ручной проверке (без базы в демо-режиме недоступно).
-				if d.Review != nil {
-					r.Group(func(r chi.Router) {
-						r.Use(middleware.RequireRole(domain.RoleEmployee))
+				// Рабочее место сотрудника: заявки на ручной проверке.
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireRole(domain.RoleEmployee))
+					r.Get("/employee/me", func(w http.ResponseWriter, _ *http.Request) {
+						writeJSON(w, http.StatusOK, map[string]string{
+							"full_name": "Сидорова Анна Сергеевна",
+							"position":  "Андеррайтер МСБ",
+							"email":     "underwriter@example.test",
+						})
+					})
+					if d.Review != nil {
 						idempotent := middleware.Idempotency(d.Idempotency)
 						r.Route("/employee/applications", func(r chi.Router) {
 							r.Get("/", d.Review.List)
@@ -101,8 +108,8 @@ func New(d Deps) http.Handler {
 							r.With(idempotent).Post("/{id}/release", d.Review.Release)
 							r.With(idempotent).Post("/{id}/decision", d.Review.Decide)
 						})
-					})
-				}
+					}
+				})
 			})
 		} else {
 			dbNotice := func(w http.ResponseWriter, _ *http.Request) {

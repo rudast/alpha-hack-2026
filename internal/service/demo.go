@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -145,8 +146,17 @@ func (d *DemoAuth) Login(ctx context.Context, in LoginInput) (string, error) {
 	_, _ = rand.Read(b)
 	challengeID := "ch_" + hex.EncodeToString(b)
 
+	role := domain.RoleClient
+	if in.Role == domain.RoleEmployee || in.Identifier == "underwriter@example.test" {
+		role = domain.RoleEmployee
+	}
+
+	userID := "demo-user-1"
 	inn := "7700000001"
-	if in.Identifier != "" {
+	if role == domain.RoleEmployee {
+		userID = "demo-emp-1"
+		inn = ""
+	} else if in.Identifier != "" {
 		switch in.Identifier {
 		case "client1@example.test", "+79990000001":
 			inn = "7700000001"
@@ -162,8 +172,8 @@ func (d *DemoAuth) Login(ctx context.Context, in LoginInput) (string, error) {
 	}
 
 	d.challenges[challengeID] = domain.Challenge{
-		UserID:      "demo-user-1",
-		Role:        domain.RoleClient,
+		UserID:      userID,
+		Role:        role,
 		CompanyINN:  inn,
 		Destination: in.Identifier,
 	}
@@ -185,7 +195,11 @@ func (d *DemoAuth) Verify(ctx context.Context, challengeID, code string) (Sessio
 
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
-	token := "tok_" + hex.EncodeToString(b)
+	tokenPrefix := "tok_"
+	if ch.Role == domain.RoleEmployee {
+		tokenPrefix = "tok_emp_"
+	}
+	token := tokenPrefix + hex.EncodeToString(b)
 
 	d.sessions[token] = domain.Principal{
 		UserID:     ch.UserID,
@@ -193,10 +207,15 @@ func (d *DemoAuth) Verify(ctx context.Context, challengeID, code string) (Sessio
 		CompanyINN: ch.CompanyINN,
 	}
 
+	redirect := RedirectClient
+	if ch.Role == domain.RoleEmployee {
+		redirect = RedirectEmployee
+	}
+
 	return Session{
 		Token:    token,
 		Role:     ch.Role,
-		Redirect: "/personalAccount",
+		Redirect: redirect,
 	}, nil
 }
 
@@ -206,6 +225,12 @@ func (d *DemoAuth) GetSession(ctx context.Context, token string) (domain.Princip
 
 	p, ok := d.sessions[token]
 	if !ok {
+		if strings.HasPrefix(token, "tok_emp") {
+			return domain.Principal{
+				UserID: "demo-emp-1",
+				Role:   domain.RoleEmployee,
+			}, nil
+		}
 		if token != "" {
 			return domain.Principal{
 				UserID:     "demo-user-1",
