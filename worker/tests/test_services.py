@@ -90,6 +90,16 @@ class WorkerServicesTest(unittest.TestCase):
         self.assertEqual(result["documents"][0]["status"], "FAILED")
         self.assertIn("10 MiB", result["documents"][0]["error"])
 
+    def test_unknown_marketplace_json_schema_is_unsupported(self):
+        result = dispatch("parse_documents", {
+            "application_id": "application-1",
+            "documents": [{"id": "ozon-example", "kind": "marketplace_sales_report",
+                           "filename": "operation.json", "media_type": "application/json",
+                           "content_text": '{"accruals":[],"last_id":0}'}],
+        })
+        self.assertEqual(result["documents"][0]["status"], "UNSUPPORTED")
+        self.assertEqual(result["review_reasons"][0]["reason"], "FORMAT_UNSUPPORTED")
+
 
 if __name__ == "__main__":
     unittest.main()

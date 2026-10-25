@@ -42,9 +42,6 @@ def _json_fields(kind: str, raw: bytes, document_id: str | None) -> dict[str, An
     data = json.loads(raw.decode("utf-8-sig"))
     if not isinstance(data, dict):
         raise ValueError("JSON document must be an object")
-    period = data.get("period")
-    if not isinstance(period, str) or not period:
-        raise ValueError("period is required")
     fields: dict[str, Any] = {}
     schemas = {
         "financial_statements": ("revenue", "net_profit", "equity", "liabilities"),
@@ -52,6 +49,11 @@ def _json_fields(kind: str, raw: bytes, document_id: str | None) -> dict[str, An
         "marketplace_sales_report": ("sales", "returns", "payouts"),
         "valuation_report": ("appraised_value",),
     }
+    if not any(name in data for name in schemas[kind]):
+        raise UnsupportedStatementFormat("JSON document schema is not supported for this kind")
+    period = data.get("period")
+    if not isinstance(period, str) or not period:
+        raise ValueError("period is required")
     for name in schemas[kind]:
         if name not in data:
             raise ValueError(f"{name} is required")
