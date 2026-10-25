@@ -4,6 +4,7 @@
     "app": {
       "root": ".",
       "runtime": "go",
+      "entrypoint": "cmd/api/main.go",
       "bindings": [
         {
           "type": "service",
