@@ -11,6 +11,7 @@ import (
 
 	"github.com/rudast/alpha-hack-2026/internal/domain"
 	"github.com/rudast/alpha-hack-2026/internal/middleware"
+	"github.com/rudast/alpha-hack-2026/web"
 )
 
 type Deps struct {
@@ -76,7 +77,7 @@ func New(d Deps) http.Handler {
 		}
 	})
 
-	r.Handle("/*", http.FileServer(http.Dir(d.WebDir)))
+	r.Handle("/*", web.Handler(d.WebDir))
 	return r
 }
 
