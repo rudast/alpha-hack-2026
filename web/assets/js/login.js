@@ -18,18 +18,24 @@
   var DEMO_MODE = true;
   var DEMO_PASSWORD = 'demo-password';
   var DEMO_CODE = '000000';
-  var DEMO_CLIENTS = [
-    { label: 'ООО «Демо Торг»', login: '+79990000001' },
-    { label: 'ООО «Демо Строй»', login: '+79990000002' },
-    { label: 'ООО «Демо Логистик»', login: '+79990000003' },
-    { label: 'ООО «Демо Долг»', login: '+79990000004' },
-    { label: 'ИП Иванов Демо', login: '+79990000005' },
-  ];
+  // Роль задаётся на странице: <body data-role="employee"> — вход сотрудников банка (/employee/login/)
+  var ROLE = document.body.dataset.role === 'employee' ? 'employee' : 'client';
 
-  var ROLE = 'client'; // на этой странице входят только клиенты
+  var DEMO_ACCOUNTS = {
+    client: [
+      { label: 'ООО «Демо Торг»', login: '+79990000001' },
+      { label: 'ООО «Демо Строй»', login: '+79990000002' },
+      { label: 'ООО «Демо Логистик»', login: '+79990000003' },
+      { label: 'ООО «Демо Долг»', login: '+79990000004' },
+      { label: 'ИП Иванов Демо', login: '+79990000005' },
+    ],
+    employee: [{ label: 'Сидорова Анна Сергеевна', login: 'underwriter@example.test' }],
+  };
+  var DEMO_CLIENTS = DEMO_ACCOUNTS[ROLE];
+
   var CODE_LENGTH = 6;
   var CHALLENGE_TTL_MS = 5 * 60 * 1000; // challenge_id живёт 5 минут
-  var DEFAULT_REDIRECT = '/personalAccount';
+  var DEFAULT_REDIRECT = ROLE === 'employee' ? '/employee/' : '/personalAccount';
 
   // ---------- Элементы ----------
 
@@ -273,9 +279,14 @@
       return;
     }
 
-    // Страница только для клиентов: токен другой роли не принимаем.
+    // Страница для одной роли: токен другой роли не принимаем.
     if (!res.data.token || res.data.role !== ROLE) {
-      backToLogin('Для этой учётной записи вход в кабинет клиента недоступен.', true);
+      backToLogin(
+        ROLE === 'employee'
+          ? 'Это вход для сотрудников банка. Клиенты входят на странице /login/.'
+          : 'Для этой учётной записи вход в кабинет клиента недоступен.',
+        true
+      );
       return;
     }
 

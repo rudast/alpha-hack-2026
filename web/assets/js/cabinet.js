@@ -17,7 +17,7 @@
   'use strict';
 
   // Закрытая страница: без токена сразу на вход.
-  if (!Auth.requireLogin()) return;
+  if (!Auth.requireLogin('client')) return;
 
   var $ = function (id) {
     return document.getElementById(id);
@@ -520,9 +520,17 @@
     return fallback || (p ? p.name : 'Продукт не выбран');
   }
 
+  // Кнопка в карточке, когда клиенту нужно ответить банку. Нажатие открывает окно заявки.
+  var APP_ACTIONS = {
+    INFO_REQUESTED: 'Загрузить документы',
+    COUNTER_OFFER: 'Посмотреть условия',
+    APPROVED: 'Подписать и получить',
+  };
+
   function appRow(a) {
     var st = Catalog.status(a.status);
     var draft = a.status === 'DRAFT';
+    var action = APP_ACTIONS[a.status];
     return (
       '<article class="app" data-app="' + esc(a.id) + '" data-status="' + esc(a.status) + '" tabindex="0" role="button" aria-label="Открыть заявку">' +
       '<div class="app-main">' +
@@ -536,7 +544,9 @@
       '<span class="badge badge-' + st.tone + '" data-status="' + esc(a.status) + '">' + esc(st.label) + '</span>' +
       (draft
         ? '<a class="btn btn-primary btn-inline app-continue" href="#draft=' + encodeURIComponent(a.id) + '">Продолжить</a>'
-        : '<span class="app-chevron">' + icon('chevron', 18) + '</span>') +
+        : action
+          ? '<span class="btn btn-primary btn-inline app-continue">' + action + '</span>'
+          : '<span class="app-chevron">' + icon('chevron', 18) + '</span>') +
       '<div class="app-stages">' + stageTrack(a.status, true) + '</div>' +
       '</article>'
     );
@@ -581,11 +591,16 @@
   }
 
   function closeDialog() {
+    openedApp = null;
     if (typeof dialog.close === 'function') dialog.close();
     else dialog.removeAttribute('open');
   }
 
   $('dialog-close').addEventListener('click', closeDialog);
+  // Окно закрыли клавишей Esc — заявка в нём больше не открыта
+  dialog.addEventListener('close', function () {
+    openedApp = null;
+  });
   // Клик по затемнению вокруг окна закрывает его
   dialog.addEventListener('click', function (e) {
     if (e.target === dialog) closeDialog();
@@ -750,18 +765,173 @@
     return isFinite(n) ? n : 0;
   }
 
-  // Подробности заявки: GET /applications/{id}
-  async function showApplication(id) {
-    openDialog('Заявка', '<div class="loading"><div class="spinner spinner-dark" aria-hidden="true"></div><span>Загружаем заявку…</span></div>');
+  // Подробности заявки: GET /applications/{id}. Если банк ждёт ответа клиента — блок с решением и кнопками.
+  var openedApp = null; // id заявки в открытом окне — чтобы обновить его, когда банк что-то изменит
+
+  function rateOf(productId) {
+    var front = Catalog.frontId(productId);
+    var p = front && Loans.productById(front);
+    return p ? p.rate : null;
+  }
+
+  function terms(t) {
+    var rate = t.rate != null ? t.rate : rateOf(t.product_id);
+    return {
+      product: productName(t.product_id),
+      amount: t.amount,
+      term: t.term_months,
+      rate: rate,
+      payment: rate != null ? Loans.annuity(t.amount, rate, t.term_months) : null,
+    };
+  }
+
+  function termsList(t, compare) {
+    var x = terms(t);
+    var c = compare ? terms(compare) : null;
+    var line = function (label, value, old) {
+      return '<div class="t-row"><span>' + label + '</span><strong>' + value + '</strong>' +
+        (old && old !== value ? '<s>' + old + '</s>' : '') + '</div>';
+    };
+    return (
+      line('Кредит', esc(x.product), c && esc(c.product)) +
+      line('Сумма', fmt.rub(x.amount), c && fmt.rub(c.amount)) +
+      line('Срок', fmt.term(x.term), c && fmt.term(c.term)) +
+      (x.rate != null ? line('Ставка', fmt.rate(x.rate), c && c.rate != null ? fmt.rate(c.rate) : null) : '') +
+      (x.payment != null ? line('Платёж в месяц', '≈ ' + fmt.rub(x.payment), c && c.payment != null ? '≈ ' + fmt.rub(c.payment) : null) : '')
+    );
+  }
+
+  function bankComment(text) {
+    return text ? '<div class="bank-comment"><span>Комментарий специалиста</span>' + esc(text) + '</div>' : '';
+  }
+
+  function decisionBlock(a) {
+    var d = a.decision || {};
+    var account = state.me && state.me.company.account_number ? '•••• ' + state.me.company.account_number.slice(-4) : 'расчётный счёт';
+
+    if (a.status === 'APPROVED') {
+      return (
+        '<section class="decision decision-success">' +
+        '<div class="decision-title">' + icon('check', 20) + 'Банк одобрил кредит</div>' +
+        '<div class="t-list">' + termsList(d.offer || a) + '</div>' +
+        bankComment(d.comment) +
+        '<div class="decision-actions"><button type="button" class="btn btn-primary btn-inline" data-app-action="accept">Подписать и получить</button></div>' +
+        '<p class="decision-fine">После подписания деньги поступят на счёт ' + esc(account) + ', кредит появится в «Моих кредитах».</p>' +
+        '</section>'
+      );
+    }
+
+    if (a.status === 'COUNTER_OFFER') {
+      return (
+        '<section class="decision decision-warning">' +
+        '<div class="decision-title">' + icon('info', 20) + 'Банк предлагает другие условия</div>' +
+        '<p class="decision-text">Зачёркнуто — то, что вы просили в заявке.</p>' +
+        '<div class="t-list">' + termsList(d.offer, a) + '</div>' +
+        bankComment(d.comment) +
+        '<div class="decision-actions">' +
+        '<button type="button" class="btn btn-primary btn-inline" data-app-action="accept">Принять и подписать</button>' +
+        '<button type="button" class="btn btn-secondary btn-inline" data-app-action="decline-ask">Отказаться</button>' +
+        '</div>' +
+        '<div class="decision-confirm" id="decline-confirm" hidden>' +
+        '<p>Заявка вернётся в черновик: вы сможете изменить сумму, срок или вид кредита и подать её снова.</p>' +
+        '<div class="decision-actions">' +
+        '<button type="button" class="btn btn-secondary btn-inline" data-app-action="decline">Да, отказаться</button>' +
+        '<button type="button" class="btn btn-ghost btn-inline" data-app-action="decline-cancel">Отмена</button>' +
+        '</div></div>' +
+        '</section>'
+      );
+    }
+
+    if (a.status === 'INFO_REQUESTED') {
+      var have = {};
+      (a.documents || []).forEach(function (doc) { have[doc.kind] = doc; });
+      var need = d.requested_documents || [];
+      var ready = need.every(function (k) { return have[k]; });
+      return (
+        '<section class="decision decision-warning">' +
+        '<div class="decision-title">' + icon('file', 20) + 'Банк запросил документы</div>' +
+        bankComment(d.request_comment) +
+        '<ul class="docs req-docs">' +
+        need.map(function (k) {
+          var doc = have[k];
+          return (
+            '<li class="doc' + (doc ? ' attached' : '') + '">' +
+            '<span class="doc-icon">' + icon(doc ? 'check' : 'file', 18) + '</span>' +
+            '<span class="doc-text"><span class="doc-title">' + esc(Catalog.documentTitle(k)) + '</span>' +
+            '<span class="doc-sub">' + (doc ? esc(doc.filename) : 'нужно приложить') + '</span></span>' +
+            (doc ? '' :
+              '<label class="btn btn-secondary btn-inline doc-btn">Прикрепить' +
+              '<input type="file" class="visually-hidden" data-req-doc="' + k + '" accept=".pdf,.jpg,.jpeg,.png" /></label>') +
+            '</li>'
+          );
+        }).join('') +
+        '</ul>' +
+        '<div class="decision-actions">' +
+        '<button type="button" class="btn btn-primary btn-inline" data-app-action="resubmit"' + (ready ? '' : ' disabled') + '>Отправить в банк</button>' +
+        '</div>' +
+        '<p class="decision-fine">' + (ready ? 'Все документы приложены.' : 'Кнопка станет активной, когда приложите все документы.') +
+        ' Заявка вернётся к специалисту, который её рассматривает.</p>' +
+        '</section>'
+      );
+    }
+
+    if (a.status === 'REJECTED') {
+      return (
+        '<section class="decision decision-danger">' +
+        '<div class="decision-title">' + icon('alert', 20) + 'Банк отказал в кредите</div>' +
+        bankComment(d.comment) +
+        '<div class="decision-actions"><a href="#new-loan" class="btn btn-secondary btn-inline" data-close-dialog>Подать новую заявку</a></div>' +
+        '</section>'
+      );
+    }
+
+    if (a.status === 'MANUAL_REVIEW') {
+      return (
+        '<div class="notice notice-info notice-compact">' + icon('info', 18) + '<div>' +
+        (a.assigned_to
+          ? 'Заявку рассматривает специалист банка ' + esc(a.assigned_to.full_name) + '.'
+          : 'Заявка ждёт специалиста банка.') +
+        ' Если понадобятся документы или будет решение, это появится здесь.</div></div>'
+      );
+    }
+
+    var st = Catalog.status(a.status);
+    return '<div class="notice notice-' + (st.tone === 'danger' ? 'danger' : st.tone === 'warning' ? 'warning' : 'info') + ' notice-compact">' +
+      icon('info', 18) + '<div>' + esc(st.text) + '</div></div>';
+  }
+
+  function historyList(a) {
+    var history = (a.history || []).slice().reverse();
+    if (!history.length) return '';
+    return (
+      '<h3 class="dialog-subtitle">История</h3><ul class="history">' +
+      history.map(function (h) {
+        var docs = h.documents && h.documents.length
+          ? '<div class="history-docs">' + esc(h.documents.map(Catalog.documentTitle).join(', ')) + '</div>'
+          : '';
+        return '<li><span class="history-dot"></span><div><div>' + esc(Catalog.eventLabel(h)) + '</div>' + docs +
+          (h.comment ? '<div class="history-comment">' + esc(h.comment) + '</div>' : '') +
+          '<div class="history-at">' + esc(fmt.dateTime(h.at)) + (h.by_name ? ' · ' + esc(h.by_name) : '') + '</div></div></li>';
+      }).join('') +
+      '<li><span class="history-dot"></span><div><div>Черновик создан</div><div class="history-at">' + esc(fmt.dateTime(a.created_at)) + '</div></div></li>' +
+      '</ul>'
+    );
+  }
+
+  async function showApplication(id, quiet) {
+    openedApp = id;
+    if (!quiet) openDialog('Заявка', '<div class="loading"><div class="spinner spinner-dark" aria-hidden="true"></div><span>Загружаем заявку…</span></div>');
     var res = await api('/applications/' + encodeURIComponent(id));
+    if (openedApp !== id) return; // пока грузили, окно закрыли или открыли другое
     if (!res.ok) {
       $('dialog-body').innerHTML = '<p class="muted">' + (res.status === 404 ? 'Заявка не найдена.' : 'Не удалось загрузить заявку. Попробуйте позже.') + '</p>';
       return;
     }
-    var a = res.data;
-    var st = Catalog.status(a.status);
-    var history = (a.history || []).slice().reverse();
+    renderApplication(res.data);
+  }
 
+  function renderApplication(a) {
+    var st = Catalog.status(a.status);
     $('dialog-title').textContent = 'Заявка № ' + a.id.slice(0, 8).toUpperCase();
     $('dialog-body').innerHTML =
       '<div class="app-detail-head">' +
@@ -770,29 +940,85 @@
       '<span class="badge badge-' + st.tone + '">' + esc(st.label) + '</span>' +
       '</div>' +
       stageTrack(a.status) +
-      '<div class="notice notice-' + (st.tone === 'danger' ? 'danger' : st.tone === 'warning' ? 'warning' : 'info') + ' notice-compact">' +
-      icon('info', 18) + '<div>' + esc(st.text) + '</div></div>' +
+      '<div class="app-error error-plate" id="app-error" role="alert"><span id="app-error-text"></span></div>' +
+      decisionBlock(a) +
       '<dl class="kv-list kv-grid">' +
       row('Сумма', a.amount ? fmt.rub(a.amount) : '—') +
       row('Срок', a.term_months ? fmt.term(a.term_months) : '—') +
       row('Цель', esc(a.purpose || '—')) +
       row('Отправлена', a.submitted_at ? esc(fmt.dateTime(a.submitted_at)) : 'ещё нет') +
       '</dl>' +
-      (history.length
-        ? '<h3 class="dialog-subtitle">История</h3><ul class="history">' +
-          history.map(function (h) {
-            return '<li><span class="history-dot"></span><div><div>' + esc(Catalog.status(h.to).label) + '</div>' +
-              '<div class="history-at">' + esc(fmt.dateTime(h.at)) + '</div></div></li>';
-          }).join('') +
-          '<li><span class="history-dot"></span><div><div>Черновик создан</div><div class="history-at">' + esc(fmt.dateTime(a.created_at)) + '</div></div></li>' +
-          '</ul>'
-        : '') +
+      historyList(a) +
       (a.status === 'DRAFT'
         ? '<a class="btn btn-primary" href="#draft=' + encodeURIComponent(a.id) + '" data-close-dialog>Продолжить заполнение</a>'
         : '');
 
-    var link = $('dialog-body').querySelector('[data-close-dialog]');
-    if (link) link.addEventListener('click', closeDialog);
+    $('dialog-body').querySelectorAll('[data-close-dialog]').forEach(function (link) {
+      link.addEventListener('click', closeDialog);
+    });
+    $('dialog-body').querySelectorAll('[data-app-action]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        appAction(a, b.dataset.appAction, b);
+      });
+    });
+    $('dialog-body').querySelectorAll('[data-req-doc]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        if (input.files && input.files[0]) uploadRequested(a, input.dataset.reqDoc, input.files[0].name);
+      });
+    });
+  }
+
+  function appError(text) {
+    $('app-error-text').textContent = text;
+    $('app-error').classList.add('visible');
+  }
+
+  // Файл к запросу банка: POST /applications/{id}/documents (в заглушке — только имя файла)
+  async function uploadRequested(a, kind, filename) {
+    var res = await api('/applications/' + encodeURIComponent(a.id) + '/documents', {
+      method: 'POST', json: { kind: kind, filename: filename }, idempotencyKey: api.newKey(),
+    });
+    if (!res.ok) {
+      appError('Не удалось загрузить файл. Попробуйте ещё раз.');
+      return;
+    }
+    showApplication(a.id, true);
+  }
+
+  async function appAction(a, action, button) {
+    if (action === 'decline-ask' || action === 'decline-cancel') {
+      $('decline-confirm').hidden = action === 'decline-cancel';
+      return;
+    }
+    var paths = { accept: '/accept', decline: '/decline', resubmit: '/resubmit' };
+    button.disabled = true;
+    var res = await api('/applications/' + encodeURIComponent(a.id) + paths[action], {
+      method: 'POST', json: {}, idempotencyKey: api.newKey(),
+    });
+    button.disabled = false;
+    if (!res.ok) {
+      appError(res.status === 409 ? 'Статус заявки уже изменился — обновите страницу.' : 'Не получилось. Попробуйте ещё раз.');
+      return;
+    }
+    if (action === 'accept') {
+      $('dialog-title').textContent = 'Кредит выдан';
+      $('dialog-body').innerHTML =
+        '<div class="issued">' +
+        '<div class="issued-icon">' + icon('check', 34) + '</div>' +
+        '<h3>Договор подписан, деньги на счёте</h3>' +
+        '<p>' + esc(productName(res.data.product_id)) + ' на ' + fmt.rub(res.data.amount) + ' появился в «Моих кредитах» вместе с графиком платежей.</p>' +
+        '<button type="button" class="btn btn-primary btn-inline" id="to-loans">К моим кредитам</button>' +
+        '</div>';
+      $('to-loans').addEventListener('click', function () {
+        closeDialog();
+        $('loans-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      openedApp = null;
+      loadAll();
+      return;
+    }
+    renderApplication(res.data);
+    reloadApplications();
   }
 
   // ---------- Клики по спискам ----------
@@ -890,6 +1116,18 @@
   });
 
   window.addEventListener('hashchange', route);
+
+  // Банк ответил по заявке (в демо — кабинет сотрудника в соседней вкладке): обновляем списки и окно
+  window.addEventListener('demo-review-change', function () {
+    reloadApplications();
+    api('/loans').then(function (res) {
+      if (!res.ok) return;
+      state.loans = res.data;
+      renderSummary();
+      renderLoans(res);
+    });
+    if (openedApp) showApplication(openedApp, true);
+  });
 
   ready = loadAll();
   route();

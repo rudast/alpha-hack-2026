@@ -10,7 +10,9 @@
 |---|---|
 | Формы ответов (это ТЗ) | разделы ниже |
 | Как сейчас отвечают заглушки, алгоритм графика платежей | [`web/assets/js/mock-api.js`](assets/js/mock-api.js): функции `buildLoan` и `buildClosedLoan` |
-| Какие методы вызывает кабинет | [`web/assets/js/cabinet.js`](assets/js/cabinet.js), [`web/assets/js/wizard.js`](assets/js/wizard.js) |
+| Как сейчас отвечают заглушки рассмотрения заявок (сотрудник, решение, ответ клиента), упрощённый скоринг | [`web/assets/js/mock-review.js`](assets/js/mock-review.js) |
+| Какие методы вызывает кабинет клиента | [`web/assets/js/cabinet.js`](assets/js/cabinet.js), [`web/assets/js/wizard.js`](assets/js/wizard.js) |
+| Какие методы вызывает кабинет сотрудника | [`web/assets/js/employee.js`](assets/js/employee.js) |
 | Каталог, по которому сейчас работает калькулятор | [`web/assets/js/loans.js`](assets/js/loans.js) |
 | Описание API бэкенда | `docs/openapi.yaml` — новые методы туда тоже нужно добавить |
 
@@ -25,8 +27,10 @@
 | `GET /me` | **заглушка** | приветствие, профиль компании, подстановка в анкету |
 | `GET /loans` | **заглушка** | «Мои кредиты», график платежей, «Кредитная история», «Кредиты в других банках» |
 | `GET /products` | **нет** | каталог продуктов скопирован во фронт |
-| `POST /applications/{id}/accept`, `/decline` | **нет** | ответ клиента на одобрение или встречное предложение |
-| `POST /applications/{id}/documents` | **нет** | файлы на шаге «Документы» пока не отправляются |
+| `POST /applications/{id}/accept`, `/decline`, `/resubmit` | **заглушка** | ответ клиента на решение банка и на запрос документов |
+| `POST /applications/{id}/documents` | **заглушка** (только имя файла) | документы, которые запросил банк; на шаге «Документы» мастера файлы пока не отправляются |
+| `GET /employee/me`, `GET /employee/applications`, `GET /employee/applications/{id}` | **заглушка** | кабинет сотрудника: шапка, очередь, окно заявки |
+| `POST /employee/applications/{id}/take`, `/postpone`, `/decision`, `/request-documents` | **заглушка** | действия сотрудника |
 | `GET /me/offer` | заглушка | баннер «Вам предварительно одобрено до N ₽» |
 
 ## Принятые решения
@@ -47,7 +51,7 @@
 4. **Встречное предложение** клиент принимает (кредит на новых условиях сразу становится `ACTIVE`) или отклоняет (заявка возвращается в `DRAFT`).
 5. **Каталог продуктов: правильные значения — как в калькуляторе** (`web/assets/js/loans.js`). Бэкенд переносит их в `products.yaml`.
 6. **Кредиты в других банках** берутся из `companies.credit_history`, в сиде — списком.
-7. **Не делаем сейчас:** отказ, запрос документов, кабинет работника банка. Это следующий этап.
+7. **Спорные заявки решает сотрудник банка.** Скоринг одобряет хорошие заявки сам (`APPROVED`), остальные отправляет на ручную проверку (`MANUAL_REVIEW`). Сотрудник открывает заявку (она закрепляется за ним) и одобряет, отклоняет с причиной, предлагает другие условия (сумма, срок, вид кредита), запрашивает документы или откладывает. Клиент видит всё, кроме «отложить». Подробно — задача 9.
 
 ## Общие правила для всех методов
 
@@ -243,9 +247,22 @@
 | `POST /api/v1/applications/{id}/accept` | `APPROVED` или `COUNTER_OFFER` | заявка становится кредитом `ACTIVE` (см. 2.3); ответ — заявка целиком, как `GET /applications/{id}` |
 | `POST /api/v1/applications/{id}/decline` | `COUNTER_OFFER` | `DRAFT`; клиент может поменять условия и подать заново |
 
+| `POST /api/v1/applications/{id}/resubmit` | `INFO_REQUESTED` | клиент дослал запрошенные документы: `INFO_REQUESTED` → `DATA_CHECK` → `MANUAL_REVIEW`, заявка возвращается к тому же сотруднику и встаёт наверх его очереди. Если приложены не все запрошенные документы — `422 {"missing_documents": ["…"]}` |
+
 Из другого статуса — `409 {"error": "application is not awaiting client decision"}`.
 
-Чтобы список заявок показывал встречное предложение без открытия заявки, добавить в элементы `GET /applications` поле `decision` с `outcome` и `offer`, или весь объект решения.
+**Что кабинет клиента читает из заявки** (`GET /applications/{id}`):
+
+| Поле | Зачем |
+|---|---|
+| `decision.offer` | `{ product_id, amount, term_months, rate }` — одобренные или предложенные условия |
+| `decision.comment` | комментарий сотрудника к решению; при отказе — причина |
+| `decision.requested_documents`, `decision.request_comment` | какие документы запросил сотрудник и пояснение |
+| `assigned_to.full_name` | «Заявку рассматривает специалист банка Сидорова Анна Сергеевна» |
+| `documents` | приложенные документы: `{ id, kind, filename, status, created_at }` |
+| `history[]` | события с полями из задачи 9.3 |
+
+В элементы `GET /applications` добавить `decision` (`outcome`, `offer`), `requested_documents` и `assigned_to.full_name`: по ним в карточке появляются кнопки «Подписать и получить», «Посмотреть условия», «Загрузить документы».
 
 ---
 
@@ -324,7 +341,7 @@
 
 В ветке `parsing` есть таблица `application_documents` и разбор документов воркером, но метода загрузки для клиента нет ни там, ни в `main`.
 
-`POST /api/v1/applications/{id}/documents` — клиент, `Idempotency-Key`, только пока заявка `DRAFT`.
+`POST /api/v1/applications/{id}/documents` — клиент, `Idempotency-Key`, пока заявка `DRAFT` или `INFO_REQUESTED` (банк запросил документы).
 
 - Запрос `multipart/form-data`: `kind` (вид документа из каталога: `passport`, `account_statement`…) и `file` (PDF, JPG, PNG, до 10 МБ).
 - Ответ 201: `{ "id": "…", "kind": "passport", "filename": "pasport.pdf", "status": "UPLOADED", "created_at": "…" }`.
@@ -398,6 +415,70 @@
 
 ---
 
+## Задача 9. Кабинет сотрудника банка
+
+Страницы на фронте готовы: вход `/employee/login/`, кабинет `/employee/`. Вход сотрудника уже работает (роль `employee`, логин по почте, `redirect: "/employee"`). Сейчас на демо — один сотрудник из сида: `underwriter@example.test`.
+
+### 9.1. Данные
+
+| Что | Куда |
+|---|---|
+| должность сотрудника | `users.position text` (та же колонка, что в задаче 1); для сида: `Андеррайтер МСБ` |
+| кто ведёт заявку | `applications.assigned_to` — уже есть |
+| отложена ли заявка | `applications.postponed_at timestamptz` |
+| с какого момента заявка ждёт в очереди | `applications.queued_at timestamptz` — ставится при каждом попадании в `MANUAL_REVIEW` |
+
+Разрешить в `domain/application.go` переходы `MANUAL_REVIEW → INFO_REQUESTED` (запрос документов сотрудником) и `INFO_REQUESTED → DATA_CHECK → MANUAL_REVIEW` (клиент дослал). Сейчас `INFO_REQUESTED` бывает только из `DATA_CHECK`.
+
+### 9.2. Методы
+
+Все — роль `employee`, изменяющие — с `Idempotency-Key`.
+
+| Метод | Что делает |
+|---|---|
+| `GET /api/v1/employee/me` | `{ id, full_name, position, email }` — шапка кабинета |
+| `GET /api/v1/employee/applications` | `{ items: [...] }` — все заявки, которые хоть раз были в `MANUAL_REVIEW`. Элемент: `{ id, company: { inn, name, org_type }, product_id, product_name, amount, term_months, status, score, queued_at, submitted_at, updated_at, assigned_to: { id, full_name }, assigned_to_me, postponed_at, docs_provided }`. Фронт сам раскладывает на «Очередь», «Отложенные», «Ждут клиента» и «Рассмотренные» |
+| `GET /api/v1/employee/applications/{id}` | заявка целиком (как у клиента) плюс `company` — снимок компании для окна сотрудника: `inn, name, org_type, ogrn, okved, okved_title, registration_date, director, address, total_debt, equity, debt_to_equity, has_overdue, applicant: { full_name, position, phone, email }` и `decision` со скорингом: `score, thresholds: { approve, counter }, reasons_negative: [{ text }], reasons_positive: [{ text }], model_version` |
+| `POST …/{id}/take` | взять в работу: `assigned_to = сотрудник`, событие `TAKEN`; если заявка отложена — снять `postponed_at`. Чужая заявка в работе — `409` |
+| `POST …/{id}/postpone` | `{ comment }` → `postponed_at = now()`, событие `POSTPONED` (клиент его не видит) |
+| `POST …/{id}/decision` | `{ outcome, comment, offer }`: `APPROVED` → статус `APPROVED`, `decision.offer` = условия заявки; `REJECTED` → обязателен `comment` (причину видит клиент), иначе `400`; `COUNTER_OFFER` → обязателен `offer: { product_id, amount, term_months, rate }`, срок в пределах продукта |
+| `POST …/{id}/request-documents` | `{ documents: ["account_statement", …], comment }` → статус `INFO_REQUESTED`, `decision.requested_documents`, `decision.request_comment` |
+
+Все действия, кроме `take`, — только из `MANUAL_REVIEW`, иначе `409`.
+
+### 9.3. События в истории заявки
+
+Сейчас в `history` пишутся только смены статуса. Нужно добавить к записи поля:
+
+```json
+{
+  "type": "STATUS",
+  "from": "MANUAL_REVIEW",
+  "to": "INFO_REQUESTED",
+  "at": "2026-10-25T15:56:00Z",
+  "by": "…id сотрудника… | client | system",
+  "by_name": "Сидорова Анна Сергеевна",
+  "comment": "Приложите спецификацию крана от поставщика",
+  "documents": ["equipment_specification"],
+  "client_visible": true
+}
+```
+
+| `type` | Когда | Видит клиент |
+|---|---|---|
+| `STATUS` | смена статуса (с `from`, `to`; при решении сотрудника — `comment`, `offer`) | да |
+| `TAKEN` | сотрудник взял заявку в работу | да |
+| `DOCS_PROVIDED` | клиент дослал документы | да |
+| `POSTPONED`, `RESUMED` | сотрудник отложил / вернулся к заявке | нет |
+
+`GET /applications/{id}` для клиента отдаёт только события с `client_visible = true`.
+
+### 9.4. Скоринг
+
+Фронту нужны от скоринга `score`, `thresholds`, `reasons_negative`, `reasons_positive` — формат из `docs/scoring.md`, раздел 11. В демо-заглушке скоринг упрощённый (функция `score` в `mock-review.js`): балл от 65 — `APPROVED` сразу, ниже — `MANUAL_REVIEW`.
+
+---
+
 ## Как проверить
 
 ```bash
@@ -445,10 +526,12 @@ curl -s localhost:8080/api/v1/products | jq '.products | length'   # 14
 | После задачи | Фронт |
 |---|---|
 | 3 | выключает заглушку `GET /loans` |
-| 4 | в окне заявки: «Подписать и получить» для `APPROVED`; новые условия и «Принять» / «Отказаться» для `COUNTER_OFFER`; автообновление статуса заявки, пока она на проверке |
+| 4 и 9 | убирает `mock-review.js`; окно заявки у клиента и кабинет сотрудника уже готовы. Добавить автообновление статуса заявки, пока она на проверке |
 | 5 | калькулятор и мастер грузят каталог из `GET /products`, копии в `loans.js` и `catalog.js` и соответствие id калькулятора и бэкенда (`working-capital` → `working_capital`) удаляются |
 | 6 | шаг «Документы» отправляет файлы |
 
-Когда все методы готовы, подключение `mock-api.js` удаляется со страницы кабинета.
+Рассмотрение заявок (задачи 4, 6, 9) подменяет `mock-review.js`: он хранит демо-заявки в браузере, чтобы кабинет сотрудника и кабинет клиента в двух вкладках видели одно и то же. Когда методы задач 4 и 9 готовы, подключение `mock-review.js` удаляется со страниц `/personalAccount/` и `/employee/` — экраны уже вызывают нужные методы.
 
-Порядок, в котором удобнее всего: **1 → 2 → 3 → 7** (кабинет показывает настоящие кредиты), затем **5**, **4**, **6**.
+Когда все методы готовы, подключение `mock-api.js` удаляется со страниц.
+
+Порядок, в котором удобнее всего: **1 → 2 → 3 → 7** (кабинет показывает настоящие кредиты), затем **4 + 9** (рассмотрение заявок), **5**, **6**.

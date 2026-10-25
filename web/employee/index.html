@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Заявки на рассмотрении — Альфа-Будущее</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23ef3124'/%3E%3Cpath fill='white' transform='translate(3.6 3.6) scale(.7)' d='M13.6 3h-3.2L5 17h2.8l1.2-3.4h6l1.2 3.4H19L13.6 3zm-3.6 8.2L12 5.5l2 5.7h-4zM5 19.5h14V22H5v-2.5z'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/assets/css/core.css?v=7" />
+  <link rel="stylesheet" href="/assets/css/cabinet.css?v=7" />
+  <link rel="stylesheet" href="/assets/css/employee.css?v=7" />
+</head>
+<body class="page-employee">
+
+  <header class="topbar">
+    <a href="/employee/" class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M13.6 3h-3.2L5 17h2.8l1.2-3.4h6l1.2 3.4H19L13.6 3zm-3.6 8.2L12 5.5l2 5.7h-4zM5 19.5h14V22H5v-2.5z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">Альфа-Будущее</div>
+        <div class="brand-caption">Рабочее место сотрудника банка</div>
+      </div>
+    </a>
+
+    <div class="topbar-actions">
+      <div class="emp-person hidden" id="emp-person">
+        <span class="avatar" id="emp-avatar" aria-hidden="true"></span>
+        <span class="emp-person-text">
+          <span class="emp-person-name" id="emp-name"></span>
+          <span class="emp-person-role" id="emp-role"></span>
+        </span>
+      </div>
+      <button type="button" id="btn-logout" class="btn btn-secondary btn-inline">Выйти</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="page-head emp-head">
+      <div>
+        <h1 class="page-title">Заявки на рассмотрении</h1>
+        <p class="page-subtitle">Спорные заявки, которые скоринг передал на ручную проверку</p>
+      </div>
+      <div class="emp-counters" id="emp-counters" aria-live="polite"></div>
+    </div>
+
+    <div id="error-plate" class="error-plate" role="alert">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 5a1 1 0 012 0v6a1 1 0 11-2 0V7zm1 11a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5z"/>
+      </svg>
+      <span id="error-message"></span>
+    </div>
+
+    <section class="block" aria-labelledby="queue-title">
+      <div class="block-head">
+        <h2 id="queue-title">Очередь</h2>
+        <span class="block-count" id="queue-count"></span>
+        <span class="block-hint">сверху — с досланными документами, дальше — кто дольше ждёт</span>
+      </div>
+      <div id="queue" class="queue"><div class="card-row skeleton"></div></div>
+    </section>
+
+    <section class="block hidden" id="postponed-block" aria-labelledby="postponed-title">
+      <div class="block-head">
+        <h2 id="postponed-title">Отложенные</h2>
+        <span class="block-count" id="postponed-count"></span>
+      </div>
+      <div id="postponed" class="queue queue-muted"></div>
+    </section>
+
+    <section class="block" aria-label="Другие заявки">
+      <div id="waiting" class="fold hidden"></div>
+      <div id="done" class="fold hidden"></div>
+    </section>
+
+    <p class="emp-demo">
+      <span class="demo-tag" title="Методов сотрудника пока нет на бэкенде, данные из mock-review.js">демо-данные</span>
+      Заявки хранятся в этом браузере: откройте кабинет клиента в соседней вкладке, и действия будут видны сразу.
+      <button type="button" class="link" id="btn-reset">Сбросить демо-заявки</button>
+    </p>
+  </main>
+
+  <!-- Окно работы с заявкой -->
+  <dialog id="review" class="dialog dialog-review" aria-labelledby="review-title">
+    <div class="dialog-head review-head">
+      <div>
+        <h2 id="review-title"></h2>
+        <div class="review-sub" id="review-sub"></div>
+      </div>
+      <button type="button" class="dialog-close" id="review-close" aria-label="Закрыть">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="dialog-body review-body" id="review-body"></div>
+    <div class="review-foot" id="review-foot"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/assets/js/api.js?v=7"></script>
+  <script src="/assets/js/mock-api.js?v=7"></script>
+  <script src="/assets/js/loans.js?v=7"></script>
+  <script src="/assets/js/catalog.js?v=7"></script>
+  <script src="/assets/js/ui.js?v=7"></script>
+  <script src="/assets/js/mock-review.js?v=7"></script>
+  <script src="/assets/js/employee.js?v=7"></script>
+</body>
+</html>
