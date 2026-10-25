@@ -75,7 +75,27 @@ func Run(ctx context.Context, cfg config.Config) error {
 			}
 		}
 	} else {
-		log.Printf("DATABASE_URL is not set; running in web presentation mode (static files + assistant)")
+		log.Printf("DATABASE_URL is not set; running in web presentation mode with in-memory DemoService")
+	}
+
+	if authHandler == nil || authStore == nil || meHandler == nil || appHandler == nil {
+		log.Printf("initializing in-memory DemoService (auth, company bootstrap, applications enabled)")
+		demo := service.NewDemoPackage()
+		if authHandler == nil {
+			authHandler = handler.NewAuthHandler(demo.Auth)
+		}
+		if authStore == nil {
+			authStore = demo.Sessions
+		}
+		if meHandler == nil {
+			meHandler = handler.NewMeHandler(demo.Trust)
+		}
+		if appHandler == nil {
+			appHandler = handler.NewApplicationHandler(demo.Apps)
+		}
+		if idempotency == nil {
+			idempotency = demo.Idempotency
+		}
 	}
 
 	srv := &http.Server{
