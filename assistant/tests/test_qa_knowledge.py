@@ -66,6 +66,27 @@ class TestQAKnowledgeBase(unittest.TestCase):
         self.assertTrue(len(res) > 0)
         self.assertEqual(res[0][0].id, "assistant_capabilities_guide")
 
+    def test_expanded_knowledge_queries(self):
+        # 1. Subsidies
+        res = qa_engine.search("Какие есть льготные программы господдержки и субсидии МСП 1764?", top_k=1)
+        self.assertTrue(len(res) > 0)
+        self.assertEqual(res[0][0].id, "state_subsidies_msp")
+
+        # 2. Franchise
+        res = qa_engine.search("Кредит на открытие франшизы Wildberries или Ozon", top_k=1)
+        self.assertTrue(len(res) > 0)
+        self.assertEqual(res[0][0].id, "franchise_financing")
+
+        # 3. Founder suretyship
+        res = qa_engine.search("Нужно ли поручительство учредителя или бенефициара для ООО?", top_k=1)
+        self.assertTrue(len(res) > 0)
+        self.assertEqual(res[0][0].id, "founder_suretyship")
+
+        # 4. Acquiring discount
+        res = qa_engine.search("Скидка на процентную ставку за эквайринг в Альфа-Банке", top_k=1)
+        self.assertTrue(len(res) > 0)
+        self.assertEqual(res[0][0].id, "acquiring_discount")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -177,6 +177,79 @@ class TestDialogueManager(unittest.TestCase):
         self.assertIn("Альфи", resp.reply)
         self.assertIn("Подбор программы", resp.reply)
 
+    def test_easter_eggs_responses(self):
+        cases = [
+            ("welldone", "туймазы🍚"),
+            ("well done", "туймазы🍚"),
+            ("Артем", "（ ͜.人 ͜.）"),
+            ("артём", "（ ͜.人 ͜.）"),
+            ("Руслан", "52"),
+            ("52", "52"),
+            ("Саня", "🦍"),
+            ("саня", "🦍"),
+            ("Макс", "🤠"),
+            ("макс", "🤠"),
+        ]
+        for msg, expected_reply in cases:
+            req = ChatRequest(session_id="test-egg", message=msg)
+            resp = self.dm.process(req)
+            self.assertEqual(resp.reply, expected_reply, f"Mismatch for '{msg}': got '{resp.reply}'")
+            self.assertEqual(resp.dialogue_state, "CHIT_CHAT")
+
+    def test_chit_chat_conversations(self):
+        req_how = ChatRequest(session_id="test-chat-1", message="Как дела?")
+        resp_how = self.dm.process(req_how)
+        self.assertEqual(resp_how.dialogue_state, "CHIT_CHAT")
+        self.assertIn("отлично", resp_how.reply.lower())
+
+        req_who = ChatRequest(session_id="test-chat-2", message="Кто ты?")
+        resp_who = self.dm.process(req_who)
+        self.assertEqual(resp_who.dialogue_state, "CHIT_CHAT")
+        self.assertIn("Альфи", resp_who.reply)
+
+        req_joke = ChatRequest(session_id="test-chat-3", message="Расскажи анекдот")
+        resp_joke = self.dm.process(req_joke)
+        self.assertEqual(resp_joke.dialogue_state, "CHIT_CHAT")
+        self.assertIn("кредит", resp_joke.reply.lower())
+
+        req_adv = ChatRequest(session_id="test-chat-4", message="Дай финансовый совет")
+        resp_adv = self.dm.process(req_adv)
+        self.assertEqual(resp_adv.dialogue_state, "CHIT_CHAT")
+        self.assertIn("совет", resp_adv.reply.lower())
+
+        req_bye = ChatRequest(session_id="test-chat-5", message="Пока")
+        resp_bye = self.dm.process(req_bye)
+        self.assertEqual(resp_bye.dialogue_state, "CHIT_CHAT")
+        self.assertIn("свидания", resp_bye.reply.lower())
+
+    def test_recommendation_authenticated_vs_unauthenticated_actions(self):
+        # 1. Unauthenticated client
+        req_unauth = ChatRequest(
+            session_id="test-unauth-actions",
+            message="Хочу кредит 1 млн на оборотку",
+            context=ClientContext(is_authenticated=False),
+        )
+        resp_unauth = self.dm.process(req_unauth)
+        self.assertEqual(resp_unauth.dialogue_state, "RECOMMENDATION")
+        self.assertEqual(len(resp_unauth.actions), 2)
+        self.assertEqual(resp_unauth.actions[0].type, "apply_calculator")
+        self.assertIn("Вставить", resp_unauth.actions[0].label)
+        self.assertEqual(resp_unauth.actions[1].type, "apply_wizard")
+        self.assertEqual(resp_unauth.actions[1].label, "Оформить кредит")
+
+        # 2. Authenticated client
+        req_auth = ChatRequest(
+            session_id="test-auth-actions",
+            message="Хочу кредит 1 млн на оборотку",
+            context=ClientContext(is_authenticated=True),
+        )
+        resp_auth = self.dm.process(req_auth)
+        self.assertEqual(resp_auth.dialogue_state, "RECOMMENDATION")
+        self.assertEqual(len(resp_auth.actions), 2)
+        self.assertEqual(resp_auth.actions[0].type, "apply_wizard")
+        self.assertEqual(resp_auth.actions[0].label, "Оформить кредит")
+        self.assertEqual(resp_auth.actions[1].type, "apply_calculator")
+
 
 if __name__ == "__main__":
     unittest.main()

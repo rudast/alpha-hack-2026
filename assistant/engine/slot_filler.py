@@ -90,7 +90,44 @@ class SlotFiller:
 
     @classmethod
     def _detect_intent(cls, text: str) -> str:
-        # 0. Bot Capabilities / How to use / Help
+        # 0. Hidden Easter Egg Commands
+        t_stripped = text.strip()
+        if re.search(r"\b(welldone|well\s+done)\b", text) or t_stripped == "welldone":
+            return "easter_egg_welldone"
+
+        if re.search(r"\b(артем|артём|artem)\b", text):
+            return "easter_egg_artem"
+
+        if re.search(r"\b(руслан|ruslan)\b", text) or t_stripped == "52":
+            return "easter_egg_ruslan"
+
+        if re.search(r"\b(саня|саша|sanya|санек|санёк)\b", text):
+            return "easter_egg_sanya"
+
+        if re.search(r"\b(макс|максим|max)\b", text) and not any(w in text for w in ["сум", "лимит", "срок", "ставк", "процент", "платеж"]):
+            return "easter_egg_max"
+
+        # 0.1 Chit-Chat: How are you
+        if re.search(r"\b(как\s+дела|как\s+поживаешь|как\s+настроение|как\s+жизнь|как\s+ты|че\s+как|как\s+оно)\b", text):
+            return "chit_chat_how_are_you"
+
+        # 0.2 Chit-Chat: Who are you / Creator
+        if re.search(r"\b(кто\s+ты|кто\s+тебя\s+создал|как\s+тебя\s+зовут|откуда\s+ты|расскажи\s+о\s+себе|ты\s+человек\s+или|ты\s+бот)\b", text):
+            return "chit_chat_who_are_you"
+
+        # 0.3 Chit-Chat: Joke
+        if re.search(r"\b(анекдот|шутк\w*|пошути|расскажи\s+анекдот|посмеши|знаешь\s+анекдот)\b", text):
+            return "chit_chat_joke"
+
+        # 0.4 Chit-Chat: Advice
+        if re.search(r"\b(дай\s+совет|совет\s+дня|бизнес\s+совет|финансов\w*\s+совет|посоветуй\s+что-нибудь|что\s+посоветуешь)\b", text):
+            return "chit_chat_advice"
+
+        # 0.5 Chit-Chat: Farewell
+        if re.search(r"\b(пока|до\s+свидания|прощай|до\s+встречи|хорошего\s+дня|спокойной\s+ночи|увидимся)\b", text):
+            return "chit_chat_farewell"
+
+        # 0.6 Bot Capabilities / How to use / Help
         if re.search(r"\b(что\s+ты\s+(умеешь|можешь)|чем\s+(ты\s+)?(можешь\s+)?помочь|как\s+(тобой\s+)?пользоваться|что\s+тебе\s+написать|что\s+(можно\s+)?(тебе\s+)?написать|какие\s+команды|возможности)\b", text):
             return "bot_capabilities"
 
