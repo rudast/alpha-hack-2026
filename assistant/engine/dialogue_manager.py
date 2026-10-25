@@ -68,7 +68,45 @@ class DialogueManager:
         extracted = SlotFiller.extract(text)
         session.slots = session.slots.merge_with(extracted)
 
-        # 0. Bot Capabilities Guide
+        # 0. Easter Egg Commands
+        if extracted.intent == "easter_egg_welldone":
+            res = templates.render_easter_egg("welldone")
+            session.dialogue_state = res["dialogue_state"]
+            return ChatResponse(session_id=session.session_id, **res)
+
+        if extracted.intent == "easter_egg_artem":
+            res = templates.render_easter_egg("artem")
+            session.dialogue_state = res["dialogue_state"]
+            return ChatResponse(session_id=session.session_id, **res)
+
+        if extracted.intent == "easter_egg_ruslan":
+            res = templates.render_easter_egg("ruslan")
+            session.dialogue_state = res["dialogue_state"]
+            return ChatResponse(session_id=session.session_id, **res)
+
+        if extracted.intent == "easter_egg_sanya":
+            res = templates.render_easter_egg("sanya")
+            session.dialogue_state = res["dialogue_state"]
+            return ChatResponse(session_id=session.session_id, **res)
+
+        if extracted.intent == "easter_egg_max":
+            res = templates.render_easter_egg("max")
+            session.dialogue_state = res["dialogue_state"]
+            return ChatResponse(session_id=session.session_id, **res)
+
+        # 0.1 Chit-Chat Commands
+        if extracted.intent in (
+            "chit_chat_how_are_you",
+            "chit_chat_who_are_you",
+            "chit_chat_joke",
+            "chit_chat_advice",
+            "chit_chat_farewell",
+        ):
+            res = templates.render_chit_chat(extracted.intent)
+            session.dialogue_state = res["dialogue_state"]
+            return ChatResponse(session_id=session.session_id, **res)
+
+        # 0.2 Bot Capabilities Guide
         if extracted.intent == "bot_capabilities":
             guide_item = qa_engine.get_by_id("assistant_capabilities_guide")
             if guide_item:

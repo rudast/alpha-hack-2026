@@ -106,6 +106,9 @@
         return;
       }
 
+      // Isolate history per user account: reset if user logged in, logged out, or switched accounts
+      this.syncAccountSession();
+
       this.loadHistory();
       this.renderWidget();
       this.bindEvents();
@@ -132,6 +135,30 @@
 
       // Attract attention: show tooltip at 2.5s and auto-open window at 5s
       this.scheduleAttentionTrigger();
+    },
+
+    syncAccountSession: function () {
+      var currentToken = (window.Auth && typeof window.Auth.token === 'function') ? (window.Auth.token() || '') : '';
+      var savedToken = null;
+      try {
+        savedToken = sessionStorage.getItem('alfa_assistant_token');
+      } catch (e) {}
+
+      // If token changed (user logged in, logged out, or switched accounts)
+      if (savedToken !== null && currentToken !== savedToken) {
+        try {
+          sessionStorage.removeItem(STORAGE_KEY_HISTORY);
+          sessionStorage.removeItem(STORAGE_KEY_SESSION);
+        } catch (e) {}
+        this.history = [];
+        this.sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+        try {
+          sessionStorage.setItem(STORAGE_KEY_SESSION, this.sessionId);
+        } catch (e) {}
+      }
+      try {
+        sessionStorage.setItem('alfa_assistant_token', currentToken);
+      } catch (e) {}
     },
 
     loadHistory: function () {
@@ -408,12 +435,18 @@
 
     clearHistory: function () {
       this.history = [];
+      this.sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
       try {
         sessionStorage.removeItem(STORAGE_KEY_HISTORY);
+        sessionStorage.setItem(STORAGE_KEY_SESSION, this.sessionId);
       } catch (e) {}
       var container = document.getElementById('assistant-messages-list');
       if (container) container.innerHTML = '';
       this.fetchGreeting();
+    },
+
+    resetSession: function () {
+      this.clearHistory();
     },
 
     fetchGreeting: function () {
@@ -461,6 +494,32 @@
     },
 
     fallbackResponse: function (text) {
+      var tLower = (text || '').toLowerCase().trim();
+      var easterEggs = {
+        'welldone': 'туймазы🍚',
+        'well done': 'туймазы🍚',
+        'артем': '（ ͜.人 ͜.）',
+        'артём': '（ ͜.人 ͜.）',
+        'artem': '（ ͜.人 ͜.）',
+        'руслан': '52',
+        'ruslan': '52',
+        'саня': '🦍',
+        'саша': '🦍',
+        'sanya': '🦍',
+        'макс': '🍑',
+        'максим': '🍑',
+        'max': '🍑',
+      };
+      if (easterEggs.hasOwnProperty(tLower)) {
+        this.addBotMessage({
+          reply: easterEggs[tLower],
+          recommended_products: [],
+          actions: [],
+          quick_replies: ['3 млн на маркетплейсы', 'Оборотные средства 1 млн', 'Что ты умеешь?'],
+        });
+        return;
+      }
+
       // Offline / network fallback using loans.js if available
       var reply = 'Я подобрал для вас подходящие условия из каталога банка.';
       var actions = [];
@@ -547,9 +606,19 @@
       var bubble = document.createElement('div');
       bubble.className = 'msg-bubble';
 
+      // Safely escape HTML to prevent XSS before parsing markdown
+      var raw = msg.text || '';
+      var safeText = raw
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
       // Parse markdown-like bold and bullet lists
-      var formatted = (msg.text || '')
+      var formatted = safeText
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/\n\n/g, '</p><p>')
         .replace(/\n• /g, '<br>• ')
         .replace(/\n/g, '<br>');

@@ -19,6 +19,15 @@
 
   var Auth = {
     save: function (session) {
+      var prevToken = null;
+      try {
+        var prevRaw = localStorage.getItem(KEY);
+        if (prevRaw) {
+          var prevData = JSON.parse(prevRaw);
+          prevToken = prevData.token;
+        }
+      } catch (e) {}
+
       var data = {
         token: session.token,
         role: session.role,
@@ -26,8 +35,21 @@
       };
       try {
         localStorage.setItem(KEY, JSON.stringify(data));
+        // If switching accounts or logging in with a new token, wipe previous account's assistant history and draft
+        if (prevToken && prevToken !== session.token) {
+          sessionStorage.removeItem('alfa_assistant_history');
+          sessionStorage.removeItem('alfa_assistant_session');
+          sessionStorage.removeItem('alfa_assistant_token');
+          sessionStorage.removeItem('alfa_assistant_state');
+          sessionStorage.removeItem('alfa_assistant_user_dismissed');
+          sessionStorage.removeItem('loan_draft');
+        }
+        sessionStorage.setItem('alfa_assistant_token', session.token || '');
       } catch (e) {
         /* приватный режим браузера: токен не сохранится, вход будет работать только до перезагрузки */
+      }
+      if (prevToken && prevToken !== session.token && window.AlfaAssistant && typeof window.AlfaAssistant.clearHistory === 'function') {
+        window.AlfaAssistant.clearHistory();
       }
     },
 
@@ -49,7 +71,17 @@
     clear: function () {
       try {
         localStorage.removeItem(KEY);
+        // Clear all session storage so previous account history never leaks into the next account
+        sessionStorage.removeItem('alfa_assistant_history');
+        sessionStorage.removeItem('alfa_assistant_session');
+        sessionStorage.removeItem('alfa_assistant_token');
+        sessionStorage.removeItem('alfa_assistant_state');
+        sessionStorage.removeItem('alfa_assistant_user_dismissed');
+        sessionStorage.removeItem('loan_draft');
       } catch (e) {}
+      if (window.AlfaAssistant && typeof window.AlfaAssistant.clearHistory === 'function') {
+        window.AlfaAssistant.clearHistory();
+      }
     },
 
     requireLogin: function () {

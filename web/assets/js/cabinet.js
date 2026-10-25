@@ -732,6 +732,9 @@
   $('btn-logout').addEventListener('click', function () {
     LoanDraft.clear(); // расчёт принадлежит этой сессии
     Auth.clear();
+    try {
+      sessionStorage.clear();
+    } catch (e) {}
     window.location.replace('/login/');
   });
 
