@@ -19,8 +19,17 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	httpAddr := os.Getenv("HTTP_ADDR")
+	if httpAddr == "" {
+		if port := os.Getenv("PORT"); port != "" {
+			httpAddr = ":" + port
+		} else {
+			httpAddr = ":8080"
+		}
+	}
+
 	cfg := Config{
-		HTTPAddr:             getenv("HTTP_ADDR", ":8080"),
+		HTTPAddr:             httpAddr,
 		WebDir:               getenv("WEB_DIR", "web"),
 		DatabaseURL:          os.Getenv("DATABASE_URL"),
 		RedisAddr:            getenv("REDIS_ADDR", "localhost:6379"),

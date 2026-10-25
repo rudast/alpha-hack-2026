@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "app": {
+      "root": ".",
+      "runtime": "go",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "assistant",
+          "format": "url",
+          "env": "ASSISTANT_URL"
+        }
+      ]
+    },
+    "assistant": {
+      "root": "assistant",
+      "framework": "fastapi",
+      "entrypoint": "main:app"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/v1/assistant/(.*)",
+      "destination": {
+        "service": "assistant"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "app"
+      }
+    }
+  ]
+}
