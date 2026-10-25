@@ -44,27 +44,36 @@ func New(d Deps) http.Handler {
 	}
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Post("/auth/login", d.Auth.Login)
-		r.Post("/auth/verify", d.Auth.Verify)
-
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.Authenticate(d.Sessions))
+		if d.Auth != nil && d.Sessions != nil && d.Applications != nil && d.Me != nil {
+			r.Post("/auth/login", d.Auth.Login)
+			r.Post("/auth/verify", d.Auth.Verify)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole(domain.RoleClient))
-				r.Post("/me/bootstrap", d.Me.Bootstrap)
+				r.Use(middleware.Authenticate(d.Sessions))
 
-				// Изменяющие запросы по заявкам идемпотентны: нужен заголовок Idempotency-Key.
-				idempotent := middleware.Idempotency(d.Idempotency)
-				r.Route("/applications", func(r chi.Router) {
-					r.With(idempotent).Post("/", d.Applications.Create)
-					r.Get("/", d.Applications.List)
-					r.Get("/{id}", d.Applications.Get)
-					r.With(idempotent).Patch("/{id}", d.Applications.Update)
-					r.With(idempotent).Post("/{id}/submit", d.Applications.Submit)
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireRole(domain.RoleClient))
+					r.Post("/me/bootstrap", d.Me.Bootstrap)
+
+					// Изменяющие запросы по заявкам идемпотентны: нужен заголовок Idempotency-Key.
+					idempotent := middleware.Idempotency(d.Idempotency)
+					r.Route("/applications", func(r chi.Router) {
+						r.With(idempotent).Post("/", d.Applications.Create)
+						r.Get("/", d.Applications.List)
+						r.Get("/{id}", d.Applications.Get)
+						r.With(idempotent).Patch("/{id}", d.Applications.Update)
+						r.With(idempotent).Post("/{id}/submit", d.Applications.Submit)
+					})
 				})
 			})
-		})
+		} else {
+			dbNotice := func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+					"error": "database or redis is not configured; specify DATABASE_URL and REDIS_ADDR in environment",
+				})
+			}
+			r.HandleFunc("/*", dbNotice)
+		}
 	})
 
 	r.Handle("/*", http.FileServer(http.Dir(d.WebDir)))
