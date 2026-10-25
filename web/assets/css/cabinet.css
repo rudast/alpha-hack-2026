@@ -46,22 +46,6 @@
   text-decoration: none;
 }
 
-.company-chip {
-  text-align: right;
-  margin-right: 4px;
-  line-height: 1.25;
-}
-
-.company-chip-name {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.company-chip-inn {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
 /* ---------- Каркас ---------- */
 
 .content {
@@ -98,29 +82,6 @@
   color: inherit;
   cursor: pointer;
   text-decoration: underline;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 24px;
-  align-items: start;
-  margin-top: 24px;
-}
-
-.layout-main {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  min-width: 0;
-}
-
-.layout-side {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  position: sticky;
-  top: 16px;
 }
 
 .block-head {
@@ -169,11 +130,6 @@
   vertical-align: middle;
 }
 
-.panel .demo-tag,
-.offer .demo-tag {
-  margin-top: 12px;
-}
-
 /* ---------- Заглушки загрузки ---------- */
 
 .skeleton {
@@ -181,16 +137,6 @@
   background-size: 200% 100%;
   animation: shimmer 1.3s ease-in-out infinite;
   border-radius: var(--radius-m);
-}
-
-.tile.skeleton {
-  min-height: 118px;
-  box-shadow: none;
-}
-
-.card-row.skeleton {
-  height: 160px;
-  border-radius: var(--radius-l);
 }
 
 .skeleton-text {
@@ -291,18 +237,10 @@
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.tile-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--color-text-secondary);
 }
 
 .tile-danger {
@@ -384,14 +322,6 @@
   border-radius: 2px;
   background: var(--color-text-primary);
   box-shadow: 0 0 0 2px var(--color-bg-primary);
-}
-
-.gauge-scale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-  font-size: 10px;
-  color: var(--color-text-tertiary);
 }
 
 /* ---------- Плашки-уведомления ---------- */
@@ -477,160 +407,6 @@
 }
 
 /* ---------- Кредиты ---------- */
-
-#loans {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.loan {
-  background: var(--color-bg-primary);
-  border-radius: var(--radius-l);
-  box-shadow: var(--shadow-card);
-  padding: 22px;
-  border: 1.5px solid transparent;
-}
-
-.loan-overdue {
-  border-color: var(--color-error-border);
-}
-
-.loan-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.loan-title {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.015em;
-}
-
-.loan-meta {
-  margin-top: 2px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.loan-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 200px;
-  gap: 20px;
-  align-items: center;
-  margin-top: 18px;
-}
-
-.loan-left {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.loan-left-value {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.loan-left-of {
-  font-size: 14px;
-  color: var(--color-text-secondary);
-}
-
-.progress {
-  height: 8px;
-  margin-top: 10px;
-  border-radius: 999px;
-  background: var(--color-bg-tertiary);
-  overflow: hidden;
-}
-
-.progress span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-text-primary);
-}
-
-.loan-progress-caption {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.loan-next {
-  padding: 12px 14px;
-  border-radius: var(--radius-m);
-  background: var(--color-bg-secondary);
-}
-
-.loan-next.is-soon {
-  background: var(--color-warning-bg);
-}
-
-.loan-next.is-overdue {
-  background: var(--color-danger-bg);
-}
-
-.loan-next-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.loan-next.is-overdue .loan-next-label,
-.loan-next.is-overdue .loan-next-value {
-  color: var(--color-danger);
-}
-
-.loan-next-value {
-  margin-top: 2px;
-  font-size: 19px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.loan-next-date {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.loan-facts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-bg-tertiary);
-}
-
-.loan-facts dt {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.loan-facts dd {
-  margin-top: 2px;
-  font-size: 15px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.loan-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
-}
 
 /* ---------- Пустые состояния ---------- */
 
@@ -834,29 +610,6 @@
 
 /* ---------- Боковая колонка ---------- */
 
-.panel {
-  background: var(--color-bg-primary);
-  border-radius: var(--radius-l);
-  box-shadow: var(--shadow-card);
-  padding: 20px;
-}
-
-.panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.panel h2 {
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.panel-title {
-  margin-bottom: 8px;
-}
-
 .source-badge {
   font-size: 11px;
   font-weight: 700;
@@ -865,20 +618,6 @@
   background: var(--color-success-bg);
   color: var(--color-success);
   white-space: nowrap;
-}
-
-.profile-name {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 17px;
-  font-weight: 800;
-  margin-bottom: 8px;
-}
-
-.profile-name svg {
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
 }
 
 .kv-list .kv {
@@ -1864,28 +1603,11 @@ select.text-input {
   .summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .layout-side {
-    position: static;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  }
 }
 
 @media (max-width: 760px) {
   .topbar {
     flex-wrap: wrap;
-  }
-  .company-chip {
-    display: none;
-  }
-  .loan-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .loan-facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .fields {
     grid-template-columns: minmax(0, 1fr);
@@ -1975,4 +1697,1335 @@ select.text-input {
 
 .prepay-overdue {
   margin: 0 0 16px;
+}
+
+/* ==========================================================================
+   Главная: одна колонка, профиль компании — в выезжающей панели
+   ========================================================================== */
+
+:root {
+  /* График остатка долга */
+  --chart-line: #ef3124;
+  --chart-grid: #eceef0;
+  --chart-axis: #8a949e;
+}
+
+#view-overview .block {
+  margin-top: 32px;
+}
+
+.tile.skeleton {
+  min-height: 104px;
+  box-shadow: none;
+}
+
+.card-row.skeleton {
+  height: 196px;
+  border-radius: var(--radius-l);
+}
+
+/* Компания в шапке — кнопка, открывающая профиль */
+
+.company-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.company-chip:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.company-chip-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.company-chip-name {
+  font-size: 14px;
+  font-weight: 700;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.company-chip-inn {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.company-chip-chevron {
+  color: var(--color-text-tertiary);
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0b1f35 0%, #2a4a70 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.avatar-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+  border-radius: 16px;
+}
+
+/* Сводка: только название и сумма */
+
+.tile {
+  display: flex;
+  flex-direction: column;
+}
+
+.tile-value {
+  margin-top: 8px;
+}
+
+.tile-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.tile-chip-warning {
+  background: #ffffff;
+  color: var(--color-warning);
+}
+
+.tile-chip-danger {
+  background: #ffffff;
+  color: var(--color-danger);
+}
+
+.tile .gauge {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.gauge-pin {
+  top: 10px;
+}
+
+/* ---------- Кредиты: компактные карточки в две колонки ---------- */
+
+.loans-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.loans-grid > .empty {
+  grid-column: 1 / -1;
+}
+
+.loan {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-card);
+  padding: 22px;
+  border: 1.5px solid transparent;
+  transition: box-shadow 0.15s ease;
+}
+
+.loan:hover {
+  box-shadow: 0 16px 44px rgba(11, 31, 53, 0.1), 0 2px 8px rgba(11, 31, 53, 0.05);
+}
+
+.loan-overdue {
+  border-color: var(--color-error-border);
+}
+
+.loan-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 26px;
+}
+
+.loan-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.loan-left {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.loan-left-value {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.loan-left-of {
+  font-size: 14px;
+  color: var(--color-text-tertiary);
+}
+
+.progress {
+  height: 6px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: var(--color-bg-tertiary);
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-text-primary);
+}
+
+.loan-overdue .progress span {
+  background: var(--color-danger);
+}
+
+.loan-next {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-secondary);
+  font-size: 14px;
+}
+
+.loan-next-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+}
+
+.loan-next strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.loan-next.is-soon {
+  background: var(--color-warning-bg);
+}
+
+.loan-next.is-soon .loan-next-label {
+  color: var(--color-warning);
+}
+
+.loan-next.is-overdue {
+  background: var(--color-danger-bg);
+}
+
+.loan-next.is-overdue .loan-next-label,
+.loan-next.is-overdue strong {
+  color: var(--color-danger);
+}
+
+.loan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.loan-actions .btn svg {
+  flex-shrink: 0;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+/* ---------- Панель профиля компании ---------- */
+
+.drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(440px, 100vw);
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  box-shadow: -24px 0 80px rgba(11, 31, 53, 0.2);
+  overflow: hidden;
+}
+
+.drawer[open] {
+  display: flex;
+  flex-direction: column;
+  animation: drawer-in 0.22s ease-out;
+}
+
+.drawer::backdrop {
+  background: rgba(11, 31, 53, 0.4);
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+
+.drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22px 24px 8px;
+}
+
+.drawer-head h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.drawer-body {
+  padding: 8px 24px 32px;
+  overflow-y: auto;
+}
+
+.drawer-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.drawer-name {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.drawer-sub {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.drawer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.pill-success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.drawer-section {
+  margin-top: 22px;
+  padding: 4px 16px;
+  border-radius: var(--radius-l);
+  background: var(--color-bg-secondary);
+}
+
+.drawer-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0 4px;
+}
+
+.drawer-section-head h3 {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.plist .prow {
+  padding: 10px 0;
+}
+
+.plist .prow + .prow {
+  border-top: 1px solid var(--color-bg-tertiary);
+}
+
+.prow dt {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.prow dd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.prow-sub {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.copy-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.copy-btn.copied {
+  color: var(--color-success);
+}
+
+.drawer-body .demo-tag {
+  margin-top: 16px;
+}
+
+/* ---------- Окно кредита: цифры и график остатка ---------- */
+
+.dialog-wide {
+  width: min(880px, calc(100vw - 32px));
+}
+
+.sched-notice {
+  margin: 0 0 16px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fact {
+  padding: 14px 16px;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-secondary);
+}
+
+.fact-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.fact-value {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.fact-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.sched-chart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 24px 0 4px;
+}
+
+.sched-chart-head h3 {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.chart-key {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.chart-key li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.key-paid {
+  background: var(--chart-line);
+}
+
+.key-planned {
+  background: #ffffff;
+  border: 2px solid var(--chart-line);
+}
+
+.key-next {
+  background: var(--color-text-primary);
+  box-shadow: 0 0 0 3px rgba(11, 31, 53, 0.15);
+}
+
+.key-overdue {
+  background: var(--color-danger);
+  box-shadow: 0 0 0 3px rgba(217, 38, 26, 0.2);
+}
+
+/* График */
+
+.bchart {
+  position: relative;
+  width: 100%;
+  margin: 0 -4px;
+}
+
+.bchart-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+  touch-action: pan-y;
+}
+
+.bchart-svg:focus {
+  outline: none;
+}
+
+.bchart-svg:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.bchart-grid line {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.bchart-axis {
+  fill: var(--chart-axis);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bchart-line {
+  fill: none;
+  stroke: var(--chart-line);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.bchart-line-plan {
+  stroke-dasharray: 5 5;
+  opacity: 0.7;
+}
+
+.bchart-today {
+  stroke: var(--color-text-tertiary);
+  stroke-width: 1;
+}
+
+.bchart-today-label {
+  fill: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.bchart-dot {
+  stroke: var(--color-bg-primary);
+  stroke-width: 2;
+}
+
+.bchart-dot-paid,
+.bchart-dot-start {
+  fill: var(--chart-line);
+}
+
+.bchart-dot-planned {
+  fill: var(--color-bg-primary);
+  stroke: var(--chart-line);
+}
+
+.bchart-dot-next {
+  fill: var(--color-text-primary);
+}
+
+.bchart-dot-overdue {
+  fill: var(--color-danger);
+}
+
+.bchart-halo {
+  stroke: none;
+}
+
+.bchart-halo-next {
+  fill: rgba(11, 31, 53, 0.12);
+}
+
+.bchart-halo-overdue {
+  fill: rgba(217, 38, 26, 0.18);
+}
+
+.bchart-dot-focus {
+  stroke-width: 3;
+}
+
+.bchart-cross {
+  stroke: var(--color-text-primary);
+  stroke-width: 1;
+  opacity: 0.25;
+}
+
+.bchart-tip {
+  position: absolute;
+  z-index: 2;
+  min-width: 190px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-primary);
+  box-shadow: 0 12px 32px rgba(11, 31, 53, 0.18), 0 0 0 1px rgba(11, 31, 53, 0.06);
+  pointer-events: none;
+  font-size: 13px;
+}
+
+.bchart-tip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.bchart-tip-date {
+  color: var(--color-text-secondary);
+}
+
+.bchart-tip-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.bchart-tip-paid {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.bchart-tip-next {
+  background: var(--color-progress-bg);
+  color: var(--color-progress);
+}
+
+.bchart-tip-overdue {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.bchart-tip-value {
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.bchart-tip-caption {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  margin-bottom: 6px;
+}
+
+.bchart-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 4px;
+  color: var(--color-text-secondary);
+}
+
+.bchart-tip-row strong {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+/* Таблица — запасной вид под графиком */
+
+.sched-table {
+  margin-top: 12px;
+}
+
+.sched-table summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-progress);
+  cursor: pointer;
+  list-style: none;
+}
+
+.sched-table summary::-webkit-details-marker {
+  display: none;
+}
+
+.sched-table summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.15s ease;
+}
+
+.sched-table[open] summary::after {
+  transform: rotate(-135deg) translateY(-1px);
+}
+
+.sched-table .table-wrap {
+  margin-top: 12px;
+  max-height: 40vh;
+}
+
+.sched-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-bg-tertiary);
+}
+
+/* Адаптив новых блоков — после базовых правил, иначе они их не перебьют */
+
+.topbar-actions .btn-inline {
+  white-space: nowrap;
+}
+
+@media (max-width: 1080px) {
+  .loans-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .company-chip-text,
+  .company-chip-chevron {
+    display: none;
+  }
+  .company-chip {
+    height: 40px;
+    padding: 1px;
+  }
+  .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar-actions {
+    gap: 8px;
+  }
+  .drawer {
+    width: 100vw;
+    border-radius: 0;
+  }
+  .facts {
+    gap: 8px;
+  }
+  .fact {
+    padding: 12px;
+  }
+  .fact-value {
+    font-size: 16px;
+  }
+  .loan-left-value {
+    font-size: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer[open] {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Кнопка в шапке блока, кредитная история, поле даты
+   ========================================================================== */
+
+.block-head .block-action {
+  margin-left: auto;
+  align-self: center;
+}
+
+.notice-success {
+  background: var(--color-success-bg);
+  color: #0b4f2e;
+}
+
+.notice-success svg {
+  color: var(--color-success);
+}
+
+.pill-progress {
+  background: var(--color-progress-bg);
+  color: var(--color-progress);
+}
+
+.pill-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+/* ---------- Кредитная история: свёрнута, раскрывается по клику ---------- */
+
+.loan-history {
+  margin-top: 16px;
+}
+
+.history-toggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 20px;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-l);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.history-toggle:hover {
+  background: var(--color-bg-primary);
+  border-color: var(--color-text-tertiary);
+}
+
+.history-toggle[aria-expanded='true'] {
+  border-style: solid;
+  background: var(--color-bg-primary);
+  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  border-bottom-color: transparent;
+}
+
+.history-toggle-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.history-toggle-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-toggle-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.history-toggle-sub {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.history-toggle-chevron {
+  color: var(--color-text-tertiary);
+  display: flex;
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+
+.history-toggle[aria-expanded='true'] .history-toggle-chevron {
+  transform: rotate(-90deg);
+}
+
+.history-list {
+  border: 1.5px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-l) var(--radius-l);
+  background: var(--color-bg-primary);
+  padding: 4px 8px 8px;
+  animation: history-in 0.2s ease-out;
+}
+
+@keyframes history-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.closed {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 12px;
+  border: none;
+  border-radius: var(--radius-m);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.closed + .closed {
+  border-top: 1px solid var(--color-bg-tertiary);
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+}
+
+.closed:hover {
+  background: var(--color-bg-secondary);
+}
+
+.closed-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closed-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.closed-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.closed-dates {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.closed-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.closed-sum {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 120px;
+}
+
+.closed-sum strong {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.closed-sum span {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.closed-chevron {
+  color: var(--color-text-tertiary);
+  display: flex;
+}
+
+/* ---------- Поле даты и календарь ---------- */
+
+.date-field {
+  position: relative;
+}
+
+.date-input {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 4px 0 14px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-secondary);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.date-input:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.date-input:focus-within,
+.date-field.is-open .date-input {
+  background: var(--color-bg-primary);
+  border-color: var(--color-border-focus);
+}
+
+.field.has-error .date-input {
+  background: var(--color-error-bg);
+  border-color: var(--color-error-text);
+}
+
+.date-input input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.date-input input::placeholder {
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.date-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.date-btn:hover,
+.date-field.is-open .date-btn {
+  background: var(--color-bg-secondary);
+  color: var(--color-accent);
+}
+
+.cal {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 312px;
+  padding: 14px;
+  border-radius: var(--radius-l);
+  background: var(--color-bg-primary);
+  box-shadow: 0 18px 48px rgba(11, 31, 53, 0.2), 0 0 0 1px rgba(11, 31, 53, 0.06);
+  animation: cal-in 0.16s ease-out;
+}
+
+@keyframes cal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cal-nav {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.cal-nav:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.cal-title {
+  height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cal-title:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+}
+
+.cal-title:disabled {
+  cursor: default;
+}
+
+.cal-weekdays,
+.cal-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cal-weekdays span {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+}
+
+.cal-weekdays span:nth-child(n + 6) {
+  color: var(--color-accent);
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.cal-day:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+}
+
+.cal-day.is-other {
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+}
+
+.cal-day.is-today {
+  box-shadow: inset 0 0 0 1.5px var(--color-text-primary);
+}
+
+.cal-day.is-selected,
+.cal-cell.is-selected {
+  background: var(--color-accent);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.cal-day.is-selected:hover,
+.cal-cell.is-selected:hover {
+  background: var(--color-accent-hover);
+}
+
+.cal-day:disabled,
+.cal-cell:disabled {
+  color: var(--color-border);
+  cursor: not-allowed;
+}
+
+.cal-months,
+.cal-years {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.cal-cell {
+  height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cal-cell:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+}
+
+.cal-cell.is-today:not(.is-selected) {
+  box-shadow: inset 0 0 0 1.5px var(--color-text-primary);
+}
+
+.cal-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-bg-tertiary);
+}
+
+.cal-today {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cal-today:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+@media (max-width: 760px) {
+  .closed {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .closed-pills {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+  .closed-sum {
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .closed-chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .block-head {
+    flex-wrap: wrap;
+  }
+  .cal {
+    width: min(312px, calc(100vw - 32px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-list,
+  .cal {
+    animation: none;
+  }
+}
+
+.bchart-dense .bchart-dot {
+  stroke-width: 1;
+}
+
+.bchart-dense .bchart-dot-planned {
+  stroke-width: 1.5;
+}
+
+/* Фон страницы и вторичной кнопки совпадают — даём кнопке в шапке блока белую подложку */
+.block-head .block-action {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+}
+
+.block-head .block-action:hover {
+  background: var(--color-bg-tertiary);
 }

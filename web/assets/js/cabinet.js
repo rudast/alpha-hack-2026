@@ -136,73 +136,145 @@
     return m ? '+7 ' + m[1] + ' ' + m[2] + '-' + m[3] + '-' + m[4] : p || '—';
   }
 
-  function maskAccount(acc) {
-    return acc ? '•••• ' + acc.slice(-4) : '—';
-  }
-
   function row(label, value) {
     return '<div class="kv"><dt>' + esc(label) + '</dt><dd>' + value + '</dd></div>';
+  }
+
+  // «ООО «Демо Торг»» → «ДТ», «ИП Иванов Демо» → «ИД»
+  function initials(name) {
+    var words = String(name || '')
+      .replace(/^(ООО|ИП|АО|ПАО|ЗАО)\s+/i, '')
+      .replace(/[«»"]/g, '')
+      .split(/\s+/)
+      .filter(Boolean);
+    return (words.slice(0, 2).map(function (w) { return w[0]; }).join('') || '?').toUpperCase();
+  }
+
+  function copyBtn(value, label) {
+    return '<button type="button" class="copy-btn" data-copy="' + esc(value) + '" aria-label="Скопировать ' + esc(label) + '" title="Скопировать">' +
+      icon('copy', 16) + '</button>';
+  }
+
+  function prow(label, value, copy) {
+    return '<div class="prow"><dt>' + esc(label) + '</dt><dd><span>' + value + '</span>' + (copy || '') + '</dd></div>';
   }
 
   function renderProfile(res) {
     var me = state.me;
     if (!me) {
-      $('profile').innerHTML = '<p class="muted">' + esc(errorText(res, 'профиль')) + '</p>';
-      $('contacts').innerHTML = '';
+      $('drawer-body').innerHTML = '<p class="muted">' + esc(errorText(res, 'профиль')) + '</p>';
       return;
     }
     var c = me.company;
     var u = me.user;
+    var ip = c.org_type === 'IP';
 
     $('greeting').textContent = greetingWord() + ', ' + firstNames(u.full_name);
-    $('greeting-sub').textContent = c.name + ' · ИНН ' + c.inn;
+    $('greeting-sub').textContent = c.name;
+    $('chip-avatar').textContent = initials(c.name);
     $('chip-name').textContent = c.name;
     $('chip-inn').textContent = 'ИНН ' + c.inn;
     $('company-chip').classList.remove('hidden');
 
-    $('profile').innerHTML =
-      '<div class="profile-name">' + icon('building', 20) + '<span>' + esc(c.name) + '</span></div>' +
-      '<dl class="kv-list">' +
-      row('ИНН', esc(c.inn)) +
-      row(c.org_type === 'IP' ? 'ОГРНИП' : 'ОГРН', esc(c.ogrn)) +
-      row('Дата регистрации', esc(fmt.date(c.registration_date)) + '<span class="kv-sub">в бизнесе ' + esc(fmt.age(c.registration_date)) + '</span>') +
-      row('ОКВЭД', esc(c.okved) + (c.okved_title ? '<span class="kv-sub">' + esc(c.okved_title) + '</span>' : '')) +
-      row(c.org_type === 'IP' ? 'Предприниматель' : 'Руководитель', esc(c.director)) +
-      row('Адрес', esc(c.address)) +
-      row('Расчётный счёт', '<span title="' + esc(c.account_number) + '">' + esc(maskAccount(c.account_number)) + '</span>') +
-      '</dl>' + demoTag('GET', '/me');
+    $('drawer-body').innerHTML =
+      '<div class="drawer-hero">' +
+      '<div class="avatar avatar-lg">' + esc(initials(c.name)) + '</div>' +
+      '<div>' +
+      '<div class="drawer-name">' + esc(c.name) + '</div>' +
+      '<div class="drawer-sub">' + (ip ? 'Индивидуальный предприниматель' : 'Общество с ограниченной ответственностью') + '</div>' +
+      '</div>' +
+      '</div>' +
+      '<div class="drawer-badges">' +
+      '<span class="pill pill-success">' + icon('check', 14) + 'Действующая</span>' +
+      '<span class="pill">в бизнесе ' + esc(fmt.age(c.registration_date)) + '</span>' +
+      '<span class="pill">ОКВЭД ' + esc(c.okved) + '</span>' +
+      '</div>' +
 
-    $('contacts').innerHTML =
-      '<dl class="kv-list">' +
-      row('Представитель', esc(u.full_name) + '<span class="kv-sub">' + esc(u.position) + '</span>') +
-      row('Телефон', esc(formatPhone(u.phone))) +
-      row('Почта', esc(u.email || '—')) +
-      '</dl>';
+      '<section class="drawer-section">' +
+      '<div class="drawer-section-head"><h3>Реквизиты</h3><span class="source-badge" title="Сведения из государственного реестра, изменить их можно только в ФНС">из ЕГРЮЛ</span></div>' +
+      '<dl class="plist">' +
+      prow('ИНН', esc(c.inn), copyBtn(c.inn, 'ИНН')) +
+      prow(ip ? 'ОГРНИП' : 'ОГРН', esc(c.ogrn), copyBtn(c.ogrn, ip ? 'ОГРНИП' : 'ОГРН')) +
+      prow('Дата регистрации', esc(fmt.date(c.registration_date))) +
+      prow('Вид деятельности', esc(c.okved_title || c.okved)) +
+      prow(ip ? 'Предприниматель' : 'Руководитель', esc(c.director)) +
+      prow('Адрес', esc(c.address)) +
+      '</dl>' +
+      '</section>' +
+
+      '<section class="drawer-section">' +
+      '<div class="drawer-section-head"><h3>Расчётный счёт</h3></div>' +
+      '<dl class="plist">' +
+      prow('Счёт', esc(c.account_number), copyBtn(c.account_number, 'номер счёта')) +
+      '</dl>' +
+      '</section>' +
+
+      '<section class="drawer-section">' +
+      '<div class="drawer-section-head"><h3>Контакты</h3></div>' +
+      '<dl class="plist">' +
+      prow('Представитель', esc(u.full_name) + '<span class="prow-sub">' + esc(u.position) + '</span>') +
+      prow('Телефон', esc(formatPhone(u.phone))) +
+      prow('Почта', esc(u.email || '—')) +
+      '</dl>' +
+      '</section>' +
+      demoTag('GET', '/me');
   }
+
+  // ---------- Панель профиля ----------
+
+  var drawer = $('profile-drawer');
+
+  function openDrawer() {
+    if (typeof drawer.showModal === 'function') drawer.showModal();
+    else drawer.setAttribute('open', '');
+  }
+
+  function closeDrawer() {
+    if (typeof drawer.close === 'function') drawer.close();
+    else drawer.removeAttribute('open');
+  }
+
+  $('company-chip').addEventListener('click', openDrawer);
+  $('drawer-close').addEventListener('click', closeDrawer);
+  drawer.addEventListener('click', function (e) {
+    if (e.target === drawer) closeDrawer();
+    var btn = e.target.closest('[data-copy]');
+    if (!btn || !navigator.clipboard) return;
+    navigator.clipboard.writeText(btn.dataset.copy).then(function () {
+      btn.classList.add('copied');
+      btn.innerHTML = icon('check', 16);
+      setTimeout(function () {
+        btn.classList.remove('copied');
+        btn.innerHTML = icon('copy', 16);
+      }, 1500);
+    });
+  });
 
   // ---------- Сводка ----------
 
-  function tile(label, value, sub, tone, extra) {
+  function tile(label, value, tone, extra) {
     return (
       '<div class="tile' + (tone ? ' tile-' + tone : '') + '">' +
       '<div class="tile-label">' + label + '</div>' +
       '<div class="tile-value">' + value + '</div>' +
-      (sub ? '<div class="tile-sub">' + sub + '</div>' : '') +
       (extra || '') +
       '</div>'
     );
   }
 
-  // Шкала долговой нагрузки 0…3: отметки на 1 и 2, всё, что выше 3, упирается в край
+  // Шкала долговой нагрузки 0…3: зелёная до 1, жёлтая до 2, красная дальше
   function gauge(ratio) {
     var pos = ratio == null ? 100 : Math.min(ratio / 3, 1) * 100;
     return (
       '<div class="gauge" aria-hidden="true">' +
       '<div class="gauge-track"><span class="g-ok"></span><span class="g-mid"></span><span class="g-high"></span></div>' +
       '<div class="gauge-pin" style="left:' + pos.toFixed(1) + '%"></div>' +
-      '<div class="gauge-scale"><span>0</span><span>1</span><span>2</span><span>3+</span></div>' +
       '</div>'
     );
+  }
+
+  function chip(text, tone) {
+    return '<span class="tile-chip' + (tone ? ' tile-chip-' + tone : '') + '">' + esc(text) + '</span>';
   }
 
   function renderSummary() {
@@ -211,51 +283,25 @@
     var html = '';
 
     // 1. Общий долг (из БКИ — по всем банкам)
-    if (b && b.total_debt != null) {
-      var ours = loans ? loans.reduce(function (s, l) { return s + l.principal_left; }, 0) : null;
-      var sub = 'по всем банкам';
-      if (ours === 0) sub = 'весь долг — в других банках';
-      else if (ours != null) sub = 'у нас ' + fmt.short(ours) + ' · в других банках ' + fmt.short(Math.max(0, b.total_debt - ours));
-      html += tile('Общий долг', fmt.rub(b.total_debt), esc(sub));
-    } else {
-      html += tile('Общий долг', '—', 'данные ещё не получены');
-    }
+    html += tile('Общий долг', b && b.total_debt != null ? fmt.rub(b.total_debt) : '—');
 
     // 2. Ежемесячные платежи по нашим кредитам
-    if (loans) {
-      var monthly = loans.reduce(function (s, l) { return s + l.monthly_payment; }, 0);
-      html += tile(
-        'Платежи в месяц',
-        loans.length ? fmt.rub(monthly) : '0 ₽',
-        loans.length ? 'по ' + loans.length + ' ' + UI.plural(loans.length, 'кредиту', 'кредитам', 'кредитам') + ' в нашем банке' : 'кредитов в нашем банке нет'
-      );
-    } else {
-      html += tile('Платежи в месяц', '—', 'не удалось загрузить');
-    }
+    var monthly = loans ? loans.reduce(function (s, l) { return s + l.monthly_payment; }, 0) : null;
+    html += tile('Платежи в месяц', loans ? fmt.rub(monthly) : '—');
 
     // 3. Ближайший платёж (просрочка важнее)
     var overdue = loans ? loans.filter(function (l) { return l.status === 'OVERDUE'; }) : [];
     if (overdue.length) {
       var od = overdue[0];
-      html += tile(
-        'Просроченный платёж',
-        fmt.rub(od.overdue_amount),
-        'с ' + esc(fmt.dateShort(od.next_payment.date)) + ' · ' + esc(od.product_name),
-        'danger'
-      );
+      html += tile('Просрочен платёж', fmt.rub(od.overdue_amount) + chip('с ' + fmt.dateShort(od.next_payment.date), 'danger'), 'danger');
     } else if (loans && loans.length) {
       var next = loans
         .filter(function (l) { return l.next_payment; })
         .sort(function (a, b) { return a.next_payment.date < b.next_payment.date ? -1 : 1; })[0];
-      var days = UI.daysUntil(next.next_payment.date);
-      html += tile(
-        'Ближайший платёж',
-        fmt.rub(next.next_payment.amount),
-        esc(fmt.dateShort(next.next_payment.date)) + ', ' + esc(fmt.relDays(next.next_payment.date)),
-        days <= 3 ? 'warning' : ''
-      );
+      var soon = UI.daysUntil(next.next_payment.date) <= 3;
+      html += tile('Ближайший платёж', fmt.rub(next.next_payment.amount) + chip(fmt.dateShort(next.next_payment.date), soon ? 'warning' : ''), soon ? 'warning' : '');
     } else {
-      html += tile('Ближайший платёж', '—', loans ? 'платежей нет' : 'не удалось загрузить');
+      html += tile('Ближайший платёж', '—');
     }
 
     // 4. Долговая нагрузка
@@ -265,12 +311,10 @@
         'Долг / капитал',
         esc(fmt.ratio(b.debt_to_equity)) + ' <span class="level level-' + level.tone + '">' + level.label + '</span>',
         '',
-        '',
-        gauge(b.debt_to_equity) +
-          '<div class="tile-sub" title="' + esc(level.text) + '">капитал ' + esc(fmt.short(b.equity)) + '</div>'
+        gauge(b.debt_to_equity)
       );
     } else {
-      html += tile('Долг / капитал', '—', 'данные ещё не получены');
+      html += tile('Долг / капитал', '—');
     }
 
     $('summary').innerHTML = html;
@@ -313,57 +357,33 @@
 
   function loanCard(l) {
     var paidShare = Math.max(0, Math.min(1, (l.amount - l.principal_left) / l.amount));
-    var days = l.next_payment ? UI.daysUntil(l.next_payment.date) : null;
     var overdue = l.status === 'OVERDUE';
-    var soon = !overdue && days != null && days <= 3;
-
-    var nextHtml = l.next_payment
-      ? '<div class="loan-next' + (overdue ? ' is-overdue' : soon ? ' is-soon' : '') + '">' +
-        '<div class="loan-next-label">' + (overdue ? 'Просрочен платёж' : 'Ближайший платёж') + '</div>' +
-        '<div class="loan-next-value">' + fmt.rub(l.next_payment.amount) + '</div>' +
-        '<div class="loan-next-date">' + esc(fmt.dateShort(l.next_payment.date)) + ' · ' + esc(fmt.relDays(l.next_payment.date)) + '</div>' +
-        '</div>'
-      : '';
+    var soon = !overdue && l.next_payment && UI.daysUntil(l.next_payment.date) <= 3;
 
     return (
       '<article class="loan' + (overdue ? ' loan-overdue' : '') + '">' +
       '<div class="loan-top">' +
-      '<div>' +
       '<div class="loan-title">' + esc(l.product_name) + '</div>' +
-      '<div class="loan-meta">Договор № ' + esc(l.contract_number) + ' · от ' + esc(fmt.date(l.issued_at)) + '</div>' +
-      '</div>' +
-      '<span class="badge badge-' + (overdue ? 'danger' : 'success') + '">' + (overdue ? 'Просрочка' : 'Активен') + '</span>' +
+      (overdue ? '<span class="badge badge-danger">Просрочка</span>' : '') +
       '</div>' +
 
-      '<div class="loan-body">' +
-      '<div class="loan-progress">' +
       '<div class="loan-left"><span class="loan-left-value">' + fmt.rub(l.principal_left) + '</span>' +
-      '<span class="loan-left-of">осталось из ' + fmt.rub(l.amount) + '</span></div>' +
-      '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(paidShare * 100) + '" aria-label="Выплачено основного долга">' +
+      '<span class="loan-left-of">из ' + fmt.rub(l.amount) + '</span></div>' +
+      '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(paidShare * 100) +
+      '" aria-label="Выплачено ' + Math.round(paidShare * 100) + '% основного долга">' +
       '<span style="width:' + (paidShare * 100).toFixed(1) + '%"></span></div>' +
-      '<div class="loan-progress-caption">' +
-      '<span>Выплачено ' + Math.round(paidShare * 100) + '% долга · ' + l.payments_made + ' из ' + l.payments_total + ' платежей</span>' +
-      '<span>Уплачено всего ' + fmt.rub(l.paid_total) + '</span>' +
-      '</div>' +
-      '</div>' +
-      nextHtml +
-      '</div>' +
 
-      '<dl class="loan-facts">' +
-      '<div><dt>Ставка</dt><dd>' + fmt.rate(l.rate) + '</dd></div>' +
-      '<div><dt>Платёж в месяц</dt><dd>' + fmt.rub(l.monthly_payment) + '</dd></div>' +
-      '<div><dt>Срок</dt><dd>' + fmt.term(l.term_months) + '</dd></div>' +
-      '<div><dt>Погашение до</dt><dd>' + esc(fmt.date(l.maturity_date)) + '</dd></div>' +
-      '</dl>' +
-
-      (overdue
-        ? '<div class="notice notice-danger notice-compact">' + icon('alert', 18) +
-          '<div>Внесите платёж как можно скорее: за просрочку начисляются пени, и она попадает в кредитную историю.</div></div>'
+      (l.next_payment
+        ? '<div class="loan-next' + (overdue ? ' is-overdue' : soon ? ' is-soon' : '') + '">' +
+          '<span class="loan-next-label">' + icon(overdue ? 'alert' : 'calendar', 18) + (overdue ? 'Просрочен с ' : 'Платёж ') +
+          esc(fmt.dateShort(l.next_payment.date)) + '</span>' +
+          '<strong>' + fmt.rub(l.next_payment.amount) + '</strong>' +
+          '</div>'
         : '') +
 
       '<div class="loan-actions">' +
-      '<button type="button" class="btn btn-secondary btn-inline" data-action="schedule" data-loan="' + esc(l.id) + '">График платежей</button>' +
-      '<button type="button" class="btn btn-secondary btn-inline" data-action="prepay" data-loan="' + esc(l.id) + '">Погасить досрочно</button>' +
+      '<button type="button" class="btn btn-secondary btn-inline" data-action="schedule" data-loan="' + esc(l.id) + '">' + icon('chart', 18) + 'График платежей</button>' +
+      '<button type="button" class="btn btn-ghost btn-inline" data-action="prepay" data-loan="' + esc(l.id) + '">Погасить досрочно</button>' +
       '</div>' +
       '</article>'
     );
@@ -394,6 +414,8 @@
         .join('');
     }
 
+    renderHistory();
+
     var others = state.loans.other_banks || [];
     $('other-banks-block').classList.toggle('hidden', !others.length);
     $('other-banks').innerHTML =
@@ -413,8 +435,68 @@
       '<p class="block-note">Эти кредиты учитываются в общем долге и долговой нагрузке. Управлять ими можно только в выдавшем банке.</p>';
   }
 
+  // ---------- Кредитная история (закрытые кредиты) ----------
+
+  var historyOpen = false;
+
+  // «апр 2023»
+  var monthYearFmt = new Intl.DateTimeFormat('ru-RU', { month: 'short', year: 'numeric' });
+
+  function monthYear(value) {
+    return monthYearFmt.format(UI.parseDate(value)).replace(' г.', '').replace('.', '');
+  }
+
+  function closedRow(l) {
+    var pills =
+      (l.closed_early ? '<span class="pill pill-progress">досрочно на ' + fmt.term(l.months_early) + '</span>' : '') +
+      (l.late_payments
+        ? '<span class="pill pill-warning">' + l.late_payments + ' ' + UI.plural(l.late_payments, 'просрочка', 'просрочки', 'просрочек') + '</span>'
+        : '<span class="pill pill-success">' + icon('check', 14) + 'без просрочек</span>');
+    return (
+      '<button type="button" class="closed" data-action="schedule" data-loan="' + esc(l.id) + '">' +
+      '<span class="closed-icon">' + icon('check', 18) + '</span>' +
+      '<span class="closed-main">' +
+      '<span class="closed-title">' + esc(l.product_name) + '</span>' +
+      '<span class="closed-dates">' + esc(monthYear(l.issued_at)) + ' — ' + esc(monthYear(l.closed_at)) + '</span>' +
+      '</span>' +
+      '<span class="closed-pills">' + pills + '</span>' +
+      '<span class="closed-sum"><strong>' + fmt.rub(l.amount) + '</strong><span>переплата ' + fmt.rub(l.overpayment) + '</span></span>' +
+      '<span class="closed-chevron">' + icon('chevron', 18) + '</span>' +
+      '</button>'
+    );
+  }
+
+  function renderHistory() {
+    var box = $('loan-history');
+    var closed = (state.loans && state.loans.closed_loans) || [];
+    box.classList.toggle('hidden', !closed.length);
+    if (!closed.length) return;
+
+    var total = closed.reduce(function (sum, l) { return sum + l.amount; }, 0);
+    var clean = closed.every(function (l) { return !l.late_payments; });
+    box.innerHTML =
+      '<button type="button" class="history-toggle" id="history-toggle" aria-expanded="' + historyOpen + '" aria-controls="history-list">' +
+      '<span class="history-toggle-icon">' + icon('clock', 20) + '</span>' +
+      '<span class="history-toggle-text">' +
+      '<span class="history-toggle-title">Кредитная история</span>' +
+      '<span class="history-toggle-sub">' + closed.length + ' ' + UI.plural(closed.length, 'закрытый кредит', 'закрытых кредита', 'закрытых кредитов') +
+      ' на ' + fmt.short(total) + (clean ? ' · все без просрочек' : '') + '</span>' +
+      '</span>' +
+      '<span class="history-toggle-chevron">' + icon('chevron', 20) + '</span>' +
+      '</button>' +
+      '<div class="history-list" id="history-list"' + (historyOpen ? '' : ' hidden') + '>' +
+      closed.map(closedRow).join('') +
+      '</div>';
+
+    $('history-toggle').addEventListener('click', function () {
+      historyOpen = !historyOpen;
+      this.setAttribute('aria-expanded', String(historyOpen));
+      $('history-list').hidden = !historyOpen;
+    });
+  }
+
   function findLoan(id) {
-    var list = (state.loans && state.loans.loans) || [];
+    var list = state.loans ? (state.loans.loans || []).concat(state.loans.closed_loans || []) : [];
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
     return null;
   }
@@ -470,6 +552,7 @@
       return a.created_at < b.created_at ? 1 : -1;
     });
     $('apps-count').textContent = apps.length || '';
+    $('apps-new').classList.toggle('hidden', !apps.length); // в пустом состоянии своя кнопка
 
     if (!apps.length) {
       box.innerHTML =
@@ -486,9 +569,10 @@
 
   var dialog = $('dialog');
 
-  function openDialog(title, html) {
+  function openDialog(title, html, wide) {
     $('dialog-title').textContent = title;
     $('dialog-body').innerHTML = html;
+    dialog.classList.toggle('dialog-wide', !!wide);
     if (typeof dialog.showModal === 'function') {
       if (!dialog.open) dialog.showModal();
     } else {
@@ -507,9 +591,17 @@
     if (e.target === dialog) closeDialog();
   });
 
-  // График платежей
+  // График платежей: ключевые цифры, график остатка долга, таблица — свёрнутой
+  function fact(label, value, sub) {
+    return '<div class="fact"><div class="fact-label">' + label + '</div><div class="fact-value">' + value + '</div>' +
+      (sub ? '<div class="fact-sub">' + sub + '</div>' : '') + '</div>';
+  }
+
   function showSchedule(loan) {
     var statusLabel = { PAID: 'Оплачен', NEXT: 'Ближайший', OVERDUE: 'Просрочен', PLANNED: '' };
+    var paidShare = Math.round(((loan.amount - loan.principal_left) / loan.amount) * 100);
+    var overdue = loan.status === 'OVERDUE';
+    var closed = loan.status === 'CLOSED';
     var rows = loan.schedule
       .map(function (p) {
         return (
@@ -527,14 +619,67 @@
       .join('');
 
     openDialog(
-      'График платежей',
-      '<p class="dialog-lead">' + esc(loan.product_name) + ' · договор № ' + esc(loan.contract_number) + '</p>' +
+      loan.product_name,
+      '<p class="dialog-lead">Договор № ' + esc(loan.contract_number) + ' от ' + esc(fmt.date(loan.issued_at)) +
+        (closed ? ' · закрыт ' + esc(fmt.date(loan.closed_at)) : '') + '</p>' +
+        (closed ? closedNotice(loan) : '') +
+        (overdue
+          ? '<div class="notice notice-danger notice-compact sched-notice">' + icon('alert', 18) +
+            '<div>Платёж ' + fmt.rub(loan.overdue_amount) + ' просрочен с ' + esc(fmt.dateShort(loan.next_payment.date)) +
+            '. Внесите его как можно скорее: за просрочку начисляются пени, и она попадает в кредитную историю.</div></div>'
+          : '') +
+        '<div class="facts">' +
+        (closed
+          ? fact('Сумма кредита', fmt.rub(loan.amount), 'ставка ' + fmt.rate(loan.rate)) +
+            fact('Выплачено всего', fmt.rub(loan.paid_total), loan.payments_made + ' ' + UI.plural(loan.payments_made, 'платёж', 'платежа', 'платежей')) +
+            fact('Переплата', fmt.rub(loan.overpayment), 'проценты за ' + fmt.term(loan.payments_made)) +
+            fact('Закрыт', esc(fmt.date(loan.closed_at)), loan.closed_early ? 'досрочно' : 'в срок')
+          : fact('Осталось выплатить', fmt.rub(loan.principal_left), 'выплачено ' + paidShare + '%') +
+            fact('Платёж в месяц', fmt.rub(loan.monthly_payment), loan.payments_made + ' из ' + loan.payments_total + ' внесено') +
+            fact('Ставка', fmt.rate(loan.rate), 'сумма ' + fmt.short(loan.amount)) +
+            fact('Погашение до', esc(fmt.date(loan.maturity_date)), 'срок ' + fmt.term(loan.term_months))) +
+        '</div>' +
+        '<div class="sched-chart-head">' +
+        '<h3>Остаток долга</h3>' +
+        '<ul class="chart-key" aria-label="Обозначения">' +
+        '<li><span class="key-dot key-paid"></span>оплачен</li>' +
+        (closed
+          ? ''
+          : '<li><span class="key-dot key-' + (overdue ? 'overdue' : 'next') + '"></span>' + (overdue ? 'просрочен' : 'ближайший') + '</li>' +
+            '<li><span class="key-dot key-planned"></span>предстоит</li>') +
+        '</ul>' +
+        '</div>' +
+        '<div id="balance-chart"></div>' +
+        '<details class="sched-table">' +
+        '<summary>Все платежи таблицей</summary>' +
         '<div class="table-wrap"><table class="schedule">' +
         '<thead><tr><th>№</th><th>Дата</th><th class="num">Платёж</th><th class="num">Основной долг</th><th class="num">Проценты</th><th class="num">Остаток</th><th></th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table></div>'
+        '<tbody>' + rows + '</tbody></table></div>' +
+        '</details>' +
+        (closed
+          ? ''
+          : '<div class="sched-actions">' +
+            '<button type="button" class="btn btn-secondary btn-inline" id="sched-prepay">Погасить досрочно</button>' +
+            '</div>'),
+      true
     );
-    var current = $('dialog-body').querySelector('.sch-next, .sch-overdue');
-    if (current) current.scrollIntoView({ block: 'center' });
+    BalanceChart.render($('balance-chart'), loan);
+    if (!closed) {
+      $('sched-prepay').addEventListener('click', function () {
+        showPrepay(loan);
+      });
+    }
+  }
+
+  function closedNotice(loan) {
+    if (loan.late_payments) {
+      return '<div class="notice notice-warning notice-compact sched-notice">' + icon('info', 18) +
+        '<div>Кредит погашен полностью. ' + loan.late_payments + ' ' + UI.plural(loan.late_payments, 'платёж был внесён', 'платежа были внесены', 'платежей были внесены') +
+        ' с опозданием — это видно в кредитной истории.</div></div>';
+    }
+    return '<div class="notice notice-success notice-compact sched-notice">' + icon('check', 18) +
+      '<div>Кредит погашен полностью' + (loan.closed_early ? ' — досрочно, на ' + fmt.term(loan.months_early) + ' раньше срока' : ' и в срок') +
+      ', без просрочек.</div></div>';
   }
 
   // Досрочное погашение — заглушка с расчётом, без отправки в банк
@@ -651,6 +796,12 @@
   }
 
   // ---------- Клики по спискам ----------
+
+  $('loan-history').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-action="schedule"]');
+    var loan = btn && findLoan(btn.dataset.loan);
+    if (loan) showSchedule(loan);
+  });
 
   $('loans').addEventListener('click', function (e) {
     var btn = e.target.closest('[data-action]');

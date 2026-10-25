@@ -42,7 +42,6 @@
 
   var form = $('calc-form');
   var results = $('calc-results');
-  var countEl = $('calc-count');
   var amountInput = $('amount-input');
   var amountRange = $('amount-range');
   var termRange = $('term-range');
@@ -308,10 +307,7 @@
   }
 
   function render() {
-    var total = Loans.PRODUCTS.length;
-
     if (!touched) {
-      countEl.textContent = '— из ' + total;
       results.innerHTML = emptyHtml(
         'sliders',
         'Задайте параметры кредита',
@@ -322,7 +318,6 @@
     }
 
     var list = Loans.getAvailable(query());
-    countEl.textContent = list.length + ' из ' + total;
 
     if (!list.length) {
       results.innerHTML = emptyHtml(

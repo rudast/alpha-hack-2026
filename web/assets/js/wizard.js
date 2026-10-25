@@ -62,6 +62,7 @@
       files: {}, // вид документа → имя файла (только в браузере)
       consents: { bki: false, pd: false },
       errors: {}, // ошибки полей анкеты: 'группа.поле' → текст
+      dateRaw: {}, // что введено в поля дат как текст: нужно, чтобы отличить «пусто» от «такой даты нет»
       savedAt: null,
     };
   }
@@ -128,6 +129,7 @@
         if (s.form[g.name]) form[g.name] = s.form[g.name];
       });
     }
+    form = Catalog.composeForm(form);
     form.consents = { bki_request: s.consents.bki, personal_data: s.consents.pd };
     return {
       product_id: backId || '',
@@ -445,6 +447,8 @@
           return '<option value="' + esc(o) + '"' + (value === o ? ' selected' : '') + '>' + esc(Catalog.OPTION_LABELS[o] || o) + '</option>';
         }).join('') +
         '</select>';
+    } else if (f.type === 'date') {
+      control = DatePicker.html({ id: id, value: value, max: f.max, attrs: 'data-field="' + path + '" data-type="date"' });
     } else if (f.type === 'money') {
       control =
         '<div class="money-input"><input type="text" inputmode="numeric" id="' + id + '" data-field="' + path + '" data-type="money" value="' +
@@ -493,6 +497,17 @@
       g.fields.forEach(function (f) {
         var v = getField(g.name, f.key);
         var path = g.name + '.' + f.key;
+        if (f.type === 'date') {
+          var raw = s.dateRaw[path];
+          if (raw && !v) {
+            errors[path] = raw.length < 10 ? 'Введите дату полностью: ДД.ММ.ГГГГ' : 'Такой даты нет — проверьте день и месяц';
+            return;
+          }
+          if (v && f.max === 'today' && UI.daysUntil(v) > 0) {
+            errors[path] = 'Дата не может быть позже сегодняшней';
+            return;
+          }
+        }
         if (f.required && (v === undefined || v === null || String(v).trim() === '')) {
           errors[path] = f.type === 'bool' || f.type === 'select' ? 'Выберите вариант' : 'Заполните поле';
           return;
@@ -554,6 +569,7 @@
     if (f.type === 'bool') return v ? 'Да' : 'Нет';
     if (f.type === 'money') return fmt.rub(v);
     if (f.type === 'select') return esc(Catalog.OPTION_LABELS[v] || v);
+    if (f.type === 'date') return esc(DatePicker.format(v));
     return esc(v);
   }
 
@@ -678,6 +694,7 @@
 
     function bindForm() {
       var body = $('wizard-body');
+      DatePicker.enhance(body); // маска даты срабатывает раньше обработчиков ниже
       body.querySelectorAll('[data-field]').forEach(function (el) {
         var path = el.dataset.field;
         var parts = path.split('.');
@@ -698,6 +715,9 @@
             var n = parseInt(el.value.replace(/\D/g, ''), 10);
             el.value = isFinite(n) ? Loans.fmt.number(n) : '';
             setField(parts[0], parts[1], isFinite(n) ? n : '');
+          } else if (el.dataset.type === 'date') {
+            s.dateRaw[path] = el.value;
+            setField(parts[0], parts[1], DatePicker.parse(el.value) || '');
           } else if (el.dataset.type === 'number') {
             var num = parseFloat(el.value.replace(',', '.').replace(/[^\d.]/g, ''));
             setField(parts[0], parts[1], isFinite(num) ? num : '');
@@ -807,7 +827,9 @@
       if (result.missing) {
         s.step = STEP.FORM;
         s.errors = {};
-        result.missing.forEach(function (f) { s.errors[f] = 'Заполните поле'; });
+        result.missing.forEach(function (f) {
+          Catalog.fieldPaths(f).forEach(function (path) { s.errors[path] = 'Заполните поле'; });
+        });
         render();
         showError('Банк не принял заявку: не заполнено — ' + result.missing.map(Catalog.fieldLabel).join(', ') + '.');
         return;
@@ -871,7 +893,7 @@
     s.amount = a.amount || g.amount;
     s.term = a.term_months || g.term;
     s.purpose = a.purpose || g.purpose;
-    s.form = form;
+    s.form = Catalog.decomposeForm(form);
     s.consents = { bki: !!consents.bki_request, pd: !!consents.personal_data };
     s.collateral = form.applicant && form.applicant.has_collateral ? 'with' : g.collateral === 'with' ? 'with' : 'without';
     s.productId = front;
