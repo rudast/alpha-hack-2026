@@ -152,12 +152,17 @@ Content-Type: application/json
 { "product_id": "working-capital", "amount": 1000000, "term_months": 12 }
 
 ### Очередь заявок андеррайтера
-GET {{host}}/api/v1/employee/applications?status=MANUAL_REVIEW
-Authorization: Bearer {{token}}
+GET {{host}}/api/v1/employee/applications
+Authorization: Bearer {{employeeVerify.response.body.token}}
+
+### Взять заявку в работу
+POST {{host}}/api/v1/employee/applications/{{applicationId}}/take
+Idempotency-Key: {{$guid}}
+Authorization: Bearer {{employeeVerify.response.body.token}}
 
 ### Решение по заявке
 POST {{host}}/api/v1/employee/applications/{{applicationId}}/decision
-Authorization: Bearer {{token}}
+Authorization: Bearer {{employeeVerify.response.body.token}}
 Content-Type: application/json
 
-{ "outcome": "COUNTER_OFFER", "amount": 700000, "rate": 18.5, "comment": "Снижена сумма" }
+{ "action": "counter_offer", "product_id": "ooo_loan", "amount": 700000, "term_months": 24, "rate": 18.5, "reason": "Снижена сумма" }

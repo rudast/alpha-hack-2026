@@ -20,6 +20,7 @@ type Deps struct {
 	Me           *MeHandler
 	Applications *ApplicationHandler
 	Loans        *LoanHandler
+	Review       *ReviewHandler
 	Products     *ProductHandler
 	Idempotency  middleware.IdempotencyStore
 	AssistantURL string
@@ -71,9 +72,24 @@ func New(d Deps) http.Handler {
 					r.With(idempotent).Post("/{id}/submit", d.Applications.Submit)
 					r.With(idempotent).Post("/{id}/accept", d.Applications.Accept)
 					r.With(idempotent).Post("/{id}/decline", d.Applications.Decline)
+					r.With(idempotent).Post("/{id}/resume", d.Applications.Resume)
 					// Документы черновика: тело с файлом до 10 МБ, поэтому лимит идемпотентности больше обычного.
 					r.With(middleware.IdempotencyWithLimit(d.Idempotency, domain.MaxDocumentSize+1<<20)).Post("/{id}/documents", d.Applications.UploadDocument)
 					r.With(idempotent).Delete("/{id}/documents/{docId}", d.Applications.DeleteDocument)
+				})
+			})
+
+			// Рабочее место сотрудника: заявки на ручной проверке.
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole(domain.RoleEmployee))
+				idempotent := middleware.Idempotency(d.Idempotency)
+				r.Route("/employee/applications", func(r chi.Router) {
+					r.Get("/", d.Review.List)
+					r.Get("/{id}", d.Review.Get)
+					r.Get("/{id}/documents/{docId}", d.Review.Document)
+					r.With(idempotent).Post("/{id}/take", d.Review.Take)
+					r.With(idempotent).Post("/{id}/release", d.Review.Release)
+					r.With(idempotent).Post("/{id}/decision", d.Review.Decide)
 				})
 			})
 		})

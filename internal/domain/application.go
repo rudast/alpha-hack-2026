@@ -27,14 +27,15 @@ const (
 )
 
 // transitions повторяет docs/state-diagram.md. Отказ выносит только сотрудник,
-// поэтому из SCORING в REJECTED перехода нет.
+// поэтому из SCORING в REJECTED перехода нет. Запросить документы может и воркер (из DATA_CHECK),
+// и сотрудник (из MANUAL_REVIEW); после ответа клиента заявка возвращается туда, откуда её запросили.
 var transitions = map[Status][]Status{
 	StatusDraft:         {StatusSubmitted},
 	StatusSubmitted:     {StatusDataCheck},
 	StatusDataCheck:     {StatusInfoRequested, StatusScoring},
-	StatusInfoRequested: {StatusDataCheck},
+	StatusInfoRequested: {StatusDataCheck, StatusManualReview},
 	StatusScoring:       {StatusManualReview, StatusApproved, StatusCounterOffer},
-	StatusManualReview:  {StatusApproved, StatusCounterOffer, StatusRejected},
+	StatusManualReview:  {StatusApproved, StatusCounterOffer, StatusRejected, StatusInfoRequested},
 	StatusApproved:      {StatusSigning},
 	StatusCounterOffer:  {StatusSigning, StatusDraft},
 	StatusRejected:      {StatusDraft},
@@ -108,6 +109,13 @@ type Application struct {
 	// OfferID — предварительное предложение, по которому создана заявка; nil у обычной заявки.
 	OfferID *string `json:"offer_id"`
 
+	// InfoRequest — что банк просит дополнить, пока заявка в INFO_REQUESTED.
+	InfoRequest *string `json:"info_request"`
+
+	// Ручная проверка: кто из сотрудников взял заявку в работу и когда. Клиенту не показывается.
+	AssignedTo *string    `json:"-"`
+	AssignedAt *time.Time `json:"-"`
+
 	// Поля выданного кредита (заявка в ACTIVE, OVERDUE, CLOSED). Клиенту отдаются через GET /loans
 	// вместе с посчитанным графиком, поэтому в JSON заявки не входят.
 	Rate           *float64   `json:"-"` // ставка, % годовых
@@ -141,6 +149,7 @@ type ApplicationSummary struct {
 
 // LoanTerms — условия, на которых выдаётся кредит, когда клиент принимает решение банка.
 type LoanTerms struct {
+	ProductID      string
 	Amount         int64
 	TermMonths     int
 	Rate           float64

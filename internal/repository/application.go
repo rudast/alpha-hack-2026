@@ -15,7 +15,8 @@ import (
 
 const applicationColumns = `id::text, version, company_inn, product_id, amount, term_months, purpose, status,
 	form, history, decision, submitted_at, created_at, updated_at, offer_id::text,
-	rate::float8, contract_number, issued_at, paid_payments, late_payments, closed_at`
+	rate::float8, contract_number, issued_at, paid_payments, late_payments, closed_at,
+	info_request, assigned_to::text, assigned_at`
 
 type ApplicationRepo struct {
 	db *pgxpool.Pool
@@ -195,7 +196,7 @@ func (r *ApplicationRepo) Submit(ctx context.Context, id, inn, by string, at tim
 func (r *ApplicationRepo) Accept(ctx context.Context, id, inn string, from domain.Status, t domain.LoanTerms, by string, at time.Time) (domain.Application, error) {
 	row := r.db.QueryRow(ctx, `
 		UPDATE applications SET
-			status = 'ACTIVE', amount = $4, term_months = $5, rate = $6, contract_number = $7, issued_at = $8,
+			status = 'ACTIVE', product_id = $11, amount = $4, term_months = $5, rate = $6, contract_number = $7, issued_at = $8,
 			paid_payments = 0, late_payments = 0, version = version + 1, updated_at = now(),
 			history = history || jsonb_build_array(
 				jsonb_build_object('from', $3::text, 'to', 'SIGNING', 'at', $9::timestamptz, 'by', $10::text),
@@ -204,7 +205,7 @@ func (r *ApplicationRepo) Accept(ctx context.Context, id, inn string, from domai
 				jsonb_build_object('from', 'DISBURSED', 'to', 'ACTIVE', 'at', $9::timestamptz, 'by', 'system'))
 		WHERE id = $1::text::uuid AND company_inn = $2 AND status = $3
 		RETURNING `+applicationColumns,
-		id, inn, string(from), t.Amount, t.TermMonths, t.Rate, t.ContractNumber, t.IssuedAt, at, by)
+		id, inn, string(from), t.Amount, t.TermMonths, t.Rate, t.ContractNumber, t.IssuedAt, at, by, t.ProductID)
 	return r.afterDecisionUpdate(ctx, row, id, inn)
 }
 
@@ -347,7 +348,8 @@ func scanApplication(row pgx.Row) (domain.Application, error) {
 	var form, history, decision []byte
 	err := row.Scan(&a.ID, &a.Version, &a.CompanyINN, &a.ProductID, &a.Amount, &a.TermMonths, &a.Purpose, &status,
 		&form, &history, &decision, &a.SubmittedAt, &a.CreatedAt, &a.UpdatedAt, &a.OfferID,
-		&a.Rate, &a.ContractNumber, &a.IssuedAt, &a.PaidPayments, &a.LatePayments, &a.ClosedAt)
+		&a.Rate, &a.ContractNumber, &a.IssuedAt, &a.PaidPayments, &a.LatePayments, &a.ClosedAt,
+		&a.InfoRequest, &a.AssignedTo, &a.AssignedAt)
 	if err != nil {
 		return domain.Application{}, mapNotFound(err)
 	}

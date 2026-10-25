@@ -58,6 +58,10 @@ func Run(ctx context.Context, cfg config.Config) error {
 	sweeper := service.NewApplicationSweeper(applicationRepo, companies, documents, applicationPublisher, time.Minute, 2*time.Minute)
 	go sweeper.Run(ctx)
 
+	// Ручная проверка: раз в минуту возвращает в общий пул заявки, взятые в работу больше 2 часов назад.
+	review := service.NewReviewService(applicationRepo, repository.NewUserRepo(pool), companies, documents, products)
+	go review.RunReleaser(ctx, time.Minute)
+
 	// Приём результатов воркера скоринга: читает applications:results и пишет статусы и решения в Postgres.
 	consumerName, err := os.Hostname()
 	if err != nil {
@@ -75,6 +79,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			Me:           handler.NewMeHandler(trust, offers, service.NewProfileService(repository.NewUserRepo(pool), companies)),
 			Applications: handler.NewApplicationHandler(applications),
 			Products:     handler.NewProductHandler(products),
+			Review:       handler.NewReviewHandler(review),
 			Loans:        handler.NewLoanHandler(service.NewLoanService(applicationRepo, companies, products)),
 			Idempotency:  repository.NewIdempotencyStore(rdb),
 			AssistantURL: cfg.AssistantURL,

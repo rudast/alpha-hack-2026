@@ -23,6 +23,7 @@ type ApplicationRepository interface {
 	Submit(ctx context.Context, id, inn, by string, at time.Time) (domain.Application, error)
 	Accept(ctx context.Context, id, inn string, from domain.Status, t domain.LoanTerms, by string, at time.Time) (domain.Application, error)
 	Decline(ctx context.Context, id, inn, by string, at time.Time) (domain.Application, error)
+	Resume(ctx context.Context, id, inn string, to domain.Status, by string, at time.Time) (domain.Application, error)
 	// MarkEnqueued запоминает, что задача по заявке отправлена воркеру, чтобы сборщик не отправил её повторно сразу же.
 	MarkEnqueued(ctx context.Context, id string) error
 }
@@ -298,10 +299,46 @@ func (s *ApplicationService) Decline(ctx context.Context, p domain.Principal, id
 	return s.withDocuments(s.apps.Decline(ctx, id, p.CompanyINN, p.UserID, s.now()))
 }
 
+// Resume — клиент дополнил заявку, по которой банк запросил данные (INFO_REQUESTED): загрузил документы
+// и нажал «Отправить». Заявка возвращается туда, откуда её запросили: от сотрудника — в общий пул ручной
+// проверки, от воркера — на проверку данных (задача воркеру отправляется заново).
+func (s *ApplicationService) Resume(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
+	a, err := s.apps.GetForCompany(ctx, id, p.CompanyINN)
+	if err != nil {
+		return domain.Application{}, err
+	}
+	if a.Status != domain.StatusInfoRequested {
+		return domain.Application{}, domain.ErrNotInfoRequested
+	}
+	to := domain.StatusDataCheck
+	for i := len(a.History) - 1; i >= 0; i-- {
+		if a.History[i].To == domain.StatusInfoRequested {
+			if a.History[i].From == domain.StatusManualReview {
+				to = domain.StatusManualReview
+			}
+			break
+		}
+	}
+
+	resumed, err := s.withDocuments(s.apps.Resume(ctx, id, p.CompanyINN, to, p.UserID, s.now()))
+	if err != nil {
+		return domain.Application{}, err
+	}
+	if to == domain.StatusDataCheck {
+		company, err := s.companies.GetByINN(ctx, p.CompanyINN)
+		if err != nil {
+			return domain.Application{}, err
+		}
+		s.dispatch(ctx, resumed, company)
+	}
+	return resumed, nil
+}
+
 // decisionTerms — поля решения скоринга (docs/scoring.md, раздел 11), нужные для выдачи кредита.
 type decisionTerms struct {
 	Rate  *float64 `json:"rate"`
 	Offer *struct {
+		ProductID  string   `json:"product_id"`
 		Amount     *int64   `json:"amount"`
 		TermMonths *int     `json:"term_months"`
 		Rate       *float64 `json:"rate"`
@@ -310,16 +347,21 @@ type decisionTerms struct {
 
 func (s *ApplicationService) loanTerms(a domain.Application, now time.Time) domain.LoanTerms {
 	t := domain.LoanTerms{
+		ProductID:      a.ProductID,
 		Amount:         a.Amount,
 		TermMonths:     a.TermMonths,
 		ContractNumber: contractNumber(a.ProductID, a.ID, now),
 		IssuedAt:       dateOf(now),
 	}
-	if p, ok := s.catalog.Product(a.ProductID); ok {
-		t.Rate = p.BaseRate
-	}
 	var d decisionTerms
 	_ = json.Unmarshal(a.Decision, &d)
+	// Во встречном предложении сотрудник может предложить другой продукт.
+	if a.Status == domain.StatusCounterOffer && d.Offer != nil && d.Offer.ProductID != "" {
+		t.ProductID = d.Offer.ProductID
+	}
+	if p, ok := s.catalog.Product(t.ProductID); ok {
+		t.Rate = p.BaseRate
+	}
 	if d.Rate != nil {
 		t.Rate = *d.Rate
 	}
