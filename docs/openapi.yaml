@@ -3,9 +3,10 @@ info:
   title: Умный кредитный кабинет — API
   version: 0.1.0
   description: >
-    Реализованы `/healthz`, `/api/v1/auth/login`, `/api/v1/auth/verify`, `/api/v1/me/bootstrap`
-    и методы заявок клиента (`/api/v1/applications`). Остальные методы — черновой контракт,
-    он будет меняться по ходу разработки.
+    Реализованы `/healthz`, вход (`/api/v1/auth/*`), `/api/v1/me`, `/api/v1/me/bootstrap`, `/api/v1/me/offer`,
+    `/api/v1/products`, `/api/v1/loans` и методы заявок клиента (`/api/v1/applications`: черновик, отправка,
+    ответ на решение банка, документы). `/api/v1/calculator` и методы сотрудника (`/api/v1/employee/*`) —
+    черновой контракт, он будет меняться по ходу разработки.
 servers:
   - url: http://localhost:8080
 tags:
@@ -185,30 +186,73 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/me:
+    get:
+      tags: [client]
+      summary: Профиль клиента и его компании
+      description: Приветствие, профиль компании, подстановка в анкету. Пользователь и компания берутся из сессии.
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: Профиль; поля без данных приходят как null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/products:
     get:
       tags: [client]
       summary: Каталог кредитных продуктов
+      description: >
+        Без авторизации: калькулятор открыт до входа. Значения (ставки, суммы, сроки, правило 9 месяцев)
+        совпадают с калькулятором. `field_groups` — базовые группы полей плюс группы продукта.
       responses:
         "200":
           description: Список продуктов
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: "#/components/schemas/Product" }
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items: { $ref: "#/components/schemas/Product" }
   /api/v1/loans:
     get:
       tags: [client]
-      summary: Действующие кредиты клиента и общая сумма долга
+      summary: Кредиты компании и кредиты в других банках
+      description: >
+        Кредит — это заявка в статусе ACTIVE, OVERDUE или CLOSED (отдельной таблицы нет). График платежей
+        не хранится, а считается на лету (аннуитет) из суммы, ставки, срока, даты выдачи и числа внесённых
+        платежей. Статус действующего кредита считается по графику: OVERDUE, если дата следующего платежа
+        прошла. `loans` — действующие (просроченные первыми), `closed_loans` — закрытые (новые первыми),
+        `other_banks` — из ответа БКИ (`companies.credit_history.other_banks`).
       security: [{ bearer: [] }]
       responses:
         "200":
-          description: Кредиты и долговая нагрузка
+          description: Кредиты
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/LoansOverview"
+              schema: { $ref: "#/components/schemas/LoansResponse" }
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/calculator:
     post:
       tags: [client]
@@ -484,6 +528,174 @@ paths:
                 oneOf:
                   - { $ref: "#/components/schemas/ValidationError" }
                   - { $ref: "#/components/schemas/Error" }
+  /api/v1/applications/{id}/accept:
+    post:
+      tags: [client]
+      summary: Принять одобрение или встречное предложение
+      description: >
+        Из APPROVED или COUNTER_OFFER заявка проходит SIGNING, SIGNED, DISBURSED (подписание и выдача имитируются)
+        и становится кредитом ACTIVE; все переходы пишутся в историю. Записываются ставка, номер договора и дата
+        выдачи (сегодня). У встречного предложения сумма, срок и ставка берутся из `decision.offer`; ставка —
+        `decision.offer.rate`, иначе `decision.rate`, иначе ставка продукта. Кредит появляется в `GET /loans`.
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Заявка целиком, как в `GET /applications/{id}`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Application" }
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Заявка не найдена (или принадлежит другой компании)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Заявка не ждёт ответа клиента (`application is not awaiting client decision`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/applications/{id}/decline:
+    post:
+      tags: [client]
+      summary: Отказаться от встречного предложения
+      description: COUNTER_OFFER → DRAFT; клиент может изменить условия и подать заново. Связь с предварительным предложением снимается.
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Заявка в статусе DRAFT
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Application" }
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Заявка не найдена (или принадлежит другой компании)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Заявка не в статусе COUNTER_OFFER
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/applications/{id}/documents:
+    post:
+      tags: [client]
+      summary: Загрузить документ к черновику
+      description: >
+        Файл сохраняется в Docker-том по схеме `<id заявки>/<вид>/<имя файла>`, в базе о документах ничего
+        не хранится. Файл с тем же видом и именем заменяется. Только пока заявка в DRAFT. Тип файла
+        определяется по содержимому: PDF, JPG или PNG. Пути к файлам передаются воркеру скоринга в задаче.
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [kind, file]
+              properties:
+                kind: { type: string, description: "Вид документа из каталога: passport, account_statement…" }
+                file: { type: string, format: binary, description: "PDF, JPG или PNG до 10 МБ" }
+      responses:
+        "201":
+          description: Документ сохранён
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "400":
+          description: Неизвестный вид документа, файл не PDF/JPG/PNG или нет поля file
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Заявка не найдена (или принадлежит другой компании)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Заявка уже отправлена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: Файл больше 10 МБ
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/applications/{id}/documents/{docId}:
+    delete:
+      tags: [client]
+      summary: Удалить документ черновика
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: docId
+          in: path
+          required: true
+          schema: { type: string }
+          description: "`id` из списка документов заявки"
+      responses:
+        "204":
+          description: Документ удалён
+        "401":
+          description: Нет сессии
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Метод только для клиентов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Заявка или документ не найдены
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Заявка уже отправлена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/employee/applications:
     get:
       tags: [employee]
@@ -604,25 +816,138 @@ components:
           nullable: true
           description: Общий долг / собственный капитал; null, если капитал нулевой или отрицательный
         fetched_at: { type: string, format: date-time, nullable: true }
+    Profile:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            full_name: { type: string }
+            phone: { type: string, nullable: true }
+            email: { type: string, nullable: true }
+            position: { type: string, nullable: true }
+        company:
+          type: object
+          properties:
+            inn: { type: string }
+            org_type: { type: string, enum: [IP, OOO] }
+            name: { type: string }
+            ogrn: { type: string, nullable: true }
+            okved: { type: string }
+            okved_title: { type: string, nullable: true }
+            registration_date: { type: string, format: date, nullable: true }
+            director: { type: string, nullable: true }
+            address: { type: string, nullable: true }
+            status: { type: string, nullable: true }
+            account_number: { type: string, nullable: true, description: Расчётный счёт в нашем банке }
     Product:
       type: object
       properties:
         id: { type: string }
         name: { type: string }
-        min_amount: { type: number }
-        max_amount: { type: number }
+        description: { type: string }
+        rate: { type: number, description: "Базовая ставка, % годовых" }
+        min_amount: { type: integer, format: int64 }
+        max_amount: { type: integer, format: int64 }
+        min_term_months: { type: integer }
         max_term_months: { type: integer }
-        base_rate: { type: number }
-    LoansOverview:
+        collateral: { type: string, enum: [none, optional, required] }
+        org_types: { type: array, items: { type: string, enum: [IP, OOO] } }
+        needs_9_months: { type: boolean, description: Бизнесу должно быть не меньше 9 месяцев }
+        young_max_amount: { type: integer, format: int64, nullable: true, description: Лимит для бизнеса младше 9 месяцев; null — отдельного лимита нет }
+        field_groups:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              title: { type: string }
+              fields:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    key: { type: string }
+                    label: { type: string }
+                    type: { type: string, enum: [text, number, money, bool, select] }
+                    required: { type: boolean }
+                    options: { type: array, items: { type: string } }
+        documents:
+          type: object
+          properties:
+            required: { type: array, items: { $ref: "#/components/schemas/DocumentKind" } }
+            optional: { type: array, items: { $ref: "#/components/schemas/DocumentKind" } }
+    DocumentKind:
       type: object
       properties:
-        loans:
+        kind: { type: string }
+        title: { type: string }
+    Document:
+      type: object
+      properties:
+        id: { type: string, description: Идентификатор для удаления }
+        kind: { type: string }
+        filename: { type: string }
+        size: { type: integer, format: int64 }
+        status: { type: string, enum: [UPLOADED] }
+        created_at: { type: string, format: date-time }
+    Payment:
+      type: object
+      properties:
+        number: { type: integer }
+        date: { type: string, format: date }
+        amount: { type: number }
+        principal: { type: number }
+        interest: { type: number }
+        balance_after: { type: number }
+        status: { type: string, enum: [PAID, NEXT, OVERDUE, PLANNED] }
+    Loan:
+      type: object
+      properties:
+        id: { type: string, format: uuid, description: Идентификатор заявки }
+        product_id: { type: string }
+        product_name: { type: string }
+        contract_number: { type: string }
+        amount: { type: integer, format: int64 }
+        rate: { type: number }
+        term_months: { type: integer }
+        issued_at: { type: string, format: date }
+        closed_at: { type: string, format: date, nullable: true, description: Только у закрытых }
+        maturity_date: { type: string, format: date, description: Дата последнего платежа по графику на полный срок }
+        status: { type: string, enum: [ACTIVE, OVERDUE, CLOSED] }
+        monthly_payment: { type: number }
+        principal_left: { type: integer, format: int64 }
+        paid_total: { type: integer, format: int64 }
+        payments_made: { type: integer }
+        payments_total: { type: integer }
+        next_payment:
+          nullable: true
+          type: object
+          properties:
+            date: { type: string, format: date }
+            amount: { type: number }
+        overdue_amount: { type: number, description: Только у действующих }
+        closed_early: { type: boolean, description: Только у закрытых }
+        months_early: { type: integer, description: Только у закрытых }
+        overpayment: { type: integer, format: int64, description: "Только у закрытых: paid_total − amount" }
+        late_payments: { type: integer, description: Только у закрытых }
+        schedule:
           type: array
-          items: { type: object }
-        total_debt: { type: number }
-        debt_to_equity:
-          type: number
-          description: Общий долг / собственный капитал; значение больше 2 ухудшает скоринг
+          description: Все платежи; у закрытого кредита только внесённые
+          items: { $ref: "#/components/schemas/Payment" }
+    LoansResponse:
+      type: object
+      properties:
+        loans: { type: array, items: { $ref: "#/components/schemas/Loan" } }
+        closed_loans: { type: array, items: { $ref: "#/components/schemas/Loan" } }
+        other_banks:
+          type: array
+          items:
+            type: object
+            properties:
+              bank: { type: string }
+              kind: { type: string }
+              debt: { type: integer, format: int64 }
     CalculatorRequest:
       type: object
       required: [product_id, amount, term_months]
@@ -710,7 +1035,7 @@ components:
         purpose: { type: string }
         status: { $ref: "#/components/schemas/ApplicationStatus" }
         form: { type: object, additionalProperties: true }
-        documents: { type: array, items: { type: object }, description: Метаданные загруженных файлов (загрузка пока не реализована) }
+        documents: { type: array, items: { $ref: "#/components/schemas/Document" }, description: Файлы из тома (в базе не хранятся) }
         history:
           type: array
           items:
@@ -719,7 +1044,7 @@ components:
               from: { $ref: "#/components/schemas/ApplicationStatus" }
               to: { $ref: "#/components/schemas/ApplicationStatus" }
               at: { type: string, format: date-time }
-              by: { type: string, description: Кто выполнил переход (идентификатор пользователя либо `worker`) }
+              by: { type: string, description: "Кто выполнил переход: идентификатор пользователя, `worker` или `system` (имитация выдачи)" }
               comment: { type: string, description: Пояснение к переходу (необязательное) }
         decision: { type: object, description: Решение по заявке; появится после скоринга }
         offer_id: { type: string, format: uuid, nullable: true, description: Предварительное предложение, по которому создана заявка }
@@ -728,7 +1053,7 @@ components:
         updated_at: { type: string, format: date-time }
     ApplicationSummary:
       type: object
-      description: Строка списка заявок. Название статуса для пользователя задаёт фронт.
+      description: Строка списка заявок (до выдачи кредита; выданные кредиты — в `GET /loans`). Название статуса для пользователя задаёт фронт.
       properties:
         id: { type: string, format: uuid }
         product_id: { type: string }
@@ -738,6 +1063,7 @@ components:
         status: { $ref: "#/components/schemas/ApplicationStatus" }
         submitted_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+        decision: { type: object, nullable: true, description: "Решение банка (в том числе встречное предложение `offer`), чтобы показать его без открытия заявки" }
     ValidationError:
       type: object
       required: [missing_fields]

@@ -71,7 +71,7 @@ func TestSweep_SendsATaskForEveryStuckApplication(t *testing.T) {
 	}}
 	claimer := &fakeClaimer{stuck: []domain.Application{stuckApp("a1"), stuckApp("a2")}}
 	publisher := &fakePublisher{}
-	s := NewApplicationSweeper(claimer, companies, publisher, time.Minute, 2*time.Minute)
+	s := NewApplicationSweeper(claimer, companies, noDocuments{}, publisher, time.Minute, 2*time.Minute)
 
 	sent, err := s.Sweep(context.Background())
 	if err != nil || sent != 2 || len(publisher.tasks) != 2 {
@@ -102,7 +102,7 @@ func TestSweep_SendsATaskForEveryStuckApplication(t *testing.T) {
 
 func TestSweep_AsksForApplicationsOlderThanTheThreshold(t *testing.T) {
 	claimer := &fakeClaimer{}
-	s := NewApplicationSweeper(claimer, &fakeCompanies{}, &fakePublisher{}, time.Minute, 2*time.Minute)
+	s := NewApplicationSweeper(claimer, &fakeCompanies{}, noDocuments{}, &fakePublisher{}, time.Minute, 2*time.Minute)
 
 	sent, err := s.Sweep(context.Background())
 	if err != nil || sent != 0 {
@@ -116,7 +116,7 @@ func TestSweep_AsksForApplicationsOlderThanTheThreshold(t *testing.T) {
 func TestSweep_OneFailureDoesNotStopTheOthers(t *testing.T) {
 	claimer := &fakeClaimer{stuck: []domain.Application{stuckApp("a1"), stuckApp("a2"), stuckApp("a3")}}
 	publisher := &fakePublisher{failFor: "a2"}
-	s := NewApplicationSweeper(claimer, &fakeCompanies{c: domain.Company{INN: "7700000002"}}, publisher, time.Minute, 2*time.Minute)
+	s := NewApplicationSweeper(claimer, &fakeCompanies{c: domain.Company{INN: "7700000002"}}, noDocuments{}, publisher, time.Minute, 2*time.Minute)
 
 	sent, err := s.Sweep(context.Background())
 	if err != nil || sent != 2 {
@@ -130,7 +130,7 @@ func TestSweep_OneFailureDoesNotStopTheOthers(t *testing.T) {
 func TestSweep_CompanyErrorSkipsTheApplication(t *testing.T) {
 	claimer := &fakeClaimer{stuck: []domain.Application{stuckApp("a1")}}
 	publisher := &fakePublisher{}
-	s := NewApplicationSweeper(claimer, failingCompanies{}, publisher, time.Minute, 2*time.Minute)
+	s := NewApplicationSweeper(claimer, failingCompanies{}, noDocuments{}, publisher, time.Minute, 2*time.Minute)
 
 	sent, err := s.Sweep(context.Background())
 	if err != nil || sent != 0 || len(publisher.tasks) != 0 {
@@ -140,7 +140,7 @@ func TestSweep_CompanyErrorSkipsTheApplication(t *testing.T) {
 
 func TestSweep_ClaimErrorIsReturned(t *testing.T) {
 	claimer := &fakeClaimer{err: errors.New("db is down")}
-	s := NewApplicationSweeper(claimer, &fakeCompanies{}, &fakePublisher{}, time.Minute, 2*time.Minute)
+	s := NewApplicationSweeper(claimer, &fakeCompanies{}, noDocuments{}, &fakePublisher{}, time.Minute, 2*time.Minute)
 
 	if _, err := s.Sweep(context.Background()); err == nil {
 		t.Fatal("want the claim error")
@@ -149,7 +149,7 @@ func TestSweep_ClaimErrorIsReturned(t *testing.T) {
 
 func TestRun_SweepsRepeatedlyAndStopsWithTheContext(t *testing.T) {
 	claimer := &fakeClaimer{}
-	s := NewApplicationSweeper(claimer, &fakeCompanies{}, &fakePublisher{}, 5*time.Millisecond, time.Minute)
+	s := NewApplicationSweeper(claimer, &fakeCompanies{}, noDocuments{}, &fakePublisher{}, 5*time.Millisecond, time.Minute)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -169,3 +169,7 @@ func TestRun_SweepsRepeatedlyAndStopsWithTheContext(t *testing.T) {
 		t.Fatalf("swept %d times, want repeated sweeps", claimer.callCount())
 	}
 }
+
+type noDocuments struct{}
+
+func (noDocuments) List(string) ([]domain.Document, error) { return []domain.Document{}, nil }

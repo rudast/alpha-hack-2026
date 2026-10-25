@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"hash/crc32"
 	"log"
 	"strings"
 	"time"
@@ -18,6 +21,8 @@ type ApplicationRepository interface {
 	ListByCompany(ctx context.Context, inn string) ([]domain.ApplicationSummary, error)
 	UpdateDraft(ctx context.Context, id, inn string, version int, p domain.DraftPatch, unlinkOffer bool) (domain.Application, error)
 	Submit(ctx context.Context, id, inn, by string, at time.Time) (domain.Application, error)
+	Accept(ctx context.Context, id, inn string, from domain.Status, t domain.LoanTerms, by string, at time.Time) (domain.Application, error)
+	Decline(ctx context.Context, id, inn, by string, at time.Time) (domain.Application, error)
 	// MarkEnqueued запоминает, что задача по заявке отправлена воркеру, чтобы сборщик не отправил её повторно сразу же.
 	MarkEnqueued(ctx context.Context, id string) error
 }
@@ -41,11 +46,12 @@ type ApplicationService struct {
 	offers    OfferGetter
 	catalog   *catalog.Catalog
 	publisher ApplicationPublisher
+	documents DocumentStore
 	now       func() time.Time
 }
 
-func NewApplicationService(apps ApplicationRepository, companies CompanyGetter, offers OfferGetter, cat *catalog.Catalog, publisher ApplicationPublisher) *ApplicationService {
-	return &ApplicationService{apps: apps, companies: companies, offers: offers, catalog: cat, publisher: publisher, now: time.Now}
+func NewApplicationService(apps ApplicationRepository, companies CompanyGetter, offers OfferGetter, cat *catalog.Catalog, publisher ApplicationPublisher, documents DocumentStore) *ApplicationService {
+	return &ApplicationService{apps: apps, companies: companies, offers: offers, catalog: cat, publisher: publisher, documents: documents, now: time.Now}
 }
 
 // CreateFromOffer создаёт черновик по предварительному предложению: продукт, сумму и срок берёт
@@ -77,7 +83,9 @@ func (s *ApplicationService) CreateFromOffer(ctx context.Context, p domain.Princ
 	if in.Purpose != nil {
 		a.Purpose = *in.Purpose
 	}
-	return s.apps.CreateFromOffer(ctx, a, p.UserID)
+	created, isNew, err := s.apps.CreateFromOffer(ctx, a, p.UserID)
+	created, err = s.withDocuments(created, err)
+	return created, isNew, err
 }
 
 // Create создаёт черновик из первого сохранения формы.
@@ -98,7 +106,7 @@ func (s *ApplicationService) Create(ctx context.Context, p domain.Principal, in 
 	if in.Purpose != nil {
 		a.Purpose = *in.Purpose
 	}
-	return s.apps.Create(ctx, a, p.UserID)
+	return s.withDocuments(s.apps.Create(ctx, a, p.UserID))
 }
 
 // Update сохраняет изменения черновика (автосохранение формы). version — версия заявки, которую
@@ -112,7 +120,7 @@ func (s *ApplicationService) Update(ctx context.Context, p domain.Principal, id 
 	if err != nil {
 		return domain.Application{}, err
 	}
-	return s.apps.UpdateDraft(ctx, id, p.CompanyINN, version, in, unlink)
+	return s.withDocuments(s.apps.UpdateDraft(ctx, id, p.CompanyINN, version, in, unlink))
 }
 
 // checkOfferPatch проверяет изменение заявки, созданной по предложению. Возвращает true, если
@@ -145,7 +153,7 @@ func (s *ApplicationService) checkOfferPatch(ctx context.Context, p domain.Princ
 }
 
 func (s *ApplicationService) Get(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
-	return s.apps.GetForCompany(ctx, id, p.CompanyINN)
+	return s.withDocuments(s.apps.GetForCompany(ctx, id, p.CompanyINN))
 }
 
 // List возвращает заявки компании с названиями продуктов из каталога.
@@ -191,6 +199,10 @@ func (s *ApplicationService) Submit(ctx context.Context, p domain.Principal, id 
 	if known {
 		missing = append(missing, s.catalog.MissingFormFields(product, a.Form)...)
 	}
+	// Согласие на запрос в БКИ обязательно для любой заявки; фронт кладёт его в form.consents.
+	if consents, _ := a.Form["consents"].(map[string]any); consents["bki_request"] != true {
+		missing = append(missing, "consents.bki_request")
+	}
 	if len(missing) > 0 {
 		return domain.Application{}, &domain.ValidationError{Fields: missing}
 	}
@@ -199,7 +211,8 @@ func (s *ApplicationService) Submit(ctx context.Context, p domain.Principal, id 
 	if err != nil {
 		return domain.Application{}, err
 	}
-	if !s.catalog.Available(product, company.OrgType, a.Amount, a.TermMonths) {
+	if !s.catalog.Available(product, company.OrgType, a.Amount, a.TermMonths) ||
+		!s.catalog.AvailableForAge(product, businessAgeMonths(company.RegistrationDate, s.now()), a.Amount) {
 		return domain.Application{}, domain.ErrProductUnavailable
 	}
 	if a.OfferID != nil {
@@ -217,6 +230,10 @@ func (s *ApplicationService) Submit(ctx context.Context, p domain.Principal, id 
 
 	// Предложение становится USED в той же транзакции, что и отправка (см. ApplicationRepo.Submit).
 	submitted, err := s.apps.Submit(ctx, id, p.CompanyINN, p.UserID, s.now())
+	if err != nil {
+		return domain.Application{}, err
+	}
+	submitted, err = s.withDocuments(submitted, nil)
 	if err != nil {
 		return domain.Application{}, err
 	}
@@ -256,4 +273,83 @@ func (s *ApplicationService) validatePatch(in domain.DraftPatch) error {
 		return domain.ErrInvalidInput
 	}
 	return nil
+}
+
+// Accept — клиент принимает решение банка (одобрение или встречное предложение): кредит сразу выдаётся
+// и становится ACTIVE. Подписание и выдача имитируются. Условия берутся из решения: у встречного
+// предложения сумма, срок и ставка из decision.offer; ставка — decision.offer.rate, иначе ставка решения,
+// иначе базовая ставка продукта.
+func (s *ApplicationService) Accept(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
+	a, err := s.apps.GetForCompany(ctx, id, p.CompanyINN)
+	if err != nil {
+		return domain.Application{}, err
+	}
+	if a.Status != domain.StatusApproved && a.Status != domain.StatusCounterOffer {
+		return domain.Application{}, domain.ErrNotAwaitingDecision
+	}
+	now := s.now()
+	terms := s.loanTerms(a, now)
+	return s.withDocuments(s.apps.Accept(ctx, id, p.CompanyINN, a.Status, terms, p.UserID, now))
+}
+
+// Decline — клиент отказывается от встречного предложения: заявка возвращается в черновик,
+// условия можно изменить и подать заново.
+func (s *ApplicationService) Decline(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
+	return s.withDocuments(s.apps.Decline(ctx, id, p.CompanyINN, p.UserID, s.now()))
+}
+
+// decisionTerms — поля решения скоринга (docs/scoring.md, раздел 11), нужные для выдачи кредита.
+type decisionTerms struct {
+	Rate  *float64 `json:"rate"`
+	Offer *struct {
+		Amount     *int64   `json:"amount"`
+		TermMonths *int     `json:"term_months"`
+		Rate       *float64 `json:"rate"`
+	} `json:"offer"`
+}
+
+func (s *ApplicationService) loanTerms(a domain.Application, now time.Time) domain.LoanTerms {
+	t := domain.LoanTerms{
+		Amount:         a.Amount,
+		TermMonths:     a.TermMonths,
+		ContractNumber: contractNumber(a.ProductID, a.ID, now),
+		IssuedAt:       dateOf(now),
+	}
+	if p, ok := s.catalog.Product(a.ProductID); ok {
+		t.Rate = p.BaseRate
+	}
+	var d decisionTerms
+	_ = json.Unmarshal(a.Decision, &d)
+	if d.Rate != nil {
+		t.Rate = *d.Rate
+	}
+	if d.Offer != nil {
+		if d.Offer.Rate != nil {
+			t.Rate = *d.Offer.Rate
+		}
+		if a.Status == domain.StatusCounterOffer && d.Offer.Amount != nil {
+			t.Amount = *d.Offer.Amount
+		}
+		if a.Status == domain.StatusCounterOffer && d.Offer.TermMonths != nil {
+			t.TermMonths = *d.Offer.TermMonths
+		}
+	}
+	return t
+}
+
+// contractPrefix — буквенный код вида кредита в номере договора, как в демо-данных кабинета.
+var contractPrefix = map[string]string{
+	"working_capital": "ОС", "ooo_loan": "КО", "ip_loan": "КИ", "express": "ЭК", "loan_up_to_1m": "КМ",
+	"overdraft": "ОВ", "credit_line": "ВКЛ", "marketplace_seller": "МП", "equipment_loan": "ОБ", "auto_loan": "АК",
+	"secured_property_equipment": "ЗИ", "business_purchase": "ГБ", "mortgage_ip": "ИИ", "mortgage_business": "ИБ",
+}
+
+// contractNumber формирует номер договора вида «0ОС-2026/1187»: вид кредита, год выдачи и четыре цифры,
+// выведенные из идентификатора заявки (для одной заявки номер всегда один и тот же).
+func contractNumber(productID, applicationID string, at time.Time) string {
+	prefix, ok := contractPrefix[productID]
+	if !ok {
+		prefix = "КР"
+	}
+	return fmt.Sprintf("0%s-%d/%04d", prefix, at.Year(), crc32.ChecksumIEEE([]byte(applicationID))%10000)
 }

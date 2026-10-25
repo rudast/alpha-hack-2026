@@ -13,6 +13,11 @@ type StaleApplicationClaimer interface {
 	ClaimStaleSubmitted(ctx context.Context, olderThan time.Duration, limit int) ([]domain.Application, error)
 }
 
+// DocumentLister возвращает загруженные документы заявки (файлы в томе).
+type DocumentLister interface {
+	List(applicationID string) ([]domain.Document, error)
+}
+
 type ApplicationPublisher interface {
 	Publish(ctx context.Context, t domain.ApplicationTask) error
 }
@@ -63,13 +68,14 @@ func jsonObject(raw json.RawMessage) json.RawMessage {
 type ApplicationSweeper struct {
 	apps      StaleApplicationClaimer
 	companies CompanyGetter
+	documents DocumentLister
 	publisher ApplicationPublisher
 	interval  time.Duration
 	olderThan time.Duration
 }
 
-func NewApplicationSweeper(apps StaleApplicationClaimer, companies CompanyGetter, publisher ApplicationPublisher, interval, olderThan time.Duration) *ApplicationSweeper {
-	return &ApplicationSweeper{apps: apps, companies: companies, publisher: publisher, interval: interval, olderThan: olderThan}
+func NewApplicationSweeper(apps StaleApplicationClaimer, companies CompanyGetter, documents DocumentLister, publisher ApplicationPublisher, interval, olderThan time.Duration) *ApplicationSweeper {
+	return &ApplicationSweeper{apps: apps, companies: companies, documents: documents, publisher: publisher, interval: interval, olderThan: olderThan}
 }
 
 // Run проверяет заявки раз в interval, пока не отменён ctx.
@@ -106,6 +112,10 @@ func (s *ApplicationSweeper) Sweep(ctx context.Context) (int, error) {
 		company, err := s.companies.GetByINN(ctx, a.CompanyINN)
 		if err != nil {
 			log.Printf("sweeper: application %s: company: %v", a.ID, err)
+			continue
+		}
+		if a.Documents, err = s.documents.List(a.ID); err != nil {
+			log.Printf("sweeper: application %s: documents: %v", a.ID, err)
 			continue
 		}
 

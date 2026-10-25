@@ -19,3 +19,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+
+# Документы заявок при локальном запуске без Docker (DOCUMENTS_DIR)
+data/

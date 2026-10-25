@@ -17,6 +17,8 @@ erDiagram
         string org_type "IP или OOO"
         string name
         string okved
+        string okved_title
+        string account_number "расчётный счёт в нашем банке"
         string ogrn
         date registration_date
         bigint total_debt "рубли, NULL пока не запрашивалось"
@@ -32,6 +34,7 @@ erDiagram
     USER {
         uuid id PK
         string full_name
+        string position "должность"
         string phone "+7XXXXXXXXXX, уникален"
         string email "уникален без учёта регистра"
         string password_hash "bcrypt"
@@ -47,13 +50,18 @@ erDiagram
         uuid created_by FK
         uuid assigned_to FK
         uuid offer_id FK "предварительное предложение, если заявка по нему"
+        numeric rate "ставка выданного кредита"
+        string contract_number
+        date issued_at "дата выдачи, день платежа"
+        int paid_payments "внесено платежей"
+        int late_payments
+        date closed_at
         string product_id "из каталога продуктов"
         bigint amount "рубли"
         int term_months
         string purpose
         string status
         jsonb form "данные формы по группам полей"
-        jsonb documents "вид и имя файла"
         jsonb history "список переходов"
         jsonb decision "балл, исход, ставка, причины"
         timestamptz submitted_at
@@ -69,7 +77,7 @@ erDiagram
 |---|---|
 | `companies` | Организация клиента, данные из реестров (`registry`), БКИ (`credit_history`) и показатели долговой нагрузки |
 | `users` | Клиенты и сотрудники банка; войти можно и по телефону, и по почте; отключённые (`is_active = false`) войти не могут |
-| `applications` | Заявка с данными формы (`form`), историей статусов (`history`), списком документов (`documents`) и решением (`decision`) |
+| `applications` | Заявка с данными формы (`form`), историей статусов (`history`) и решением (`decision`). После выдачи это и есть кредит: поля `rate`, `contract_number`, `issued_at`, `paid_payments`, `late_payments`, `closed_at` |
 | `offers` | Предварительное предложение компании (баннер «до X ₽»): продукт, лимит, срок, ставка «от», статус, срок действия и снимок данных, по которым посчитано (`basis`). У компании не больше одного `ACTIVE`; подробно в [preapproved-offer.md](preapproved-offer.md) |
 
 ### Ограничения
@@ -118,6 +126,7 @@ erDiagram
 | Запрос кредитной истории воркеру | Redis stream | `credit-history:requests` | обрезается до 10 000 записей |
 | Ответ воркера | Redis list | `credit-history:reply:<request_id>` | 1 минута |
 | Запросы банка клиенту (`INFO_REQUEST`) и ответы | Redis | не реализовано | пока заявка в обработке |
-| Содержимое документов | не реализовано | — | в заявке остаются вид и имя файла |
+| Документы заявки | Docker-том (`DOCUMENTS_DIR`) | — | файлы по схеме `<id заявки>/<вид>/<имя файла>`; в базе о документах ничего нет, список — содержимое папки; разбор не хранится |
 | Каталог продуктов | [internal/catalog/products.yaml](../internal/catalog/products.yaml) | — | статичный список, встроен в бинарник |
-| Кредит после выдачи | отдельной сущности нет | — | выданная заявка (`DISBURSED`, `ACTIVE`) показывается в кабинете как кредит |
+| Кредит после выдачи | отдельной сущности нет | — | заявка в `ACTIVE`, `OVERDUE` или `CLOSED`; график платежей считается на лету (`GET /loans`) |
+| Кредиты в других банках | `companies.credit_history.other_banks` | — | список `{bank, kind, debt}` из ответа БКИ |

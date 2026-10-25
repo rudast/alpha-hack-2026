@@ -16,6 +16,7 @@ type Config struct {
 	TrustRefreshInterval time.Duration
 	WorkerTimeout        time.Duration
 	AssistantURL         string
+	DocumentsDir         string // каталог (Docker-том) с файлами заявок
 }
 
 func Load() (Config, error) {
@@ -26,6 +27,7 @@ func Load() (Config, error) {
 		RedisAddr:            getenv("REDIS_ADDR", "localhost:6379"),
 		OTPStubCode:          getenv("OTP_STUB_CODE", "000000"),
 		AssistantURL:         getenv("ASSISTANT_URL", "http://assistant:8081"),
+		DocumentsDir:         getenv("DOCUMENTS_DIR", "data/documents"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

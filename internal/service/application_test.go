@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -132,8 +133,9 @@ func newApplications(t *testing.T, orgType string) (*ApplicationService, *fakeAp
 		t.Fatal(err)
 	}
 	repo := newFakeApps()
-	companies := &fakeCompanies{c: domain.Company{INN: clientA.CompanyINN, OrgType: orgType}}
-	s := NewApplicationService(repo, companies, newFakeOffers(), cat, &fakePublisher{})
+	registered := testNow.AddDate(-4, 0, 0) // бизнесу 4 года: правило «от 9 месяцев» выполняется
+	companies := &fakeCompanies{c: domain.Company{INN: clientA.CompanyINN, OrgType: orgType, RegistrationDate: &registered}}
+	s := NewApplicationService(repo, companies, newFakeOffers(), cat, &fakePublisher{}, newFakeDocuments())
 	s.now = func() time.Time { return testNow }
 	return s, repo
 }
@@ -152,7 +154,10 @@ func num(n int) *int       { return &n }
 func completeExpress() domain.DraftPatch {
 	return domain.DraftPatch{
 		ProductID: str("express"), Amount: i64(500_000), TermMonths: num(6), Purpose: str("Пополнение оборотных средств"),
-		Form: map[string]any{"applicant": map[string]any{"position": "Директор", "has_collateral": false}},
+		Form: map[string]any{
+			"applicant": map[string]any{"position": "Директор", "has_collateral": false},
+			"consents":  map[string]any{"bki_request": true, "personal_data": true},
+		},
 	}
 }
 
@@ -275,7 +280,7 @@ func TestApplicationSubmit_Incomplete(t *testing.T) {
 	if !errors.As(err, &v) {
 		t.Fatalf("got %v, want ValidationError", err)
 	}
-	want := []string{"amount", "term_months", "purpose", "applicant.position", "applicant.has_collateral"}
+	want := []string{"amount", "term_months", "purpose", "applicant.position", "applicant.has_collateral", "consents.bki_request"}
 	if !slices.Equal(v.Fields, want) {
 		t.Fatalf("missing fields: got %v, want %v", v.Fields, want)
 	}
@@ -518,7 +523,10 @@ func TestApplicationSubmit_ByOffer(t *testing.T) {
 	ctx := context.Background()
 	fill := domain.DraftPatch{
 		Purpose: str("Пополнение оборотных средств"),
-		Form:    map[string]any{"applicant": map[string]any{"position": "Директор", "has_collateral": false}},
+		Form: map[string]any{
+			"applicant": map[string]any{"position": "Директор", "has_collateral": false},
+			"consents":  map[string]any{"bki_request": true, "personal_data": true},
+		},
 	}
 
 	t.Run("a valid offer is submitted", func(t *testing.T) {
@@ -543,4 +551,162 @@ func TestApplicationSubmit_ByOffer(t *testing.T) {
 			t.Fatal("must not be submitted")
 		}
 	})
+}
+
+func TestApplicationSubmit_CatalogRulesFromTheCalculator(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("amount below the product minimum", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		p := completeExpress()
+		p.Amount = i64(10_000) // express: от 50 000
+		a, _ := s.Create(ctx, clientA, p)
+		if _, err := s.Submit(ctx, clientA, a.ID); !errors.Is(err, domain.ErrProductUnavailable) {
+			t.Fatalf("got %v, want ErrProductUnavailable", err)
+		}
+	})
+
+	t.Run("young business: product needs 9 months", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		young := testNow.AddDate(0, -5, 0)
+		s.companies = &fakeCompanies{c: domain.Company{INN: clientA.CompanyINN, OrgType: "OOO", RegistrationDate: &young}}
+		p := completeExpress()
+		p.ProductID, p.TermMonths = str("working_capital"), num(12)
+		a, _ := s.Create(ctx, clientA, p)
+		if _, err := s.Submit(ctx, clientA, a.ID); !errors.Is(err, domain.ErrProductUnavailable) {
+			t.Fatalf("got %v, want ErrProductUnavailable", err)
+		}
+	})
+
+	t.Run("young business: express above the young limit", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		young := testNow.AddDate(0, -5, 0)
+		s.companies = &fakeCompanies{c: domain.Company{INN: clientA.CompanyINN, OrgType: "OOO", RegistrationDate: &young}}
+		p := completeExpress()
+		p.Amount = i64(3_000_000) // express: молодому бизнесу до 2 000 000
+		a, _ := s.Create(ctx, clientA, p)
+		if _, err := s.Submit(ctx, clientA, a.ID); !errors.Is(err, domain.ErrProductUnavailable) {
+			t.Fatalf("got %v, want ErrProductUnavailable", err)
+		}
+	})
+
+	t.Run("no consent to the credit bureau request", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		p := completeExpress()
+		p.Form = map[string]any{"applicant": map[string]any{"position": "Директор", "has_collateral": false}}
+		a, _ := s.Create(ctx, clientA, p)
+		var v *domain.ValidationError
+		if _, err := s.Submit(ctx, clientA, a.ID); !errors.As(err, &v) || !slices.Equal(v.Fields, []string{"consents.bki_request"}) {
+			t.Fatalf("got %v, want the missing consent", err)
+		}
+	})
+}
+
+func (f *fakeApps) Accept(ctx context.Context, id, inn string, from domain.Status, t domain.LoanTerms, by string, at time.Time) (domain.Application, error) {
+	a, err := f.GetForCompany(ctx, id, inn)
+	if err != nil {
+		return domain.Application{}, err
+	}
+	if a.Status != from {
+		return domain.Application{}, domain.ErrNotAwaitingDecision
+	}
+	a.Status, a.Amount, a.TermMonths = domain.StatusActive, t.Amount, t.TermMonths
+	a.Rate, a.ContractNumber, a.IssuedAt = &t.Rate, &t.ContractNumber, &t.IssuedAt
+	for _, step := range [][2]domain.Status{{from, domain.StatusSigning}, {domain.StatusSigning, domain.StatusSigned},
+		{domain.StatusSigned, domain.StatusDisbursed}, {domain.StatusDisbursed, domain.StatusActive}} {
+		a.History = append(a.History, domain.HistoryEntry{From: step[0], To: step[1], At: at, By: by})
+	}
+	f.items[id] = a
+	return a, nil
+}
+
+func (f *fakeApps) Decline(ctx context.Context, id, inn, by string, at time.Time) (domain.Application, error) {
+	a, err := f.GetForCompany(ctx, id, inn)
+	if err != nil {
+		return domain.Application{}, err
+	}
+	if a.Status != domain.StatusCounterOffer {
+		return domain.Application{}, domain.ErrNotAwaitingDecision
+	}
+	a.Status, a.OfferID = domain.StatusDraft, nil
+	f.items[id] = a
+	return a, nil
+}
+
+// decided кладёт заявку в статус решения банка с решением decision.
+func decided(repo *fakeApps, status domain.Status, decision string) domain.Application {
+	a, _ := repo.Create(context.Background(), domain.Application{CompanyINN: clientA.CompanyINN, ProductID: "working_capital", Amount: 2_000_000, TermMonths: 18}, clientA.UserID)
+	a.Status, a.Decision = status, json.RawMessage(decision)
+	repo.items[a.ID] = a
+	return a
+}
+
+func TestApplicationAccept(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("approval: requested terms, rate from the decision", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		a := decided(repo, domain.StatusApproved, `{"outcome":"APPROVED","rate":18.4}`)
+		got, err := s.Accept(ctx, clientA, a.ID)
+		if err != nil || got.Status != domain.StatusActive {
+			t.Fatalf("got %v, %v", got.Status, err)
+		}
+		if got.Amount != 2_000_000 || got.TermMonths != 18 || *got.Rate != 18.4 || !got.IssuedAt.Equal(dateOf(testNow)) {
+			t.Fatalf("terms: %d %d %v %v", got.Amount, got.TermMonths, *got.Rate, got.IssuedAt)
+		}
+		if *got.ContractNumber == "" || len(got.History) != 4 || got.History[3].To != domain.StatusActive {
+			t.Fatalf("contract %q, history %+v", *got.ContractNumber, got.History)
+		}
+	})
+
+	t.Run("counter offer: amount, term and rate from decision.offer", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		a := decided(repo, domain.StatusCounterOffer, `{"outcome":"COUNTER_OFFER","rate":25,"offer":{"amount":1500000,"term_months":24,"rate":21.5}}`)
+		got, err := s.Accept(ctx, clientA, a.ID)
+		if err != nil || got.Amount != 1_500_000 || got.TermMonths != 24 || *got.Rate != 21.5 {
+			t.Fatalf("got %d %d %v, %v", got.Amount, got.TermMonths, got.Rate, err)
+		}
+	})
+
+	t.Run("no rate in the decision: the product base rate", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		a := decided(repo, domain.StatusApproved, `{"outcome":"APPROVED"}`)
+		got, _ := s.Accept(ctx, clientA, a.ID)
+		if *got.Rate != 19 { // working_capital
+			t.Fatalf("rate %v, want 19", *got.Rate)
+		}
+	})
+
+	t.Run("not awaiting a decision", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		a := decided(repo, domain.StatusScoring, `{}`)
+		if _, err := s.Accept(ctx, clientA, a.ID); !errors.Is(err, domain.ErrNotAwaitingDecision) {
+			t.Fatalf("got %v, want ErrNotAwaitingDecision", err)
+		}
+		if _, err := s.Accept(ctx, clientB, a.ID); !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("other company: got %v, want ErrNotFound", err)
+		}
+	})
+}
+
+func TestApplicationDecline(t *testing.T) {
+	ctx := context.Background()
+	s, repo := newApplications(t, "OOO")
+
+	counter := decided(repo, domain.StatusCounterOffer, `{"outcome":"COUNTER_OFFER"}`)
+	got, err := s.Decline(ctx, clientA, counter.ID)
+	if err != nil || got.Status != domain.StatusDraft {
+		t.Fatalf("got %v, %v", got.Status, err)
+	}
+	approved := decided(repo, domain.StatusApproved, `{"outcome":"APPROVED"}`)
+	if _, err := s.Decline(ctx, clientA, approved.ID); !errors.Is(err, domain.ErrNotAwaitingDecision) {
+		t.Fatalf("approval cannot be declined here: got %v", err)
+	}
+}
+
+func TestContractNumber(t *testing.T) {
+	got := contractNumber("working_capital", "app-1", testNow)
+	if got != contractNumber("working_capital", "app-1", testNow) || got[:len("0ОС-2026/")] != "0ОС-2026/" || len(got) != len("0ОС-2026/0000") {
+		t.Fatalf("got %q", got)
+	}
 }

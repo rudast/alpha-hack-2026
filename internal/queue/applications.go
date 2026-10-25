@@ -35,9 +35,18 @@ func (p *ApplicationPublisher) Publish(ctx context.Context, t domain.Application
 			return err
 		}
 	}
-	documents := string(t.Documents)
-	if documents == "" {
-		documents = "[]"
+	type taskDocument struct {
+		Kind string `json:"kind"`
+		Name string `json:"name"`
+		Path string `json:"path"` // путь внутри тома с документами
+	}
+	docs := make([]taskDocument, 0, len(t.Documents))
+	for _, d := range t.Documents {
+		docs = append(docs, taskDocument{Kind: d.Kind, Name: d.Filename, Path: d.Path})
+	}
+	documents, err := json.Marshal(docs)
+	if err != nil {
+		return err
 	}
 
 	company, err := json.Marshal(t.Company)
@@ -52,7 +61,7 @@ func (p *ApplicationPublisher) Publish(ctx context.Context, t domain.Application
 		"amount":         t.Amount,
 		"term_months":    t.TermMonths,
 		"form":           string(form),
-		"documents":      documents,
+		"documents":      string(documents),
 		"company":        string(company),
 	}
 	if t.Debt != nil {

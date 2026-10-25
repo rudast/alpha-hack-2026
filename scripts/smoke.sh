@@ -117,7 +117,7 @@ echo "== Просмотр, сохранение и защита от перез�
 call GET "/api/v1/applications/$app_id" '' "$token";                    check "просмотр своей заявки" 200
 IDEM=$(newkey) call POST "/api/v1/applications/$app_id/submit" '' "$token"; check "отправка неполной заявки" 422
 echo "      ответ: $BODY"
-patch_body="{\"version\":$ver,\"amount\":500000,\"term_months\":6,\"purpose\":\"Working capital\",\"form\":{\"applicant\":{\"position\":\"Director\",\"has_collateral\":false}}}"
+patch_body="{\"version\":$ver,\"amount\":500000,\"term_months\":6,\"purpose\":\"Working capital\",\"form\":{\"applicant\":{\"position\":\"Director\",\"has_collateral\":false},\"consents\":{\"bki_request\":true,\"personal_data\":true}}}"
 patch_key=$(newkey)
 IDEM=$patch_key call PATCH "/api/v1/applications/$app_id" "$patch_body" "$token"; check "сохранение черновика" 200
 patched_body=$BODY; ver2=$(numfield version)
@@ -154,7 +154,7 @@ IDEM=$(newkey) call PATCH "/api/v1/applications/$app_id" '{"version":3,"purpose"
 
 echo "== Заявки: продукт недоступен компании (клиент +79990000005, ИП, продукт только для ООО)"
 token_ip=$(token_for +79990000005)
-IDEM=$(newkey) call POST /api/v1/applications '{"product_id":"ooo_loan","amount":500000,"term_months":6,"purpose":"Purchase","form":{"applicant":{"position":"IP","has_collateral":false}}}' "$token_ip"
+IDEM=$(newkey) call POST /api/v1/applications '{"product_id":"ooo_loan","amount":500000,"term_months":6,"purpose":"Purchase","form":{"applicant":{"position":"IP","has_collateral":false},"consents":{"bki_request":true}}}' "$token_ip"
 check "создание черновика" 201
 IDEM=$(newkey) call POST "/api/v1/applications/$(field id)/submit" '' "$token_ip"; check "отправка недоступного продукта" 422
 echo "      ответ: $BODY"

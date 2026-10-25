@@ -4,185 +4,182 @@
 --   7700000001, 7700000004, 770000000005 — свежие, воркер не вызывается;
 --   7700000002 — ни разу не запрашивались;
 --   7700000003 — устарели (2 дня).
+-- Должность, расчётный счёт, расшифровка ОКВЭД, кредиты и долги в других банках совпадают с демо-данными
+-- кабинета (web/assets/js/mock-api.js, BACKEND_TASKS.md). Долг в других банках плюс остатки наших
+-- действующих кредитов дают total_debt (у 7700000002 и 7700000003 — значение, которое вернёт воркер).
 INSERT INTO companies
-    (inn, org_type, name, okved, ogrn, registration_date, total_debt, equity, debt_to_equity, financials_fetched_at, registry)
+    (inn, org_type, name, okved, okved_title, ogrn, account_number, registration_date,
+     total_debt, equity, debt_to_equity, financials_fetched_at, registry, credit_history)
 VALUES
-    ('7700000001', 'OOO', 'ООО «Демо Торг»', '47.19', '1027700000001', '2016-03-14',
+    ('7700000001', 'OOO', 'ООО «Демо Торг»', '47.19', 'Прочая розничная торговля в неспециализированных магазинах',
+        '1027700000001', '40702810900000000001', '2016-03-14',
         3000000, 5000000, 0.6000, now() - interval '1 hour',
-        '{"status": "ACTIVE", "director": "Петров Пётр Петрович", "address": "г. Москва, ул. Демонстрационная, д. 1"}'),
-    ('7700000002', 'OOO', 'ООО «Демо Строй»', '41.20', '1027700000002', '2022-09-01',
+        '{"status": "ACTIVE", "director": "Петров Пётр Петрович", "address": "г. Москва, ул. Демонстрационная, д. 1"}',
+        '{"other_banks": [{"bank": "Сбербанк", "kind": "Кредит на оборотные средства", "debt": 958805}]}'),
+    ('7700000002', 'OOO', 'ООО «Демо Строй»', '41.20', 'Строительство жилых и нежилых зданий',
+        '1027700000002', '40702810900000000002', '2022-09-01',
         NULL, NULL, NULL, NULL,
-        '{"status": "ACTIVE", "director": "Смирнова Ольга Ивановна", "address": "г. Москва, ул. Демонстрационная, д. 2"}'),
-    ('7700000003', 'OOO', 'ООО «Демо Логистик»', '49.41', '1027700000003', '2019-06-20',
+        '{"status": "ACTIVE", "director": "Смирнова Ольга Ивановна", "address": "г. Москва, ул. Демонстрационная, д. 2"}',
+        '{"other_banks": [{"bank": "ВТБ", "kind": "Инвестиционный кредит", "debt": 2400000}]}'),
+    ('7700000003', 'OOO', 'ООО «Демо Логистик»', '49.41', 'Деятельность автомобильного грузового транспорта',
+        '1027700000003', '40702810900000000003', '2019-06-20',
         1500000, 3000000, 0.5000, now() - interval '2 days',
-        '{"status": "ACTIVE", "director": "Кузнецов Андрей Викторович", "address": "г. Москва, ул. Демонстрационная, д. 3"}'),
-    ('7700000004', 'OOO', 'ООО «Демо Долг»', '46.90', '1027700000004', '2012-11-05',
+        '{"status": "ACTIVE", "director": "Кузнецов Андрей Викторович", "address": "г. Москва, ул. Демонстрационная, д. 3"}',
+        '{"other_banks": [{"bank": "Т-Банк", "kind": "Овердрафт", "debt": 504676}]}'),
+    ('7700000004', 'OOO', 'ООО «Демо Долг»', '46.90', 'Торговля оптовая неспециализированная',
+        '1027700000004', '40702810900000000004', '2012-11-05',
         7000000, 2000000, 3.5000, now() - interval '1 hour',
-        '{"status": "ACTIVE", "director": "Попов Сергей Николаевич", "address": "г. Москва, ул. Демонстрационная, д. 4"}'),
-    ('770000000005', 'IP', 'ИП Иванов Демо', '56.10', '304770000000005', '2020-02-10',
+        '{"status": "ACTIVE", "director": "Попов Сергей Николаевич", "address": "г. Москва, ул. Демонстрационная, д. 4"}',
+        '{"other_banks": [{"bank": "Сбербанк", "kind": "Кредит под залог недвижимости", "debt": 2214000},
+                          {"bank": "ВТБ", "kind": "Оборотный кредит", "debt": 1476802}]}'),
+    ('770000000005', 'IP', 'ИП Иванов Демо', '56.10', 'Деятельность ресторанов и услуги по доставке продуктов питания',
+        '304770000000005', '40802810900000000005', '2020-02-10',
         800000, 2000000, 0.4000, now() - interval '1 hour',
-        '{"status": "ACTIVE", "director": "Иванов Иван Иванович", "address": "г. Москва, ул. Демонстрационная, д. 5"}');
+        '{"status": "ACTIVE", "director": "Иванов Иван Иванович", "address": "г. Москва, ул. Демонстрационная, д. 5"}',
+        '{"other_banks": [{"bank": "Совкомбанк", "kind": "Кредит для ИП", "debt": 386612}]}');
 
-INSERT INTO users (full_name, phone, email, password_hash, role, company_inn) VALUES
-    ('Петров Пётр Петрович', '+79990000001', 'client1@example.test',
+INSERT INTO users (full_name, position, phone, email, password_hash, role, company_inn) VALUES
+    ('Петров Пётр Петрович', 'Генеральный директор', '+79990000001', 'client1@example.test',
         '$2a$10$JzEUypfdZw.rEpujzM0lO.DaWGUsuFpZlUjgUckzhcxumhLMzASCG', 'client', '7700000001'),
-    ('Смирнова Ольга Ивановна', '+79990000002', 'client2@example.test',
+    ('Смирнова Ольга Ивановна', 'Генеральный директор', '+79990000002', 'client2@example.test',
         '$2a$10$JzEUypfdZw.rEpujzM0lO.DaWGUsuFpZlUjgUckzhcxumhLMzASCG', 'client', '7700000002'),
-    ('Кузнецов Андрей Викторович', '+79990000003', 'client3@example.test',
+    ('Кузнецов Андрей Викторович', 'Генеральный директор', '+79990000003', 'client3@example.test',
         '$2a$10$JzEUypfdZw.rEpujzM0lO.DaWGUsuFpZlUjgUckzhcxumhLMzASCG', 'client', '7700000003'),
-    ('Попов Сергей Николаевич', '+79990000004', 'client4@example.test',
+    ('Попов Сергей Николаевич', 'Генеральный директор', '+79990000004', 'client4@example.test',
         '$2a$10$JzEUypfdZw.rEpujzM0lO.DaWGUsuFpZlUjgUckzhcxumhLMzASCG', 'client', '7700000004'),
-    ('Иванов Иван Иванович', '+79990000005', 'client5@example.test',
+    ('Иванов Иван Иванович', 'Индивидуальный предприниматель', '+79990000005', 'client5@example.test',
         '$2a$10$JzEUypfdZw.rEpujzM0lO.DaWGUsuFpZlUjgUckzhcxumhLMzASCG', 'client', '770000000005'),
-    ('Сидорова Анна Сергеевна', '+79990000100', 'underwriter@example.test',
+    ('Сидорова Анна Сергеевна', NULL, '+79990000100', 'underwriter@example.test',
         '$2a$10$JzEUypfdZw.rEpujzM0lO.DaWGUsuFpZlUjgUckzhcxumhLMzASCG', 'employee', NULL);
 
 -- Кредиты, которые компании уже брали в банке. Отдельной таблицы кредитов нет: выданный кредит это заявка
--- в статусе ACTIVE, OVERDUE или CLOSED с полной историей переходов и решением скоринга.
--- В истории {client} и {employee} заменяются на идентификаторы клиента компании и андеррайтера.
--- Ставки в decision посчитаны по формуле docs/scoring.md (раздел 10). Документы не заполнены: загрузка не реализована.
---   7700000001  working_capital 2 000 000 ₽ / 24 мес, ACTIVE;  express 500 000 ₽ / 12 мес, CLOSED
---   7700000002  loan_up_to_1m 800 000 ₽ / 12 мес, CLOSED
---   7700000003  auto_loan 1 200 000 ₽ / 36 мес, ACTIVE (залог: автомобиль)
---   7700000004  ooo_loan 3 000 000 ₽ / 36 мес, ACTIVE (одобрен андеррайтером после ручной проверки);
---               working_capital 2 500 000 ₽ / 18 мес, OVERDUE
---   770000000005  ip_loan 600 000 ₽ / 24 мес, ACTIVE
-INSERT INTO applications
-    (version, company_inn, created_by, assigned_to, product_id, amount, term_months, purpose, status,
-     form, history, decision, submitted_at, created_at, updated_at)
-SELECT v.version, c.company_inn, c.id, CASE WHEN v.manual THEN e.id END,
-       v.product_id, v.amount, v.term_months, v.purpose, v.status,
-       v.form::jsonb,
-       replace(replace(v.history, '{client}', c.id::text), '{employee}', e.id::text)::jsonb,
-       v.decision::jsonb,
-       v.submitted_at, v.submitted_at - interval '1 day', v.updated_at
-FROM (VALUES
-    ('+79990000001', 10, false, 'working_capital', 2000000::bigint, 24, 'Пополнение оборотных средств под сезонные закупки', 'ACTIVE',
-        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}',
-        '[{"from": "DRAFT", "to": "SUBMITTED", "at": "2025-03-10T10:00:00+03:00", "by": "{client}"},
-          {"from": "SUBMITTED", "to": "DATA_CHECK", "at": "2025-03-10T10:01:00+03:00", "by": "worker"},
-          {"from": "DATA_CHECK", "to": "SCORING", "at": "2025-03-10T10:04:00+03:00", "by": "worker"},
-          {"from": "SCORING", "to": "APPROVED", "at": "2025-03-10T10:05:00+03:00", "by": "worker"},
-          {"from": "APPROVED", "to": "SIGNING", "at": "2025-03-11T09:30:00+03:00", "by": "{client}"},
-          {"from": "SIGNING", "to": "SIGNED", "at": "2025-03-11T09:42:00+03:00", "by": "{client}"},
-          {"from": "SIGNED", "to": "DISBURSED", "at": "2025-03-12T11:00:00+03:00", "by": "{employee}"},
-          {"from": "DISBURSED", "to": "ACTIVE", "at": "2025-03-12T11:00:00+03:00", "by": "{employee}"}]',
-        '{"model_version": "scoring-1", "product_id": "working_capital", "class": "U", "score": 82.4, "outcome": "APPROVED",
-          "rate": 21.64, "amount": 2000000, "term_months": 24,
-          "reasons_positive": [{"factor": "C1a", "text": "Нет просрочек в кредитной истории"},
-                               {"factor": "C2", "text": "Умеренная долговая нагрузка"}],
-          "reasons_negative": []}',
-        timestamptz '2025-03-10 10:00:00+03', timestamptz '2025-03-12 11:00:00+03'),
-
-    ('+79990000001', 11, false, 'express', 500000, 12, 'Закупка товара', 'CLOSED',
-        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}',
-        '[{"from": "DRAFT", "to": "SUBMITTED", "at": "2023-04-05T15:20:00+03:00", "by": "{client}"},
-          {"from": "SUBMITTED", "to": "DATA_CHECK", "at": "2023-04-05T15:21:00+03:00", "by": "worker"},
-          {"from": "DATA_CHECK", "to": "SCORING", "at": "2023-04-05T15:23:00+03:00", "by": "worker"},
-          {"from": "SCORING", "to": "APPROVED", "at": "2023-04-05T15:24:00+03:00", "by": "worker"},
-          {"from": "APPROVED", "to": "SIGNING", "at": "2023-04-05T16:10:00+03:00", "by": "{client}"},
-          {"from": "SIGNING", "to": "SIGNED", "at": "2023-04-05T16:15:00+03:00", "by": "{client}"},
-          {"from": "SIGNED", "to": "DISBURSED", "at": "2023-04-06T10:00:00+03:00", "by": "{employee}"},
-          {"from": "DISBURSED", "to": "ACTIVE", "at": "2023-04-06T10:00:00+03:00", "by": "{employee}"},
-          {"from": "ACTIVE", "to": "CLOSED", "at": "2024-04-08T12:00:00+03:00", "by": "{employee}", "comment": "Кредит погашен полностью"}]',
-        '{"model_version": "scoring-1", "product_id": "express", "class": "X", "score": 88.0, "outcome": "APPROVED",
-          "rate": 24.8, "amount": 500000, "term_months": 12,
-          "reasons_positive": [{"factor": "C3", "text": "Компания работает больше 5 лет"},
-                               {"factor": "C1b", "text": "Мало запросов в БКИ за последние 90 дней"}],
-          "reasons_negative": []}',
-        timestamptz '2023-04-05 15:20:00+03', timestamptz '2024-04-08 12:00:00+03'),
-
-    ('+79990000002', 11, false, 'loan_up_to_1m', 800000, 12, 'Аренда спецтехники на сезон', 'CLOSED',
-        '{"applicant": {"position": "Директор", "has_collateral": false}}',
-        '[{"from": "DRAFT", "to": "SUBMITTED", "at": "2023-11-14T11:00:00+03:00", "by": "{client}"},
-          {"from": "SUBMITTED", "to": "DATA_CHECK", "at": "2023-11-14T11:01:00+03:00", "by": "worker"},
-          {"from": "DATA_CHECK", "to": "SCORING", "at": "2023-11-14T11:05:00+03:00", "by": "worker"},
-          {"from": "SCORING", "to": "APPROVED", "at": "2023-11-14T11:06:00+03:00", "by": "worker"},
-          {"from": "APPROVED", "to": "SIGNING", "at": "2023-11-15T10:00:00+03:00", "by": "{client}"},
-          {"from": "SIGNING", "to": "SIGNED", "at": "2023-11-15T10:20:00+03:00", "by": "{client}"},
-          {"from": "SIGNED", "to": "DISBURSED", "at": "2023-11-16T09:30:00+03:00", "by": "{employee}"},
-          {"from": "DISBURSED", "to": "ACTIVE", "at": "2023-11-16T09:30:00+03:00", "by": "{employee}"},
-          {"from": "ACTIVE", "to": "CLOSED", "at": "2024-11-18T12:00:00+03:00", "by": "{employee}", "comment": "Кредит погашен полностью"}]',
-        '{"model_version": "scoring-1", "product_id": "loan_up_to_1m", "class": "U", "score": 76.0, "outcome": "APPROVED",
-          "rate": 22.6, "amount": 800000, "term_months": 12,
-          "reasons_positive": [{"factor": "P1", "text": "Платёж небольшой относительно оборота"}],
-          "reasons_negative": [{"factor": "C3", "text": "Компания работает меньше 3 лет"}]}',
-        timestamptz '2023-11-14 11:00:00+03', timestamptz '2024-11-18 12:00:00+03'),
-
-    ('+79990000003', 10, false, 'auto_loan', 1200000, 36, 'Покупка грузового фургона для доставки', 'ACTIVE',
+-- в статусе ACTIVE, OVERDUE или CLOSED с полной историей переходов и решением скоринга. График платежей
+-- не хранится, его считает API (GET /loans) из суммы, ставки, срока, даты выдачи и числа внесённых платежей.
+--
+-- Даты действующих кредитов считаются от дня применения миграции, чтобы ближайший платёж был в будущем:
+--   D = ближайшее число pay_day не раньше сегодняшнего (для просроченного — последнее, не позже чем 5 дней назад);
+--   issued_at = D − (paid_payments + 1) месяцев: платежи 1…paid_payments уже прошли, следующий — D.
+-- Со временем непогашенный платёж станет просроченным, как и было бы в жизни. Чтобы вернуть исходную
+-- картину, базу нужно пересоздать (docker compose down -v). У закрытых кредитов даты фиксированные,
+-- closed_at — дата последнего внесённого платежа.
+--
+-- У 7700000002 действующих кредитов нет: это сценарий «пустой кабинет».
+WITH spec (phone, product_id, contract_number, amount, rate, term_months, paid_payments, pay_day, overdue,
+           fixed_issued_at, late_payments, score, purpose, form) AS (
+    VALUES
+    -- Действующие
+    ('+79990000001', 'working_capital', '0ОС-2026/1187', 2000000::bigint, 19.00::numeric, 18, 7, 15, false,
+        NULL::date, 0, 82.4, 'Пополнение оборотных средств под сезонные закупки',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}'),
+    ('+79990000001', 'auto_loan', '0АК-2025/0342', 1500000, 15.50, 36, 20, 5, false,
+        NULL, 0, 84.0, 'Покупка автомобиля для разъездов',
         '{"applicant": {"position": "Генеральный директор", "has_collateral": true},
-          "collateral": {"type": "vehicle", "description": "Грузовой фургон", "value": 1900000},
-          "vehicle": {"make": "ГАЗ", "model": "ГАЗель NEXT", "year": 2024, "vin": "X96A21R32R2000001"}}',
-        '[{"from": "DRAFT", "to": "SUBMITTED", "at": "2024-06-03T12:30:00+03:00", "by": "{client}"},
-          {"from": "SUBMITTED", "to": "DATA_CHECK", "at": "2024-06-03T12:31:00+03:00", "by": "worker"},
-          {"from": "DATA_CHECK", "to": "SCORING", "at": "2024-06-03T12:36:00+03:00", "by": "worker"},
-          {"from": "SCORING", "to": "APPROVED", "at": "2024-06-03T12:37:00+03:00", "by": "worker"},
-          {"from": "APPROVED", "to": "SIGNING", "at": "2024-06-04T10:00:00+03:00", "by": "{client}"},
-          {"from": "SIGNING", "to": "SIGNED", "at": "2024-06-04T10:25:00+03:00", "by": "{client}"},
-          {"from": "SIGNED", "to": "DISBURSED", "at": "2024-06-05T14:00:00+03:00", "by": "{employee}"},
-          {"from": "DISBURSED", "to": "ACTIVE", "at": "2024-06-05T14:00:00+03:00", "by": "{employee}"}]',
-        '{"model_version": "scoring-1", "product_id": "auto_loan", "class": "S", "score": 84.0, "outcome": "APPROVED",
-          "rate": 16.4, "amount": 1200000, "term_months": 36,
-          "reasons_positive": [{"factor": "C1a", "text": "Нет просрочек в кредитной истории"},
-                               {"factor": "C2", "text": "Низкая долговая нагрузка"}],
-          "reasons_negative": []}',
-        timestamptz '2024-06-03 12:30:00+03', timestamptz '2024-06-05 14:00:00+03'),
-
-    ('+79990000004', 11, true, 'ooo_loan', 3000000, 36, 'Расширение склада и закупка стеллажей', 'ACTIVE',
-        '{"applicant": {"position": "Финансовый директор", "has_collateral": false}}',
-        '[{"from": "DRAFT", "to": "SUBMITTED", "at": "2024-02-19T09:40:00+03:00", "by": "{client}"},
-          {"from": "SUBMITTED", "to": "DATA_CHECK", "at": "2024-02-19T09:41:00+03:00", "by": "worker"},
-          {"from": "DATA_CHECK", "to": "SCORING", "at": "2024-02-19T09:47:00+03:00", "by": "worker"},
-          {"from": "SCORING", "to": "MANUAL_REVIEW", "at": "2024-02-19T09:48:00+03:00", "by": "worker", "comment": "Балл ниже порога встречного предложения"},
-          {"from": "MANUAL_REVIEW", "to": "APPROVED", "at": "2024-02-21T16:00:00+03:00", "by": "{employee}", "comment": "Одобрено андеррайтером: стабильные контракты с крупными покупателями, ставка 24,5 %"},
-          {"from": "APPROVED", "to": "SIGNING", "at": "2024-02-22T10:00:00+03:00", "by": "{client}"},
-          {"from": "SIGNING", "to": "SIGNED", "at": "2024-02-22T10:30:00+03:00", "by": "{client}"},
-          {"from": "SIGNED", "to": "DISBURSED", "at": "2024-02-26T11:00:00+03:00", "by": "{employee}"},
-          {"from": "DISBURSED", "to": "ACTIVE", "at": "2024-02-26T11:00:00+03:00", "by": "{employee}"}]',
-        '{"model_version": "scoring-1", "product_id": "ooo_loan", "class": "U", "score": 48.2, "outcome": "MANUAL_REVIEW",
-          "rate": 26.77, "amount": 3000000, "term_months": 36,
-          "reasons_positive": [{"factor": "C3", "text": "Компания работает больше 5 лет"}],
-          "reasons_negative": [{"factor": "C2", "text": "Высокая долговая нагрузка"},
-                               {"factor": "C1b", "text": "Много запросов в БКИ за последние 90 дней"}]}',
-        timestamptz '2024-02-19 09:40:00+03', timestamptz '2024-02-26 11:00:00+03'),
-
-    ('+79990000004', 11, false, 'working_capital', 2500000, 18, 'Оплата поставщикам по крупному контракту', 'OVERDUE',
-        '{"applicant": {"position": "Финансовый директор", "has_collateral": false}}',
-        '[{"from": "DRAFT", "to": "SUBMITTED", "at": "2025-05-20T14:00:00+03:00", "by": "{client}"},
-          {"from": "SUBMITTED", "to": "DATA_CHECK", "at": "2025-05-20T14:01:00+03:00", "by": "worker"},
-          {"from": "DATA_CHECK", "to": "SCORING", "at": "2025-05-20T14:06:00+03:00", "by": "worker"},
-          {"from": "SCORING", "to": "APPROVED", "at": "2025-05-20T14:07:00+03:00", "by": "worker"},
-          {"from": "APPROVED", "to": "SIGNING", "at": "2025-05-21T09:15:00+03:00", "by": "{client}"},
-          {"from": "SIGNING", "to": "SIGNED", "at": "2025-05-21T09:40:00+03:00", "by": "{client}"},
-          {"from": "SIGNED", "to": "DISBURSED", "at": "2025-05-22T12:00:00+03:00", "by": "{employee}"},
-          {"from": "DISBURSED", "to": "ACTIVE", "at": "2025-05-22T12:00:00+03:00", "by": "{employee}"},
-          {"from": "ACTIVE", "to": "OVERDUE", "at": "2026-09-05T00:00:00+03:00", "by": "{employee}", "comment": "Платёж за август не поступил, просрочка 35 дней"}]',
-        '{"model_version": "scoring-1", "product_id": "working_capital", "class": "U", "score": 72.0, "outcome": "APPROVED",
-          "rate": 23.2, "amount": 2500000, "term_months": 18,
-          "reasons_positive": [{"factor": "C3", "text": "Компания работает больше 5 лет"},
-                               {"factor": "P1", "text": "Платёж небольшой относительно оборота"}],
-          "reasons_negative": [{"factor": "C2", "text": "Повышенная долговая нагрузка"}]}',
-        timestamptz '2025-05-20 14:00:00+03', timestamptz '2026-09-05 00:00:00+03'),
-
-    ('+79990000005', 10, false, 'ip_loan', 600000, 24, 'Ремонт и оборудование кафе', 'ACTIVE',
-        '{"applicant": {"position": "Индивидуальный предприниматель", "has_collateral": false}}',
-        '[{"from": "DRAFT", "to": "SUBMITTED", "at": "2025-08-11T18:10:00+03:00", "by": "{client}"},
-          {"from": "SUBMITTED", "to": "DATA_CHECK", "at": "2025-08-11T18:11:00+03:00", "by": "worker"},
-          {"from": "DATA_CHECK", "to": "SCORING", "at": "2025-08-11T18:14:00+03:00", "by": "worker"},
-          {"from": "SCORING", "to": "APPROVED", "at": "2025-08-11T18:15:00+03:00", "by": "worker"},
-          {"from": "APPROVED", "to": "SIGNING", "at": "2025-08-12T10:05:00+03:00", "by": "{client}"},
-          {"from": "SIGNING", "to": "SIGNED", "at": "2025-08-12T10:20:00+03:00", "by": "{client}"},
-          {"from": "SIGNED", "to": "DISBURSED", "at": "2025-08-13T11:00:00+03:00", "by": "{employee}"},
-          {"from": "DISBURSED", "to": "ACTIVE", "at": "2025-08-13T11:00:00+03:00", "by": "{employee}"}]',
-        '{"model_version": "scoring-1", "product_id": "ip_loan", "class": "U", "score": 86.0, "outcome": "APPROVED",
-          "rate": 21.1, "amount": 600000, "term_months": 24,
-          "reasons_positive": [{"factor": "C2", "text": "Низкая долговая нагрузка"},
-                               {"factor": "C1a", "text": "Нет просрочек в кредитной истории"}],
-          "reasons_negative": []}',
-        timestamptz '2025-08-11 18:10:00+03', timestamptz '2025-08-13 11:00:00+03')
-) AS v(phone, version, manual, product_id, amount, term_months, purpose, status, form, history, decision, submitted_at, updated_at)
-JOIN users c ON c.phone = v.phone
-CROSS JOIN (SELECT id FROM users WHERE email = 'underwriter@example.test') AS e;
+          "collateral": {"type": "vehicle", "description": "Легковой автомобиль", "value": 2100000},
+          "vehicle": {"make": "Toyota", "model": "Camry", "year": 2024, "vin": "JTNB11HK0M3000001"}}'),
+    ('+79990000003', 'equipment_loan', '0ОБ-2024/2210', 2400000, 16.50, 48, 26, 20, false,
+        NULL, 0, 80.5, 'Покупка складского погрузчика',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": true},
+          "collateral": {"type": "equipment", "description": "Вилочный погрузчик", "value": 3500000},
+          "supply": {"supplier": "ООО «Техсклад»", "contract_details": "№ 41/24 от 12.08.2024"}}'),
+    ('+79990000004', 'ooo_loan', '0КО-2026/0415', 3000000, 20.00, 18, 5, 10, true,
+        NULL, 0, 71.2, 'Расширение склада и закупка стеллажей',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}'),
+    ('+79990000004', 'credit_line', '0ВКЛ-2026/0098', 1500000, 17.00, 24, 8, 25, false,
+        NULL, 0, 73.6, 'Пополнение оборотных средств',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": false},
+          "account": {"account_number": "40702810900000000004"}, "credit_line": {"desired_limit": 1500000}}'),
+    ('+79990000005', 'express', '0ЭК-2026/0731', 600000, 20.50, 12, 4, 12, false,
+        NULL, 0, 86.0, 'Ремонт и оборудование кафе',
+        '{"applicant": {"position": "Индивидуальный предприниматель", "has_collateral": false}}'),
+    -- Закрытые
+    ('+79990000001', 'working_capital', '0ОС-2023/0412', 1500000, 18.00, 18, 18, NULL, false,
+        '2023-04-12', 0, 81.0, 'Закупка товара к сезону',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}'),
+    ('+79990000001', 'express', '0ЭК-2024/1120', 500000, 21.00, 12, 7, NULL, false,
+        '2024-11-20', 0, 88.0, 'Закупка товара',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}'),
+    ('+79990000002', 'ooo_loan', '0КО-2023/0905', 800000, 20.00, 12, 12, NULL, false,
+        '2023-09-05', 0, 76.0, 'Аренда спецтехники на сезон',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}'),
+    ('+79990000003', 'auto_loan', '0АК-2020/1015', 2000000, 14.50, 36, 36, NULL, false,
+        '2020-10-15', 0, 83.0, 'Покупка грузового фургона',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": true},
+          "collateral": {"type": "vehicle", "description": "Грузовой фургон", "value": 2600000},
+          "vehicle": {"make": "ГАЗ", "model": "ГАЗель NEXT", "year": 2020, "vin": "X96A21R32L2000001"}}'),
+    ('+79990000003', 'loan_up_to_1m', '0КМ-2023/0301', 900000, 21.50, 12, 9, NULL, false,
+        '2023-03-01', 0, 78.0, 'Ремонт автопарка',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}'),
+    ('+79990000004', 'working_capital', '0ОС-2022/0718', 2500000, 17.00, 24, 24, NULL, false,
+        '2022-07-18', 2, 72.0, 'Оплата поставщикам по крупному контракту',
+        '{"applicant": {"position": "Генеральный директор", "has_collateral": false}}'),
+    ('+79990000005', 'ip_loan', '0КИ-2024/0210', 400000, 22.00, 12, 12, NULL, false,
+        '2024-02-10', 0, 85.0, 'Покупка кухонного оборудования',
+        '{"applicant": {"position": "Индивидуальный предприниматель", "has_collateral": false}}')
+),
+dated AS (
+    SELECT s.*,
+        CASE
+            WHEN s.fixed_issued_at IS NOT NULL THEN s.fixed_issued_at
+            ELSE (CASE
+                WHEN NOT s.overdue AND m.d0 >= current_date THEN m.d0
+                WHEN NOT s.overdue THEN (m.d0 + interval '1 month')::date
+                WHEN m.d0 <= current_date - 5 THEN m.d0
+                WHEN (m.d0 - interval '1 month')::date <= current_date - 5 THEN (m.d0 - interval '1 month')::date
+                ELSE (m.d0 - interval '2 months')::date
+            END - make_interval(months => s.paid_payments + 1))::date
+        END AS issued_at,
+        CASE WHEN s.fixed_issued_at IS NOT NULL THEN 'CLOSED' WHEN s.overdue THEN 'OVERDUE' ELSE 'ACTIVE' END AS status
+    FROM spec s
+    -- d0 — день платежа в текущем месяце (дни платежа в демо-данных не больше 28, сдвиг на месяц точен).
+    CROSS JOIN LATERAL (SELECT date_trunc('month', current_date)::date + (coalesce(s.pay_day, 1) - 1) AS d0) m
+),
+built AS (
+    SELECT d.*, c.id AS client_id, c.company_inn, e.id AS employee_id,
+        (d.issued_at - 3) + time '10:00' AS submitted_at,
+        CASE WHEN d.status = 'CLOSED' THEN (d.issued_at + make_interval(months => d.paid_payments))::date END AS closed_at,
+        -- Когда наступил просроченный платёж (только у OVERDUE).
+        (d.issued_at + make_interval(months => d.paid_payments + 1))::date AS missed_at
+    FROM dated d
+    JOIN users c ON c.phone = d.phone
+    CROSS JOIN (SELECT id FROM users WHERE email = 'underwriter@example.test') e
+),
+history AS (
+    SELECT b.*,
+        jsonb_build_array(
+            jsonb_build_object('from', 'DRAFT', 'to', 'SUBMITTED', 'at', (b.submitted_at)::timestamptz, 'by', b.client_id::text),
+            jsonb_build_object('from', 'SUBMITTED', 'to', 'DATA_CHECK', 'at', (b.submitted_at + interval '1 minute')::timestamptz, 'by', 'worker'),
+            jsonb_build_object('from', 'DATA_CHECK', 'to', 'SCORING', 'at', (b.submitted_at + interval '5 minutes')::timestamptz, 'by', 'worker'),
+            jsonb_build_object('from', 'SCORING', 'to', 'APPROVED', 'at', (b.submitted_at + interval '6 minutes')::timestamptz, 'by', 'worker'),
+            jsonb_build_object('from', 'APPROVED', 'to', 'SIGNING', 'at', ((b.issued_at - 1) + time '11:00')::timestamptz, 'by', b.client_id::text),
+            jsonb_build_object('from', 'SIGNING', 'to', 'SIGNED', 'at', ((b.issued_at - 1) + time '11:15')::timestamptz, 'by', b.client_id::text),
+            jsonb_build_object('from', 'SIGNED', 'to', 'DISBURSED', 'at', (b.issued_at + time '10:00')::timestamptz, 'by', b.employee_id::text),
+            jsonb_build_object('from', 'DISBURSED', 'to', 'ACTIVE', 'at', (b.issued_at + time '10:00')::timestamptz, 'by', b.employee_id::text)
+        ) || CASE b.status
+            WHEN 'CLOSED' THEN jsonb_build_array(jsonb_build_object(
+                'from', 'ACTIVE', 'to', 'CLOSED', 'at', (b.closed_at + time '12:00')::timestamptz, 'by', b.employee_id::text,
+                'comment', CASE WHEN b.paid_payments < b.term_months THEN 'Кредит погашен досрочно' ELSE 'Кредит погашен полностью' END))
+            WHEN 'OVERDUE' THEN jsonb_build_array(jsonb_build_object(
+                'from', 'ACTIVE', 'to', 'OVERDUE', 'at', ((b.missed_at + 1) + time '00:00')::timestamptz, 'by', b.employee_id::text,
+                'comment', 'Платёж № ' || (b.paid_payments + 1) || ' не поступил'))
+            ELSE '[]'::jsonb
+        END AS history,
+        CASE b.status
+            WHEN 'CLOSED' THEN b.closed_at + time '12:00'
+            WHEN 'OVERDUE' THEN (b.missed_at + 1) + time '00:00'
+            ELSE b.issued_at + time '10:00'
+        END AS updated_at
+    FROM built b
+)
+INSERT INTO applications
+    (version, company_inn, created_by, product_id, amount, term_months, purpose, status, form, history, decision,
+     submitted_at, created_at, updated_at, rate, contract_number, issued_at, paid_payments, late_payments, closed_at)
+SELECT jsonb_array_length(h.history) + 2, h.company_inn, h.client_id, h.product_id, h.amount, h.term_months,
+       h.purpose, h.status, h.form::jsonb, h.history,
+       jsonb_build_object('model_version', 'scoring-1', 'product_id', h.product_id, 'outcome', 'APPROVED',
+           'score', h.score, 'rate', h.rate, 'amount', h.amount, 'term_months', h.term_months),
+       h.submitted_at, h.submitted_at - interval '1 day', h.updated_at,
+       h.rate, h.contract_number, h.issued_at, h.paid_payments, h.late_payments, h.closed_at
+FROM history h;
 
 -- +goose Down
 DELETE FROM applications WHERE company_inn IN ('7700000001', '7700000002', '7700000003', '7700000004', '770000000005');

@@ -25,6 +25,8 @@ RUN adduser -D -u 10001 app
 WORKDIR /app
 COPY --from=build /out/credit-cabinet /app/credit-cabinet
 COPY web /app/web
+# Каталог тома с документами: новый том получает владельца из образа, иначе пользователь app не сможет писать.
+RUN mkdir -p /data/documents && chown app /data/documents
 USER app
 ENV HTTP_ADDR=:8080 WEB_DIR=/app/web
 EXPOSE 8080

@@ -19,6 +19,8 @@ type Deps struct {
 	Auth         *AuthHandler
 	Me           *MeHandler
 	Applications *ApplicationHandler
+	Loans        *LoanHandler
+	Products     *ProductHandler
 	Idempotency  middleware.IdempotencyStore
 	AssistantURL string
 }
@@ -46,14 +48,18 @@ func New(d Deps) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/login", d.Auth.Login)
 		r.Post("/auth/verify", d.Auth.Verify)
+		// Каталог открыт без входа: калькулятор доступен до авторизации.
+		r.Get("/products", d.Products.List)
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticate(d.Sessions))
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(domain.RoleClient))
+				r.Get("/me", d.Me.Me)
 				r.Post("/me/bootstrap", d.Me.Bootstrap)
 				r.Get("/me/offer", d.Me.Offer)
+				r.Get("/loans", d.Loans.List)
 
 				// Изменяющие запросы по заявкам идемпотентны: нужен заголовок Idempotency-Key.
 				idempotent := middleware.Idempotency(d.Idempotency)
@@ -63,6 +69,11 @@ func New(d Deps) http.Handler {
 					r.Get("/{id}", d.Applications.Get)
 					r.With(idempotent).Patch("/{id}", d.Applications.Update)
 					r.With(idempotent).Post("/{id}/submit", d.Applications.Submit)
+					r.With(idempotent).Post("/{id}/accept", d.Applications.Accept)
+					r.With(idempotent).Post("/{id}/decline", d.Applications.Decline)
+					// Документы черновика: тело с файлом до 10 МБ, поэтому лимит идемпотентности больше обычного.
+					r.With(middleware.IdempotencyWithLimit(d.Idempotency, domain.MaxDocumentSize+1<<20)).Post("/{id}/documents", d.Applications.UploadDocument)
+					r.With(idempotent).Delete("/{id}/documents/{docId}", d.Applications.DeleteDocument)
 				})
 			})
 		})

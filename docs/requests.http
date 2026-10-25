@@ -1,5 +1,5 @@
 # Коллекция запросов (REST Client для VS Code / HTTP-файлы JetBrains).
-# Работают /healthz, вход, /me/bootstrap и заявки клиента, остальное — черновой контракт из openapi.yaml.
+# Работают все запросы, кроме расчёта платежа и методов сотрудника (черновой контракт из openapi.yaml).
 # Тестовые учётные записи и пароль описаны в README. Код 2FA-заглушки: 000000.
 
 @host = http://localhost:8080
@@ -28,6 +28,14 @@ Content-Type: application/json
   "code": "000000"
 }
 
+### Профиль клиента и компании
+GET {{host}}/api/v1/me
+Authorization: Bearer {{clientVerify.response.body.token}}
+
+### Кредиты компании, график платежей, кредиты в других банках
+GET {{host}}/api/v1/loans
+Authorization: Bearer {{clientVerify.response.body.token}}
+
 ### Обновить показатели долговой нагрузки после входа
 POST {{host}}/api/v1/me/bootstrap
 Authorization: Bearer {{clientVerify.response.body.token}}
@@ -54,7 +62,10 @@ Idempotency-Key: {{$guid}}
   "amount": 500000,
   "term_months": 6,
   "purpose": "Пополнение оборотных средств",
-  "form": { "applicant": { "position": "Директор", "has_collateral": false } }
+  "form": {
+    "applicant": { "position": "Директор", "has_collateral": false },
+    "consents": { "bki_request": true, "personal_data": true }
+  }
 }
 
 ### Предварительное предложение для баннера
@@ -70,6 +81,23 @@ Idempotency-Key: {{$guid}}
 
 { "offer_id": "{{offer.response.body.offer.id}}" }
 
+### Загрузить документ к черновику (PDF, JPG или PNG до 10 МБ; путь к файлу — свой)
+POST {{host}}/api/v1/applications/{{createApplication.response.body.id}}/documents
+Authorization: Bearer {{clientVerify.response.body.token}}
+Idempotency-Key: {{$guid}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="kind"
+
+passport
+--boundary
+Content-Disposition: form-data; name="file"; filename="passport.pdf"
+Content-Type: application/pdf
+
+< ./passport.pdf
+--boundary--
+
 ### Список заявок компании
 GET {{host}}/api/v1/applications
 Authorization: Bearer {{clientVerify.response.body.token}}
@@ -78,8 +106,18 @@ Authorization: Bearer {{clientVerify.response.body.token}}
 GET {{host}}/api/v1/applications/{{createApplication.response.body.id}}
 Authorization: Bearer {{clientVerify.response.body.token}}
 
-### Отправить заявку (черновик становится SUBMITTED)
+### Отправить заявку (черновик становится SUBMITTED; в форме нужно согласие consents.bki_request = true)
 POST {{host}}/api/v1/applications/{{createApplication.response.body.id}}/submit
+Authorization: Bearer {{clientVerify.response.body.token}}
+Idempotency-Key: {{$guid}}
+
+### Принять одобрение или встречное предложение (заявка в APPROVED или COUNTER_OFFER): кредит становится ACTIVE
+POST {{host}}/api/v1/applications/{{createApplication.response.body.id}}/accept
+Authorization: Bearer {{clientVerify.response.body.token}}
+Idempotency-Key: {{$guid}}
+
+### Отказаться от встречного предложения (COUNTER_OFFER → DRAFT)
+POST {{host}}/api/v1/applications/{{createApplication.response.body.id}}/decline
 Authorization: Bearer {{clientVerify.response.body.token}}
 Idempotency-Key: {{$guid}}
 
@@ -104,7 +142,7 @@ Content-Type: application/json
   "code": "000000"
 }
 
-### Каталог продуктов
+### Каталог продуктов (без входа)
 GET {{host}}/api/v1/products
 
 ### Расчёт платежа
@@ -112,10 +150,6 @@ POST {{host}}/api/v1/calculator
 Content-Type: application/json
 
 { "product_id": "working-capital", "amount": 1000000, "term_months": 12 }
-
-### Кредиты клиента
-GET {{host}}/api/v1/loans
-Authorization: Bearer {{token}}
 
 ### Очередь заявок андеррайтера
 GET {{host}}/api/v1/employee/applications?status=MANUAL_REVIEW

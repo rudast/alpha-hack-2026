@@ -4,7 +4,9 @@ CREATE TABLE companies (
     org_type              text NOT NULL CHECK (org_type IN ('IP', 'OOO')),
     name                  text NOT NULL,
     okved                 text NOT NULL DEFAULT '',
+    okved_title           text,                       -- расшифровка ОКВЭД
     ogrn                  text,
+    account_number        text,                       -- расчётный счёт в нашем банке
     registration_date     date,
 
     -- Показатели долговой нагрузки из кредитной истории.
@@ -30,6 +32,7 @@ CREATE TABLE companies (
 CREATE TABLE users (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name     text NOT NULL DEFAULT '',
+    position      text,          -- должность клиента в компании
     phone         text UNIQUE,
     email         text,
     password_hash text NOT NULL,
@@ -88,9 +91,18 @@ CREATE TABLE applications (
     -- Данные формы по группам полей: form.<группа>.<поле>. Состав зависит от продукта
     -- и описан в каталоге продуктов, проверка полноты делается в коде.
     form         jsonb NOT NULL DEFAULT '{}',
-    documents    jsonb NOT NULL DEFAULT '[]',
     history      jsonb NOT NULL DEFAULT '[]',
     decision     jsonb,
+
+    -- Выданный кредит. Отдельной таблицы кредитов нет: заявка после выдачи (ACTIVE, OVERDUE, CLOSED)
+    -- и есть кредит. amount и term_months у выданного кредита — одобренные сумма и срок. График платежей
+    -- не хранится, а считается из суммы, ставки, срока, даты выдачи и числа внесённых платежей.
+    rate            numeric(5, 2),  -- ставка выданного кредита, % годовых
+    contract_number text,
+    issued_at       date,           -- дата выдачи; её день месяца — день платежа
+    paid_payments   integer NOT NULL DEFAULT 0 CHECK (paid_payments >= 0), -- сколько ежемесячных платежей внесено
+    late_payments   integer NOT NULL DEFAULT 0 CHECK (late_payments >= 0), -- сколько из них внесено с опозданием
+    closed_at       date,
 
     submitted_at timestamptz,
     enqueued_at  timestamptz, -- когда задача по заявке последний раз отправлялась воркеру (ставит отправка заявки и сборщик застрявших заявок)

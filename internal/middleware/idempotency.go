@@ -28,6 +28,12 @@ type IdempotencyStore interface {
 // и тем же содержимым получает тот же самый ответ, не выполняя действие второй раз.
 // Ставится после Authenticate: ключи разных пользователей не пересекаются.
 func Idempotency(store IdempotencyStore) func(http.Handler) http.Handler {
+	return IdempotencyWithLimit(store, maxStoredBody)
+}
+
+// IdempotencyWithLimit — то же, что Idempotency, но принимает тело запроса до maxBody байт
+// (например, загрузку файла). Ответ по-прежнему хранится, только если он не больше maxStoredBody.
+func IdempotencyWithLimit(store IdempotencyStore, maxBody int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p, ok := PrincipalFrom(r.Context())
@@ -43,7 +49,7 @@ func Idempotency(store IdempotencyStore) func(http.Handler) http.Handler {
 			}
 
 			// Тело читаем целиком: оно входит в «отпечаток» запроса, а затем нужно хендлеру.
-			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxStoredBody))
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 			if err != nil {
 				writeError(w, http.StatusBadRequest, "invalid request body")
 				return

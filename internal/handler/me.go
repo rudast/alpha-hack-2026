@@ -9,6 +9,7 @@ import (
 
 	"github.com/rudast/alpha-hack-2026/internal/domain"
 	"github.com/rudast/alpha-hack-2026/internal/middleware"
+	"github.com/rudast/alpha-hack-2026/internal/service"
 )
 
 type TrustService interface {
@@ -20,13 +21,87 @@ type OfferService interface {
 	ProductName(id string) string
 }
 
-type MeHandler struct {
-	trust  TrustService
-	offers OfferService
+type ProfileService interface {
+	Profile(ctx context.Context, p domain.Principal) (service.Profile, error)
 }
 
-func NewMeHandler(trust TrustService, offers OfferService) *MeHandler {
-	return &MeHandler{trust: trust, offers: offers}
+type MeHandler struct {
+	trust    TrustService
+	offers   OfferService
+	profiles ProfileService
+}
+
+func NewMeHandler(trust TrustService, offers OfferService, profiles ProfileService) *MeHandler {
+	return &MeHandler{trust: trust, offers: offers, profiles: profiles}
+}
+
+type profileUser struct {
+	FullName string  `json:"full_name"`
+	Phone    *string `json:"phone"`
+	Email    *string `json:"email"`
+	Position *string `json:"position"`
+}
+
+type profileCompany struct {
+	INN              string  `json:"inn"`
+	OrgType          string  `json:"org_type"`
+	Name             string  `json:"name"`
+	OGRN             *string `json:"ogrn"`
+	OKVED            string  `json:"okved"`
+	OKVEDTitle       *string `json:"okved_title"`
+	RegistrationDate *string `json:"registration_date"` // YYYY-MM-DD
+	Director         *string `json:"director"`
+	Address          *string `json:"address"`
+	Status           *string `json:"status"`
+	AccountNumber    *string `json:"account_number"`
+}
+
+type profileResponse struct {
+	User    profileUser    `json:"user"`
+	Company profileCompany `json:"company"`
+}
+
+// Me — профиль клиента и его компании: приветствие, профиль компании, подстановка в анкету.
+func (h *MeHandler) Me(w http.ResponseWriter, r *http.Request) {
+	p, _ := middleware.PrincipalFrom(r.Context())
+
+	prof, err := h.profiles.Profile(r.Context(), p)
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		writeError(w, http.StatusNotFound, "profile not found")
+		return
+	case err != nil:
+		log.Printf("me: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	u, c := prof.User, prof.Company
+	writeJSON(w, http.StatusOK, profileResponse{
+		User: profileUser{FullName: u.FullName, Phone: nullable(u.Phone), Email: nullable(u.Email), Position: u.Position},
+		Company: profileCompany{
+			INN: c.INN, OrgType: c.OrgType, Name: c.Name, OGRN: c.OGRN, OKVED: c.OKVED, OKVEDTitle: c.OKVEDTitle,
+			RegistrationDate: dateOnly(c.RegistrationDate),
+			Director:         nullable(prof.Director), Address: nullable(prof.Address), Status: nullable(prof.Status),
+			AccountNumber: c.AccountNumber,
+		},
+	})
+}
+
+// nullable превращает пустую строку в null в ответе.
+func nullable(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// dateOnly форматирует дату без времени (YYYY-MM-DD); nil остаётся null.
+func dateOnly(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.Format(time.DateOnly)
+	return &s
 }
 
 type bootstrapResponse struct {

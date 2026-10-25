@@ -11,7 +11,7 @@ type ApplicationTask struct {
 	Amount        int64
 	TermMonths    int
 	Form          map[string]any
-	Documents     json.RawMessage
+	Documents     []Document // загруженные файлы; воркер читает их из тома по Path
 
 	// Показатели долговой нагрузки компании; nil, если они ещё не получены.
 	Debt         *int64

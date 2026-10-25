@@ -46,12 +46,16 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	applicationRepo := repository.NewApplicationRepo(pool)
 	applicationPublisher := queue.NewApplicationPublisher(rdb)
+	documents, err := repository.NewDocumentStore(cfg.DocumentsDir)
+	if err != nil {
+		return fmt.Errorf("documents: %w", err)
+	}
 	offerRepo := repository.NewOfferRepo(pool)
 	offers := service.NewOfferService(offerRepo, companies, products)
-	applications := service.NewApplicationService(applicationRepo, companies, offerRepo, products, applicationPublisher)
+	applications := service.NewApplicationService(applicationRepo, companies, offerRepo, products, applicationPublisher, documents)
 
 	// Сборщик: раз в минуту повторно отправляет воркеру заявки, которые больше 2 минут остаются в SUBMITTED.
-	sweeper := service.NewApplicationSweeper(applicationRepo, companies, applicationPublisher, time.Minute, 2*time.Minute)
+	sweeper := service.NewApplicationSweeper(applicationRepo, companies, documents, applicationPublisher, time.Minute, 2*time.Minute)
 	go sweeper.Run(ctx)
 
 	// Приём результатов воркера скоринга: читает applications:results и пишет статусы и решения в Postgres.
@@ -68,8 +72,10 @@ func Run(ctx context.Context, cfg config.Config) error {
 			WebDir:       cfg.WebDir,
 			Sessions:     authStore,
 			Auth:         handler.NewAuthHandler(auth),
-			Me:           handler.NewMeHandler(trust, offers),
+			Me:           handler.NewMeHandler(trust, offers, service.NewProfileService(repository.NewUserRepo(pool), companies)),
 			Applications: handler.NewApplicationHandler(applications),
+			Products:     handler.NewProductHandler(products),
+			Loans:        handler.NewLoanHandler(service.NewLoanService(applicationRepo, companies, products)),
 			Idempotency:  repository.NewIdempotencyStore(rdb),
 			AssistantURL: cfg.AssistantURL,
 		}),

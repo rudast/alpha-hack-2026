@@ -10,6 +10,9 @@ type Company struct {
 	OrgType          string
 	Name             string
 	OKVED            string
+	OKVEDTitle       *string
+	OGRN             *string
+	AccountNumber    *string // расчётный счёт в нашем банке
 	RegistrationDate *time.Time
 	TotalDebt        *int64
 	Equity           *int64

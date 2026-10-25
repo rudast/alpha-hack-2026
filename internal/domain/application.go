@@ -98,7 +98,7 @@ type Application struct {
 	Purpose     string          `json:"purpose"`
 	Status      Status          `json:"status"`
 	Form        map[string]any  `json:"form"`
-	Documents   json.RawMessage `json:"documents"`
+	Documents   []Document      `json:"documents"` // файлы из тома; в базе не хранятся
 	History     []HistoryEntry  `json:"history"`
 	Decision    json.RawMessage `json:"decision,omitempty"`
 	SubmittedAt *time.Time      `json:"submitted_at"`
@@ -107,6 +107,20 @@ type Application struct {
 
 	// OfferID — предварительное предложение, по которому создана заявка; nil у обычной заявки.
 	OfferID *string `json:"offer_id"`
+
+	// Поля выданного кредита (заявка в ACTIVE, OVERDUE, CLOSED). Клиенту отдаются через GET /loans
+	// вместе с посчитанным графиком, поэтому в JSON заявки не входят.
+	Rate           *float64   `json:"-"` // ставка, % годовых
+	ContractNumber *string    `json:"-"`
+	IssuedAt       *time.Time `json:"-"` // дата выдачи; её день месяца — день платежа
+	PaidPayments   int        `json:"-"` // сколько ежемесячных платежей внесено
+	LatePayments   int        `json:"-"` // сколько из них внесено с опозданием
+	ClosedAt       *time.Time `json:"-"`
+}
+
+// IsLoan сообщает, выдан ли кредит по заявке (такие заявки показываются в «Моих кредитах»).
+func (a Application) IsLoan() bool {
+	return a.Status == StatusActive || a.Status == StatusOverdue || a.Status == StatusClosed
 }
 
 // ApplicationSummary — строка списка заявок в кабинете.
@@ -119,6 +133,19 @@ type ApplicationSummary struct {
 	Status      Status     `json:"status"`
 	SubmittedAt *time.Time `json:"submitted_at"`
 	CreatedAt   time.Time  `json:"created_at"`
+
+	// Decision — решение по заявке (в том числе встречное предложение decision.offer), чтобы список
+	// показывал его без открытия заявки; null, пока решения нет.
+	Decision json.RawMessage `json:"decision"`
+}
+
+// LoanTerms — условия, на которых выдаётся кредит, когда клиент принимает решение банка.
+type LoanTerms struct {
+	Amount         int64
+	TermMonths     int
+	Rate           float64
+	ContractNumber string
+	IssuedAt       time.Time
 }
 
 // DraftPatch — изменения черновика. Нулевой указатель (или nil у Form) означает «поле не передано»,

@@ -90,7 +90,7 @@ func (s *OfferService) ProductName(id string) string {
 
 // creditHistory и registry — поля из сохранённых ответов БКИ и реестров, нужные для стоп-условий.
 type creditHistory struct {
-	CurrentOverdueDays int `json:"current_overdue_days"`
+	CurrentOverdueDays *int `json:"current_overdue_days"`
 }
 
 type registryFlags struct {
@@ -108,11 +108,12 @@ func (s *OfferService) calculate(c domain.Company, now time.Time) (domain.Offer,
 	if *c.Equity <= 0 {
 		return domain.Offer{}, domain.OfferReasonNoEquity
 	}
-	// Пустой объект означает «сведений нет», а не «всё чисто»: без истории лимит ограничивается.
-	bkiChecked := !emptyJSON(c.CreditHistory)
+	// Проверка БКИ выполнена, только если в истории есть сведения о просрочке. Пустой объект или
+	// только список кредитов в других банках означает «сведений нет», а не «всё чисто»: лимит ограничивается.
 	var history creditHistory
 	_ = json.Unmarshal(c.CreditHistory, &history)
-	if history.CurrentOverdueDays > 0 {
+	bkiChecked := history.CurrentOverdueDays != nil
+	if bkiChecked && *history.CurrentOverdueDays > 0 {
 		return domain.Offer{}, domain.OfferReasonOverdue
 	}
 	var registry registryFlags
@@ -191,11 +192,6 @@ func businessAgeMonths(registered *time.Time, now time.Time) int {
 		months--
 	}
 	return max(months, 0)
-}
-
-func emptyJSON(raw json.RawMessage) bool {
-	var v map[string]any
-	return len(raw) == 0 || json.Unmarshal(raw, &v) != nil || len(v) == 0
 }
 
 func sameTime(a, b *time.Time) bool {

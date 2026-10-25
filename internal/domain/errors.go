@@ -28,6 +28,8 @@ var (
 	ErrOfferExpired        = errors.New("offer has expired")
 	ErrOfferInvalid        = errors.New("offer is no longer valid")
 	ErrOfferAmountExceeded = errors.New("amount exceeds the offer limit")
+
+	ErrNotAwaitingDecision = errors.New("application is not awaiting client decision")
 )
 
 // ValidationError перечисляет обязательные поля, которые ещё не заполнены.

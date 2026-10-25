@@ -119,11 +119,13 @@ products:
   # Беззалоговые
   - id: overdraft
     name: Овердрафт
+    description: "Короткое финансирование для покрытия кассовых разрывов."
     min_term_months: 1
     max_term_months: 12
     min_amount: 50000
     max_amount: 15000000
     base_rate: 17.5
+    min_business_age_months: 9
     collateral: none
     field_groups: [account, rko]
     documents: [account_statement]
@@ -131,7 +133,8 @@ products:
 
   - id: credit_line
     name: Возобновляемая кредитная линия (ВКЛ)
-    min_term_months: 1
+    description: "Лимит, которым можно пользоваться частями и пополнять по мере возврата. Подходит и с залогом, и без."
+    min_term_months: 3
     max_term_months: 24
     min_amount: 300000
     max_amount: 30000000
@@ -144,6 +147,7 @@ products:
 
   - id: express
     name: Экспресс-кредит для бизнеса
+    description: "Ускоренное онлайн-рассмотрение по минимальному набору сведений. Доступен также молодым компаниям."
     min_term_months: 1
     max_term_months: 18
     min_amount: 50000
@@ -156,6 +160,7 @@ products:
   # Беззалоговые, срок 3–36 месяцев
   - id: working_capital
     name: Кредит на пополнение оборотных средств
+    description: "Пополнение оборотных средств: закупки, зарплаты, аренда и другие текущие расходы."
     min_term_months: 3
     max_term_months: 36
     min_amount: 100000
@@ -168,6 +173,7 @@ products:
 
   - id: marketplace_seller
     name: Кредит для селлеров маркетплейсов
+    description: "Целевое финансирование под аналитику продаж на маркетплейсах для пополнения складских запасов."
     min_term_months: 3
     max_term_months: 18
     min_amount: 50000
@@ -181,6 +187,7 @@ products:
 
   - id: ip_loan
     name: Кредит для ИП
+    description: "Финансирование для индивидуальных предпринимателей без обеспечения."
     min_term_months: 3
     max_term_months: 36
     min_amount: 50000
@@ -192,6 +199,7 @@ products:
 
   - id: ooo_loan
     name: Кредит для ООО
+    description: "Финансирование развития компании без обеспечения."
     min_term_months: 3
     max_term_months: 36
     min_amount: 300000
@@ -203,6 +211,7 @@ products:
 
   - id: loan_up_to_1m
     name: Кредит до 1 млн ₽
+    description: "Небольшая сумма на текущие задачи бизнеса без залога."
     min_term_months: 1
     max_term_months: 24
     min_amount: 50000
@@ -215,7 +224,8 @@ products:
   # Залоговые, срок 24–84 месяца
   - id: equipment_loan
     name: Кредит на оборудование
-    min_term_months: 24
+    description: "Покупка оборудования для производства и услуг под залог."
+    min_term_months: 12
     max_term_months: 84
     min_amount: 500000
     max_amount: 30000000
@@ -228,6 +238,7 @@ products:
 
   - id: auto_loan
     name: Автокредит для бизнеса
+    description: "Покупка транспорта для компании: легкового, грузового или специального."
     min_term_months: 12
     max_term_months: 60
     min_amount: 500000
@@ -242,6 +253,7 @@ products:
   # Базовый залоговый кредит доступен и на срок до 24 месяцев.
   - id: secured_property_equipment
     name: Кредит под залог недвижимости или оборудования
+    description: "Крупные суммы на длительный срок под имеющееся имущество."
     min_term_months: 6
     max_term_months: 120
     min_amount: 500000
@@ -255,6 +267,7 @@ products:
 
   - id: business_purchase
     name: Кредит на покупку завода или готового бизнеса
+    description: "Финансирование покупки действующего производства или готового бизнеса."
     min_term_months: 24
     max_term_months: 84
     min_amount: 5000000
@@ -268,6 +281,7 @@ products:
 
   - id: mortgage_ip
     name: Ипотека для ИП
+    description: "Покупка коммерческой недвижимости для индивидуального предпринимателя."
     min_term_months: 24
     max_term_months: 120
     min_amount: 1500000
@@ -282,6 +296,7 @@ products:
 
   - id: mortgage_business
     name: Ипотека для бизнеса (коммерческая недвижимость)
+    description: "Покупка коммерческой недвижимости для компании."
     min_term_months: 24
     max_term_months: 120
     min_amount: 2000000
@@ -289,6 +304,7 @@ products:
     base_rate: 14.5
     min_business_age_months: 9
     collateral: required
+    org_types: [OOO]
     field_groups: [collateral, property, mortgage]
     documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]
     scoring: [ltv, down_payment]

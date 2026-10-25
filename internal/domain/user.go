@@ -12,6 +12,8 @@ const (
 
 type User struct {
 	ID           string
+	FullName     string
+	Position     *string
 	Phone        string
 	Email        string
 	PasswordHash string

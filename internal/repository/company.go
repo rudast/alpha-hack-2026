@@ -23,11 +23,11 @@ func (r *CompanyRepo) GetByINN(ctx context.Context, inn string) (domain.Company,
 	var c domain.Company
 	var registry, creditHistory, financials []byte
 	err := r.db.QueryRow(ctx, `
-		SELECT inn, org_type, name, okved, registration_date, total_debt, equity, debt_to_equity, financials_fetched_at,
-			registry, credit_history, financials
+		SELECT inn, org_type, name, okved, okved_title, ogrn, account_number, registration_date,
+			total_debt, equity, debt_to_equity, financials_fetched_at, registry, credit_history, financials
 		FROM companies WHERE inn = $1`, inn,
-	).Scan(&c.INN, &c.OrgType, &c.Name, &c.OKVED, &c.RegistrationDate, &c.TotalDebt, &c.Equity, &c.DebtToEquity, &c.FetchedAt,
-		&registry, &creditHistory, &financials)
+	).Scan(&c.INN, &c.OrgType, &c.Name, &c.OKVED, &c.OKVEDTitle, &c.OGRN, &c.AccountNumber, &c.RegistrationDate,
+		&c.TotalDebt, &c.Equity, &c.DebtToEquity, &c.FetchedAt, &registry, &creditHistory, &financials)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Company{}, domain.ErrNotFound
 	}

@@ -36,6 +36,7 @@ type Group struct {
 type Product struct {
 	ID                   string   `yaml:"id" json:"id"`
 	Name                 string   `yaml:"name" json:"name"`
+	Description          string   `yaml:"description" json:"description"`
 	MinTermMonths        int      `yaml:"min_term_months" json:"min_term_months"`
 	MaxTermMonths        int      `yaml:"max_term_months" json:"max_term_months"`
 	MinAmount            int64    `yaml:"min_amount" json:"min_amount"`
@@ -218,16 +219,39 @@ func (c *Catalog) RequiredDocuments(p Product) []string {
 	return out
 }
 
+// OptionalDocuments возвращает виды необязательных документов (базовый набор, общий для всех продуктов).
+func (c *Catalog) OptionalDocuments() []string { return slices.Clone(c.f.BaseOptionalDocuments) }
+
+// OrgTypes возвращает типы организаций, которым доступен продукт (пустой список в каталоге — обоим).
+func (c *Catalog) OrgTypes(p Product) []string {
+	if len(p.OrgTypes) == 0 {
+		return []string{"IP", "OOO"}
+	}
+	return slices.Clone(p.OrgTypes)
+}
+
 // Available сообщает, подходит ли продукт организации данного типа и параметрам заявки.
-// Нулевые значения amount и termMonths не проверяются.
+// Нулевые значения amount и termMonths не проверяются. Возраст бизнеса проверяет AvailableForAge.
 func (c *Catalog) Available(p Product, orgType string, amount int64, termMonths int) bool {
 	if len(p.OrgTypes) > 0 && !slices.Contains(p.OrgTypes, orgType) {
 		return false
 	}
-	if p.MaxAmount > 0 && amount > p.MaxAmount {
+	if amount > 0 && (amount < p.MinAmount || (p.MaxAmount > 0 && amount > p.MaxAmount)) {
 		return false
 	}
 	if termMonths > 0 && (termMonths < p.MinTermMonths || termMonths > p.MaxTermMonths) {
+		return false
+	}
+	return true
+}
+
+// AvailableForAge сообщает, подходит ли продукт бизнесу возрастом ageMonths с суммой amount: продукт может
+// требовать минимальный возраст бизнеса, а молодому бизнесу (младше young_business_months) — ограничивать сумму.
+func (c *Catalog) AvailableForAge(p Product, ageMonths int, amount int64) bool {
+	if ageMonths < p.MinBusinessAgeMonths {
+		return false
+	}
+	if ageMonths < c.f.Offer.YoungBusinessMonths && p.YoungMaxAmount > 0 && amount > p.YoungMaxAmount {
 		return false
 	}
 	return true
