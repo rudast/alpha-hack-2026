@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Личный кабинет — Альфа-Будущее</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23ef3124'/%3E%3Cpath fill='white' transform='translate(3.6 3.6) scale(.7)' d='M13.6 3h-3.2L5 17h2.8l1.2-3.4h6l1.2 3.4H19L13.6 3zm-3.6 8.2L12 5.5l2 5.7h-4zM5 19.5h14V22H5v-2.5z'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="/assets/css/core.css?v=3" />
-  <link rel="stylesheet" href="/assets/css/cabinet.css?v=3" />
+  <link rel="stylesheet" href="/assets/css/core.css?v=5" />
+  <link rel="stylesheet" href="/assets/css/cabinet.css?v=5" />
+  <link rel="stylesheet" href="/assets/css/assistant.css?v=5" />
 </head>
 <body>
 
@@ -24,10 +25,14 @@
     </a>
 
     <div class="topbar-actions">
-      <div class="company-chip hidden" id="company-chip">
-        <div class="company-chip-name" id="chip-name"></div>
-        <div class="company-chip-inn" id="chip-inn"></div>
-      </div>
+      <button type="button" class="company-chip hidden" id="company-chip" aria-haspopup="dialog" aria-label="Профиль компании">
+        <span class="avatar" id="chip-avatar" aria-hidden="true"></span>
+        <span class="company-chip-text">
+          <span class="company-chip-name" id="chip-name"></span>
+          <span class="company-chip-inn" id="chip-inn"></span>
+        </span>
+        <svg class="company-chip-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
       <a href="#new-loan" class="btn btn-primary btn-inline" id="btn-new-loan">Взять кредит</a>
       <button type="button" id="btn-logout" class="btn btn-secondary btn-inline">Выйти</button>
     </div>
@@ -64,50 +69,35 @@
         <div class="tile skeleton"></div>
       </section>
 
-      <div class="layout">
-        <div class="layout-main">
-
-          <section class="block" aria-labelledby="loans-title">
-            <div class="block-head">
-              <h2 id="loans-title">Мои кредиты</h2>
-              <span class="block-count" id="loans-count"></span>
-            </div>
-            <div id="loans"><div class="card-row skeleton"></div></div>
-          </section>
-
-          <section class="block" aria-labelledby="apps-title">
-            <div class="block-head">
-              <h2 id="apps-title">Мои заявки</h2>
-              <span class="block-count" id="apps-count"></span>
-            </div>
-            <div id="applications"><div class="card-row skeleton"></div></div>
-          </section>
-
-          <section class="block hidden" id="other-banks-block" aria-labelledby="other-title">
-            <div class="block-head">
-              <h2 id="other-title">Кредиты в других банках</h2>
-              <span class="block-hint">по данным бюро кредитных историй</span>
-            </div>
-            <div id="other-banks"></div>
-          </section>
-
+      <section class="block" aria-labelledby="loans-title">
+        <div class="block-head">
+          <h2 id="loans-title">Мои кредиты</h2>
+          <span class="block-count" id="loans-count"></span>
         </div>
+        <div id="loans" class="loans-grid"><div class="card-row skeleton"></div><div class="card-row skeleton"></div></div>
+        <!-- Кредитная история: закрытые кредиты, свёрнуты по умолчанию -->
+        <div id="loan-history" class="loan-history hidden"></div>
+      </section>
 
-        <aside class="layout-side">
-          <section class="panel" aria-labelledby="profile-title">
-            <div class="panel-head">
-              <h2 id="profile-title">Компания</h2>
-              <span class="source-badge" title="Сведения получены из государственного реестра, изменить их можно только в ФНС">из ЕГРЮЛ</span>
-            </div>
-            <div id="profile"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div></div>
-          </section>
+      <section class="block" aria-labelledby="apps-title">
+        <div class="block-head">
+          <h2 id="apps-title">Мои заявки</h2>
+          <span class="block-count" id="apps-count"></span>
+          <a href="#new-loan" class="btn btn-secondary btn-inline block-action hidden" id="apps-new">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Новая заявка
+          </a>
+        </div>
+        <div id="applications"><div class="card-row skeleton"></div></div>
+      </section>
 
-          <section class="panel" aria-labelledby="contact-title">
-            <h2 id="contact-title" class="panel-title">Контакты для связи</h2>
-            <div id="contacts"><div class="skeleton skeleton-text"></div></div>
-          </section>
-        </aside>
-      </div>
+      <section class="block hidden" id="other-banks-block" aria-labelledby="other-title">
+        <div class="block-head">
+          <h2 id="other-title">Кредиты в других банках</h2>
+          <span class="block-hint">по данным бюро кредитных историй</span>
+        </div>
+        <div id="other-banks"></div>
+      </section>
     </div>
 
     <!-- ============ Мастер новой заявки ============ -->
@@ -143,6 +133,17 @@
 
   </main>
 
+  <!-- Профиль компании: выезжает справа по клику на компанию в шапке -->
+  <dialog id="profile-drawer" class="drawer" aria-labelledby="drawer-title">
+    <div class="drawer-head">
+      <h2 id="drawer-title">Профиль компании</h2>
+      <button type="button" class="dialog-close" id="drawer-close" aria-label="Закрыть">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="drawer-body"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div></div>
+  </dialog>
+
   <!-- Окно для подробностей заявки, графика платежей и заглушек -->
   <dialog id="dialog" class="dialog" aria-labelledby="dialog-title">
     <div class="dialog-head">
@@ -154,12 +155,15 @@
     <div class="dialog-body" id="dialog-body"></div>
   </dialog>
 
-  <script src="/assets/js/api.js?v=3"></script>
-  <script src="/assets/js/mock-api.js?v=3"></script>
-  <script src="/assets/js/loans.js?v=3"></script>
-  <script src="/assets/js/catalog.js?v=3"></script>
-  <script src="/assets/js/ui.js?v=3"></script>
-  <script src="/assets/js/wizard.js?v=3"></script>
-  <script src="/assets/js/cabinet.js?v=3"></script>
+  <script src="/assets/js/api.js?v=5"></script>
+  <script src="/assets/js/mock-api.js?v=5"></script>
+  <script src="/assets/js/loans.js?v=5"></script>
+  <script src="/assets/js/catalog.js?v=5"></script>
+  <script src="/assets/js/ui.js?v=5"></script>
+  <script src="/assets/js/datepicker.js?v=5"></script>
+  <script src="/assets/js/balance-chart.js?v=5"></script>
+  <script src="/assets/js/wizard.js?v=5"></script>
+  <script src="/assets/js/cabinet.js?v=5"></script>
+  <script src="/assets/js/assistant.js?v=5"></script>
 </body>
 </html>

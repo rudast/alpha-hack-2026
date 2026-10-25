@@ -73,6 +73,7 @@ CREATE TABLE applications (
     decision     jsonb,
 
     submitted_at timestamptz,
+    enqueued_at  timestamptz, -- когда задача по заявке последний раз отправлялась воркеру (ставит отправка заявки и сборщик застрявших заявок)
     created_at   timestamptz NOT NULL DEFAULT now(),
     updated_at   timestamptz NOT NULL DEFAULT now()
 );

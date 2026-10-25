@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -13,47 +13,101 @@ import (
 	"github.com/rudast/alpha-hack-2026/internal/catalog"
 	"github.com/rudast/alpha-hack-2026/internal/config"
 	"github.com/rudast/alpha-hack-2026/internal/handler"
+	"github.com/rudast/alpha-hack-2026/internal/middleware"
 	"github.com/rudast/alpha-hack-2026/internal/queue"
 	"github.com/rudast/alpha-hack-2026/internal/repository"
 	"github.com/rudast/alpha-hack-2026/internal/service"
 )
 
 func Run(ctx context.Context, cfg config.Config) error {
-	pool, err := repository.NewPool(ctx, cfg.DatabaseURL)
-	if err != nil {
-		return fmt.Errorf("postgres: %w", err)
-	}
-	defer pool.Close()
+	var (
+		authStore   middleware.SessionReader
+		authHandler *handler.AuthHandler
+		meHandler   *handler.MeHandler
+		appHandler  *handler.ApplicationHandler
+		idempotency middleware.IdempotencyStore
+	)
 
-	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
-	defer rdb.Close()
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		return fmt.Errorf("redis: %w", err)
+	if cfg.DatabaseURL != "" {
+		pool, err := repository.NewPool(ctx, cfg.DatabaseURL)
+		if err != nil {
+			log.Printf("postgres connection error: %v (running in web presentation mode)", err)
+		} else {
+			defer pool.Close()
+
+			rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
+			defer rdb.Close()
+			if err := rdb.Ping(ctx).Err(); err != nil {
+				log.Printf("redis connection error: %v (running in web presentation mode)", err)
+			} else {
+				aStore := repository.NewAuthStore(rdb)
+				authStore = aStore
+				idempotency = repository.NewIdempotencyStore(rdb)
+
+				auth, err := service.NewAuthService(repository.NewUserRepo(pool), aStore, service.StubOTP{Code: cfg.OTPStubCode})
+				if err != nil {
+					log.Printf("auth service error: %v", err)
+				} else {
+					authHandler = handler.NewAuthHandler(auth)
+				}
+
+				companies := repository.NewCompanyRepo(pool)
+				trust := service.NewTrustService(companies, queue.NewClient(rdb), cfg.TrustRefreshInterval, cfg.WorkerTimeout)
+				meHandler = handler.NewMeHandler(trust)
+
+				products, err := catalog.Load()
+				if err != nil {
+					log.Printf("catalog load error: %v", err)
+				} else {
+					applicationRepo := repository.NewApplicationRepo(pool)
+					applicationPublisher := queue.NewApplicationPublisher(rdb)
+					applications := service.NewApplicationService(applicationRepo, companies, products, applicationPublisher)
+					appHandler = handler.NewApplicationHandler(applications)
+
+					sweeper := service.NewApplicationSweeper(applicationRepo, companies, applicationPublisher, time.Minute, 2*time.Minute)
+					go sweeper.Run(ctx)
+
+					if consumerName, err := os.Hostname(); err == nil {
+						results := service.NewResultProcessor(applicationRepo)
+						go queue.NewResultConsumer(rdb).Serve(ctx, consumerName, results.Process)
+					}
+				}
+			}
+		}
+	} else {
+		log.Printf("DATABASE_URL is not set; running in web presentation mode with in-memory DemoService")
 	}
 
-	authStore := repository.NewAuthStore(rdb)
-	auth, err := service.NewAuthService(repository.NewUserRepo(pool), authStore, service.StubOTP{Code: cfg.OTPStubCode})
-	if err != nil {
-		return err
+	if authHandler == nil || authStore == nil || meHandler == nil || appHandler == nil {
+		log.Printf("initializing in-memory DemoService (auth, company bootstrap, applications enabled)")
+		demo := service.NewDemoPackage()
+		if authHandler == nil {
+			authHandler = handler.NewAuthHandler(demo.Auth)
+		}
+		if authStore == nil {
+			authStore = demo.Sessions
+		}
+		if meHandler == nil {
+			meHandler = handler.NewMeHandler(demo.Trust)
+		}
+		if appHandler == nil {
+			appHandler = handler.NewApplicationHandler(demo.Apps)
+		}
+		if idempotency == nil {
+			idempotency = demo.Idempotency
+		}
 	}
-	companies := repository.NewCompanyRepo(pool)
-	trust := service.NewTrustService(companies, queue.NewClient(rdb), cfg.TrustRefreshInterval, cfg.WorkerTimeout)
-
-	products, err := catalog.Load()
-	if err != nil {
-		return err
-	}
-	applications := service.NewApplicationService(repository.NewApplicationRepo(pool), companies, products)
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: handler.New(handler.Deps{
 			WebDir:       cfg.WebDir,
 			Sessions:     authStore,
-			Auth:         handler.NewAuthHandler(auth),
-			Me:           handler.NewMeHandler(trust),
-			Applications: handler.NewApplicationHandler(applications),
-			Idempotency:  repository.NewIdempotencyStore(rdb),
+			Auth:         authHandler,
+			Me:           meHandler,
+			Applications: appHandler,
+			Idempotency:  idempotency,
+			AssistantURL: cfg.AssistantURL,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

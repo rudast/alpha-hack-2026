@@ -2,8 +2,7 @@
 
 В PostgreSQL три таблицы: компании, пользователи и заявки. Всё, что принадлежит заявке (история статусов, документы, решение, данные формы), хранится в ней самой, без отдельных таблиц. Каталог продуктов лежит в приложении ([internal/catalog/products.yaml](../internal/catalog/products.yaml)). Временные данные и обмен с воркером живут в Redis.
 
-Схема целиком создаётся миграцией [`00001_init.sql`](../migrations/00001_init.sql), демо-данные загружает [`00002_seed_demo_data.sql`](../migrations/00002_seed_demo_data.sql). Решения, принятые при проектировании, перечислены в [db-schema-proposal.md](db-schema-proposal.md).
-
+Схема целиком создаётся миграцией [`00001_init.sql`](../migrations/00001_init.sql), демо-данные загружает [`00002_seed_demo_data.sql`](../migrations/00002_seed_demo_data.sql).
 ```mermaid
 erDiagram
     COMPANY ||--o{ USER : "работает в"
@@ -55,6 +54,7 @@ erDiagram
         jsonb history "список переходов"
         jsonb decision "балл, исход, ставка, причины"
         timestamptz submitted_at
+        timestamptz enqueued_at "последняя отправка задачи воркеру (при отправке заявки и сборщик)"
         timestamptz created_at
         timestamptz updated_at
     }
@@ -107,9 +107,11 @@ erDiagram
 | Вход, ожидающий код 2FA | Redis | `challenge:<id>`, `challenge_attempts:<id>` | 5 минут |
 | Счётчик неудачных входов | Redis | `login_fail:<роль>:<телефон или почта>` и `login_fail:user:<id>` | 15 минут от первой неудачи |
 | Ключ идемпотентности и ответ на запрос по заявке | Redis | `idempotency:<id пользователя>:<ключ>` | минута, пока запрос выполняется; 24 часа после ответа |
+| Задача воркеру скоринга | Redis stream | `applications:submitted` | обрезается до 10 000 записей |
+| Результат воркера скоринга | Redis stream | `applications:results` (группа `api`) | обрезается не автоматически, подтверждённые записи остаются в журнале |
 | Запрос кредитной истории воркеру | Redis stream | `credit-history:requests` | обрезается до 10 000 записей |
 | Ответ воркера | Redis list | `credit-history:reply:<request_id>` | 1 минута |
 | Запросы банка клиенту (`INFO_REQUEST`) и ответы | Redis | не реализовано | пока заявка в обработке |
-| Содержимое документов | не реализовано | см. [db-schema-proposal.md](db-schema-proposal.md) | в заявке остаются вид и имя файла |
+| Содержимое документов | не реализовано | — | в заявке остаются вид и имя файла |
 | Каталог продуктов | [internal/catalog/products.yaml](../internal/catalog/products.yaml) | — | статичный список, встроен в бинарник |
 | Кредит после выдачи | отдельной сущности нет | — | выданная заявка (`DISBURSED`, `ACTIVE`) показывается в кабинете как кредит |

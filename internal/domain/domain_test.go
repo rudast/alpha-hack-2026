@@ -51,3 +51,61 @@ func TestNormalizePhone(t *testing.T) {
 		}
 	}
 }
+
+func TestCanTransition(t *testing.T) {
+	allowed := [][2]Status{
+		{StatusDraft, StatusSubmitted},
+		{StatusSubmitted, StatusDataCheck},
+		{StatusDataCheck, StatusScoring},
+		{StatusDataCheck, StatusInfoRequested},
+		{StatusInfoRequested, StatusDataCheck},
+		{StatusScoring, StatusApproved},
+		{StatusScoring, StatusCounterOffer},
+		{StatusScoring, StatusManualReview},
+		{StatusManualReview, StatusRejected},
+	}
+	for _, p := range allowed {
+		if !CanTransition(p[0], p[1]) {
+			t.Errorf("%s -> %s must be allowed", p[0], p[1])
+		}
+	}
+
+	forbidden := [][2]Status{
+		{StatusScoring, StatusRejected}, // отказ выносит только сотрудник
+		{StatusSubmitted, StatusScoring},
+		{StatusApproved, StatusScoring},
+		{StatusClosed, StatusActive},
+		{StatusDraft, StatusApproved},
+	}
+	for _, p := range forbidden {
+		if CanTransition(p[0], p[1]) {
+			t.Errorf("%s -> %s must be forbidden", p[0], p[1])
+		}
+	}
+}
+
+func TestWorkerMaySet(t *testing.T) {
+	for _, s := range []Status{StatusDataCheck, StatusInfoRequested, StatusScoring, StatusManualReview, StatusApproved, StatusCounterOffer} {
+		if !WorkerMaySet(s) {
+			t.Errorf("the worker must be able to set %s", s)
+		}
+	}
+	for _, s := range []Status{StatusRejected, StatusDraft, StatusSubmitted, StatusSigning, StatusClosed} {
+		if WorkerMaySet(s) {
+			t.Errorf("the worker must not set %s", s)
+		}
+	}
+}
+
+func TestKnownStatus(t *testing.T) {
+	for _, s := range []Status{StatusDraft, StatusScoring, StatusClosed, StatusRejected} {
+		if !KnownStatus(s) {
+			t.Errorf("%s must be known", s)
+		}
+	}
+	for _, s := range []Status{"", "NOPE", "draft"} {
+		if KnownStatus(s) {
+			t.Errorf("%q must be unknown", s)
+		}
+	}
+}

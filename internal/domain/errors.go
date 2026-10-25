@@ -17,6 +17,8 @@ var (
 
 	ErrConflict           = errors.New("application is not a draft")
 	ErrVersionConflict    = errors.New("application was changed by another request")
+	ErrAlreadyApplied     = errors.New("result is already applied")
+	ErrStatusMismatch     = errors.New("application status differs from the one in the result")
 	ErrInvalidInput       = errors.New("invalid field value")
 	ErrUnknownProduct     = errors.New("unknown product")
 	ErrProductUnavailable = errors.New("product is not available for this company or parameters")

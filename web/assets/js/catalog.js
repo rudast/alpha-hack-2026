@@ -48,7 +48,8 @@
     preliminary_purchase_contract: 'Предварительный договор купли-продажи',
   };
 
-  // Типы полей: text, number, money, bool, select. hint — подсказка под полем (только фронтенд).
+  // Типы полей: text, number, money, bool, select, date. hint — подсказка под полем (только фронтенд).
+  // date хранится как 'YYYY-MM-DD'; max: 'today' — дата не позже сегодняшней.
   var FIELD_GROUPS = {
     applicant: {
       title: 'Заявитель',
@@ -88,7 +89,9 @@
       title: 'Поставка оборудования',
       fields: [
         { key: 'supplier', label: 'Поставщик', type: 'text', required: true },
-        { key: 'contract_details', label: 'Реквизиты договора поставки', type: 'text', required: true, hint: 'Номер и дата договора или счёта' },
+        // На бэкенде это одно поле contract_details («№ 15/24 от 03.10.2026»), см. composeForm()
+        { key: 'contract_number', label: 'Номер договора или счёта', type: 'text', required: true, hint: 'Например, 15/24' },
+        { key: 'contract_date', label: 'Дата договора или счёта', type: 'date', required: true, max: 'today' },
       ],
     },
     vehicle: {
@@ -325,11 +328,47 @@
     };
   }
 
+  // ---------- Составные поля ----------
+  // Клиент вводит номер и дату договора поставки отдельно, а бэкенд ждёт одну строку contract_details.
+  // В форме храним и части (чтобы черновик открывался с ними), и склеенную строку.
+
+  var CONTRACT_RE = /^№\s*(.+?)\s+от\s+(\d{2})\.(\d{2})\.(\d{4})$/;
+
+  function composeForm(form) {
+    var supply = form.supply;
+    if (!supply) return form;
+    var out = Object.assign({}, form, { supply: Object.assign({}, supply) });
+    if (supply.contract_number && supply.contract_date) {
+      out.supply.contract_details = '№ ' + supply.contract_number + ' от ' + DatePicker.format(supply.contract_date);
+    } else {
+      delete out.supply.contract_details;
+    }
+    return out;
+  }
+
+  // Черновик, сохранённый до разделения полей: разбираем строку обратно на номер и дату
+  function decomposeForm(form) {
+    var supply = form.supply;
+    if (!supply || !supply.contract_details || supply.contract_number) return form;
+    var m = CONTRACT_RE.exec(supply.contract_details);
+    supply.contract_number = m ? m[1] : supply.contract_details;
+    if (m) supply.contract_date = m[4] + '-' + m[3] + '-' + m[2];
+    return form;
+  }
+
+  // Ошибка сервера по склеенному полю подсвечивает обе его части
+  var FIELD_ALIASES = { 'supply.contract_details': ['supply.contract_number', 'supply.contract_date'] };
+
+  function fieldPaths(path) {
+    return FIELD_ALIASES[path] || [path];
+  }
+
   // «applicant.position» → «Заявитель: Должность в компании»; для полей вне формы — понятные названия
   var TOP_FIELDS = { product_id: 'Продукт', amount: 'Сумма', term_months: 'Срок', purpose: 'Цель кредита' };
 
   function fieldLabel(path) {
     if (TOP_FIELDS[path]) return TOP_FIELDS[path];
+    if (path === 'supply.contract_details') return 'Поставка оборудования: номер и дата договора';
     var parts = path.split('.');
     var group = FIELD_GROUPS[parts[0]];
     if (!group) return path;
@@ -381,6 +420,9 @@
     groupsFor: groupsFor,
     documentsFor: documentsFor,
     fieldLabel: fieldLabel,
+    fieldPaths: fieldPaths,
+    composeForm: composeForm,
+    decomposeForm: decomposeForm,
     status: status,
   };
 })();

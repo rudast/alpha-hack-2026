@@ -280,6 +280,9 @@
     }
 
     stopTimer();
+    if (window.LoanDraft && typeof window.LoanDraft.clear === 'function') {
+      window.LoanDraft.clear();
+    }
     Auth.save({ token: res.data.token, role: res.data.role });
     window.location.href = safeRedirect(res.data.redirect);
   }

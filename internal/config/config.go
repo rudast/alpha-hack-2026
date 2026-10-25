@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -15,18 +14,44 @@ type Config struct {
 	OTPStubCode          string
 	TrustRefreshInterval time.Duration
 	WorkerTimeout        time.Duration
+	AssistantURL         string
 }
 
 func Load() (Config, error) {
-	cfg := Config{
-		HTTPAddr:    getenv("HTTP_ADDR", ":8080"),
-		WebDir:      getenv("WEB_DIR", "web"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisAddr:   getenv("REDIS_ADDR", "localhost:6379"),
-		OTPStubCode: getenv("OTP_STUB_CODE", "000000"),
+	httpAddr := os.Getenv("HTTP_ADDR")
+	if httpAddr == "" {
+		if port := os.Getenv("PORT"); port != "" {
+			httpAddr = ":" + port
+		} else {
+			httpAddr = ":8080"
+		}
 	}
-	if cfg.DatabaseURL == "" {
-		return Config{}, errors.New("DATABASE_URL is required")
+
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = os.Getenv("POSTGRES_URL")
+	}
+
+	webDir := os.Getenv("WEB_DIR")
+	if webDir == "" {
+		for _, c := range []string{"web", "./web", "../web", "../../web"} {
+			if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+				webDir = c
+				break
+			}
+		}
+		if webDir == "" {
+			webDir = "web"
+		}
+	}
+
+	cfg := Config{
+		HTTPAddr:             httpAddr,
+		WebDir:               webDir,
+		DatabaseURL:          dbURL,
+		RedisAddr:            getenv("REDIS_ADDR", "localhost:6379"),
+		OTPStubCode:          getenv("OTP_STUB_CODE", "000000"),
+		AssistantURL:         getenv("ASSISTANT_URL", "http://assistant:8081"),
 	}
 
 	var err error
