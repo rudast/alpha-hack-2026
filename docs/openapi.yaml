@@ -5,8 +5,7 @@ info:
   description: >
     Реализованы `/healthz`, вход (`/api/v1/auth/*`), `/api/v1/me`, `/api/v1/me/bootstrap`, `/api/v1/me/offer`,
     `/api/v1/products`, `/api/v1/loans` и методы заявок клиента (`/api/v1/applications`: черновик, отправка,
-    ответ на решение банка, документы). `/api/v1/calculator` и методы сотрудника (`/api/v1/employee/*`) —
-    черновой контракт, он будет меняться по ходу разработки.
+    ответ на решение банка, документы). рабочее место сотрудника (`/api/v1/employee/applications`). `/api/v1/calculator` — черновой контракт.
 servers:
   - url: http://localhost:8080
 tags:
@@ -696,15 +695,47 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/applications/{id}/resume:
+    post:
+      tags: [client]
+      summary: Отправить дополненную заявку обратно на проверку
+      description: >
+        Когда банк запросил дополнительные документы (статус `INFO_REQUESTED`, текст запроса в `info_request`),
+        клиент загружает их (`POST /applications/{id}/documents` работает и в этом статусе) и вызывает этот метод.
+        Если документы запросил сотрудник, заявка возвращается в общий пул ручной проверки (`MANUAL_REVIEW`);
+        если воркер — на проверку данных (`DATA_CHECK`), задача воркеру отправляется заново.
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Заявка снова на проверке
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Application" }
+        "404":
+          description: Заявка не найдена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Заявка не ждёт дополнительных документов
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/employee/applications:
     get:
       tags: [employee]
-      summary: Очередь заявок для андеррайтера
+      summary: Заявки на ручной проверке
+      description: >
+        Общий пул: заявки в `MANUAL_REVIEW`, которые никто не взял в работу, старые первыми.
+        С `mine=true` — заявки, которые взял текущий сотрудник. Только для роли `employee`.
       security: [{ bearer: [] }]
       parameters:
-        - name: status
+        - name: mine
           in: query
-          schema: { $ref: "#/components/schemas/ApplicationStatus" }
+          schema: { type: boolean }
       responses:
         "200":
           description: Список заявок
@@ -712,23 +743,149 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { $ref: "#/components/schemas/Application" }
+                items: { $ref: "#/components/schemas/ReviewSummary" }
+        "403":
+          description: Метод только для сотрудников
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/employee/applications/{id}:
+    get:
+      tags: [employee]
+      summary: Карточка заявки
+      description: Заявка (форма, решение скоринга, история, документы), данные компании и ФИО взявшего её сотрудника.
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      responses:
+        "200":
+          description: Карточка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewCard" }
+        "404":
+          description: Заявка не найдена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/employee/applications/{id}/documents/{docId}:
+    get:
+      tags: [employee]
+      summary: Скачать документ заявки
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - name: docId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Файл (PDF, JPG или PNG)
+          content:
+            application/pdf: {}
+            image/jpeg: {}
+            image/png: {}
+        "404":
+          description: Заявка или документ не найдены
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/employee/applications/{id}/take:
+    post:
+      tags: [employee]
+      summary: Взять заявку в работу
+      description: >
+        Закрепляет заявку из общего пула за сотрудником; она пропадает из пула. Если сотрудник
+        ничего не решил за 2 часа, заявка сама возвращается в пул. Повторный вызов тем же сотрудником безопасен.
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Заявка взята
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewCard" }
+        "404":
+          description: Заявка не найдена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            Заявку уже взял другой сотрудник (`{"error": "...", "assigned_name": "ФИО"}`) либо она не на ручной проверке
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/employee/applications/{id}/release:
+    post:
+      tags: [employee]
+      summary: Вернуть заявку в общий пул
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Заявка в пуле
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewCard" }
+        "409":
+          description: Заявка не закреплена за этим сотрудником или не на ручной проверке
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/employee/applications/{id}/decision:
     post:
       tags: [employee]
       summary: Решение по заявке на ручной проверке
+      description: >
+        Решать может только сотрудник, взявший заявку в работу. `approve` — `APPROVED`;
+        `reject` — `REJECTED`, причина `reason` обязательна (видна клиенту в `decision.reason`);
+        `request_info` — `INFO_REQUESTED`, текст `info_request` обязателен, заявка открепляется и после ответа
+        клиента вернётся в общий пул; `counter_offer` — `COUNTER_OFFER` с условиями в `decision.offer`:
+        `amount`, `term_months`, `rate` обязательны, `product_id` по умолчанию продукт заявки. Другой продукт
+        можно предложить, только если для него у заявки уже заполнены поля формы и загружены документы,
+        и он доступен компании (тип организации, возраст бизнеса, сумма и срок).
       security: [{ bearer: [] }]
       parameters:
         - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DecisionInput"
+              $ref: "#/components/schemas/ReviewDecisionInput"
       responses:
         "200":
           description: Решение принято
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewCard" }
+        "400":
+          description: Неизвестное действие, продукт или некорректные сумма, срок, ставка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Заявка не взята этим сотрудником или уже не на ручной проверке
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Не хватает причины, текста запроса или данных для другого продукта
+            (`{"missing_fields": [...]}`, документы как `documents.<вид>`), либо продукт недоступен компании
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/ValidationError" }
+                  - { $ref: "#/components/schemas/Error" }
 components:
   securitySchemes:
     bearer:
@@ -1048,6 +1205,7 @@ components:
               comment: { type: string, description: Пояснение к переходу (необязательное) }
         decision: { type: object, description: Решение по заявке; появится после скоринга }
         offer_id: { type: string, format: uuid, nullable: true, description: Предварительное предложение, по которому создана заявка }
+        info_request: { type: string, nullable: true, description: Что банк просит дополнить (статус INFO_REQUESTED) }
         submitted_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -1071,11 +1229,49 @@ components:
         missing_fields:
           type: array
           items: { type: string }
-    DecisionInput:
+    ReviewDecisionInput:
       type: object
-      required: [outcome]
+      required: [action]
       properties:
-        outcome: { type: string, enum: [APPROVED, COUNTER_OFFER, REJECTED] }
-        amount: { type: number }
-        rate: { type: number }
-        comment: { type: string }
+        action: { type: string, enum: [approve, reject, request_info, counter_offer] }
+        reason: { type: string, description: Причина (обязательна при reject) или комментарий }
+        info_request: { type: string, description: Что запросить у клиента (обязательно при request_info) }
+        product_id: { type: string, description: Продукт встречного предложения; по умолчанию продукт заявки }
+        amount: { type: integer, format: int64 }
+        term_months: { type: integer }
+        rate: { type: number, description: "Ставка, % годовых" }
+    ReviewSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        company_inn: { type: string }
+        company_name: { type: string }
+        product_id: { type: string }
+        product_name: { type: string }
+        amount: { type: integer, format: int64 }
+        term_months: { type: integer }
+        submitted_at: { type: string, format: date-time }
+        assigned_to: { type: string, format: uuid, nullable: true }
+        assigned_name: { type: string, nullable: true }
+        assigned_at: { type: string, format: date-time, nullable: true }
+    ReviewCard:
+      allOf:
+        - $ref: "#/components/schemas/Application"
+        - type: object
+          properties:
+            product_name: { type: string }
+            company:
+              type: object
+              properties:
+                inn: { type: string }
+                org_type: { type: string }
+                name: { type: string }
+                okved: { type: string }
+                okved_title: { type: string, nullable: true }
+                registration_date: { type: string, format: date, nullable: true }
+                total_debt: { type: integer, format: int64, nullable: true }
+                equity: { type: integer, format: int64, nullable: true }
+                debt_to_equity: { type: number, nullable: true }
+            assigned_to: { type: string, format: uuid, nullable: true }
+            assigned_name: { type: string, nullable: true, description: ФИО сотрудника, взявшего заявку }
+            assigned_at: { type: string, format: date-time, nullable: true }

@@ -14,6 +14,8 @@ stateDiagram-v2
     MANUAL_REVIEW --> APPROVED
     MANUAL_REVIEW --> COUNTER_OFFER
     MANUAL_REVIEW --> REJECTED
+    MANUAL_REVIEW --> INFO_REQUESTED: сотрудник запросил документы
+    INFO_REQUESTED --> MANUAL_REVIEW: клиент дополнил (в общий пул)
     SCORING --> APPROVED
     SCORING --> COUNTER_OFFER
     COUNTER_OFFER --> SIGNING: клиент принял

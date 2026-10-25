@@ -61,13 +61,14 @@ func (s *ApplicationService) DeleteDocument(ctx context.Context, p domain.Princi
 	return s.documents.Delete(id, documentID)
 }
 
-// draftOf проверяет, что заявка принадлежит компании и ещё черновик: документы меняются только до отправки.
+// draftOf проверяет, что заявка принадлежит компании и её документы ещё можно менять (черновик или запрос документов).
 func (s *ApplicationService) draftOf(ctx context.Context, p domain.Principal, id string) error {
 	a, err := s.apps.GetForCompany(ctx, id, p.CompanyINN)
 	if err != nil {
 		return err
 	}
-	if a.Status != domain.StatusDraft {
+	// Документы меняются до отправки, а также когда банк запросил дополнительные документы.
+	if a.Status != domain.StatusDraft && a.Status != domain.StatusInfoRequested {
 		return domain.ErrConflict
 	}
 	return nil

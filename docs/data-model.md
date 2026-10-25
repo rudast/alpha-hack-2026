@@ -48,7 +48,9 @@ erDiagram
         int version "растёт при каждом изменении, защита от перезаписи"
         string company_inn FK
         uuid created_by FK
-        uuid assigned_to FK
+        uuid assigned_to FK "сотрудник, взявший заявку на ручной проверке"
+        timestamptz assigned_at "когда взята; через 2 часа без решения снова в пуле"
+        string info_request "что банк просит дополнить (INFO_REQUESTED)"
         uuid offer_id FK "предварительное предложение, если заявка по нему"
         numeric rate "ставка выданного кредита"
         string contract_number

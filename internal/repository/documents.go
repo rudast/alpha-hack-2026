@@ -110,6 +110,26 @@ func (s *DocumentStore) Delete(applicationID, documentID string) error {
 	return err
 }
 
+// Open открывает документ для скачивания. Закрыть файл должен вызывающий.
+func (s *DocumentStore) Open(applicationID, documentID string) (io.ReadCloser, domain.Document, error) {
+	kind, filename, ok := DecodeDocumentID(documentID)
+	if !ok || !safeName(applicationID) {
+		return nil, domain.Document{}, domain.ErrDocumentNotFound
+	}
+	doc, err := s.stat(applicationID, kind, filename)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, domain.Document{}, domain.ErrDocumentNotFound
+	}
+	if err != nil {
+		return nil, domain.Document{}, err
+	}
+	f, err := os.Open(filepath.Join(s.root, applicationID, kind, filename))
+	if err != nil {
+		return nil, domain.Document{}, err
+	}
+	return f, doc, nil
+}
+
 func (s *DocumentStore) stat(applicationID, kind, filename string) (domain.Document, error) {
 	info, err := os.Stat(filepath.Join(s.root, applicationID, kind, filename))
 	if err != nil {

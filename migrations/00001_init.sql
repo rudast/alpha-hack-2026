@@ -76,7 +76,9 @@ CREATE TABLE applications (
     version      integer NOT NULL DEFAULT 1, -- растёт при каждом изменении; PATCH принимает только актуальную версию (защита от перезаписи)
     company_inn  text NOT NULL REFERENCES companies (inn),
     created_by   uuid REFERENCES users (id),
-    assigned_to  uuid REFERENCES users (id), -- сотрудник, ведущий заявку на ручной проверке
+    assigned_to  uuid REFERENCES users (id), -- сотрудник, взявший заявку на ручной проверке в работу
+    assigned_at  timestamptz,                -- когда взята в работу; через 2 часа без решения возвращается в общий пул
+    info_request text,                       -- что банк просит дополнить (статус INFO_REQUESTED)
     offer_id     uuid REFERENCES offers (id), -- предварительное предложение, по которому создана заявка
     product_id   text NOT NULL DEFAULT '',   -- идентификатор из каталога продуктов
     amount       bigint NOT NULL DEFAULT 0 CHECK (amount >= 0),

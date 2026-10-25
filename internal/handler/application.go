@@ -22,6 +22,7 @@ type ApplicationService interface {
 	Submit(ctx context.Context, p domain.Principal, id string) (domain.Application, error)
 	Accept(ctx context.Context, p domain.Principal, id string) (domain.Application, error)
 	Decline(ctx context.Context, p domain.Principal, id string) (domain.Application, error)
+	Resume(ctx context.Context, p domain.Principal, id string) (domain.Application, error)
 	UploadDocument(ctx context.Context, p domain.Principal, id, kind, filename string, content io.Reader) (domain.Document, error)
 	DeleteDocument(ctx context.Context, p domain.Principal, id, documentID string) error
 }
@@ -153,6 +154,17 @@ func (h *ApplicationHandler) Decline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a)
 }
 
+// Resume — клиент дополнил заявку по запросу банка (INFO_REQUESTED) и отправляет её обратно на проверку.
+func (h *ApplicationHandler) Resume(w http.ResponseWriter, r *http.Request) {
+	p, _ := middleware.PrincipalFrom(r.Context())
+	a, err := h.svc.Resume(r.Context(), p, chi.URLParam(r, "id"))
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, a)
+}
+
 // UploadDocument — загрузка документа к черновику: multipart/form-data с полями kind (вид документа
 // из каталога) и file (PDF, JPG или PNG до 10 МБ).
 func (h *ApplicationHandler) UploadDocument(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +220,8 @@ func (h *ApplicationHandler) fail(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "unknown document kind or file type (PDF, JPG or PNG expected)")
 	case errors.Is(err, domain.ErrDocumentTooLarge):
 		writeError(w, http.StatusRequestEntityTooLarge, "file is larger than 10 MB")
+	case errors.Is(err, domain.ErrNotInfoRequested):
+		writeError(w, http.StatusConflict, "application is not waiting for additional documents")
 	case errors.Is(err, domain.ErrNotAwaitingDecision):
 		writeError(w, http.StatusConflict, "application is not awaiting client decision")
 	case errors.Is(err, domain.ErrConflict):

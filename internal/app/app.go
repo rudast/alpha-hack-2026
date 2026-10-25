@@ -27,6 +27,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		appHandler  *handler.ApplicationHandler
 		prodHandler *handler.ProductHandler
 		loanHandler *handler.LoanHandler
+		revHandler  *handler.ReviewHandler
 		idempotency middleware.IdempotencyStore
 	)
 
@@ -94,6 +95,11 @@ func Run(ctx context.Context, cfg config.Config) error {
 					sweeper := service.NewApplicationSweeper(applicationRepo, companies, documents, applicationPublisher, time.Minute, 2*time.Minute)
 					go sweeper.Run(ctx)
 
+					// Ручная проверка: раз в минуту возвращает в общий пул заявки, взятые в работу больше 2 часов назад.
+					review := service.NewReviewService(applicationRepo, repository.NewUserRepo(pool), companies, documents, products)
+					revHandler = handler.NewReviewHandler(review)
+					go review.RunReleaser(ctx, time.Minute)
+
 					if consumerName, err := os.Hostname(); err == nil {
 						results := service.NewResultProcessor(applicationRepo)
 						go queue.NewResultConsumer(rdb).Serve(ctx, consumerName, results.Process)
@@ -140,6 +146,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			Applications: appHandler,
 			Products:     prodHandler,
 			Loans:        loanHandler,
+			Review:       revHandler,
 			Idempotency:  idempotency,
 			AssistantURL: cfg.AssistantURL,
 		}),
