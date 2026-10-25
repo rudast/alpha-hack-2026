@@ -4,15 +4,7 @@
     "app": {
       "root": ".",
       "runtime": "go",
-      "entrypoint": "cmd/api/main.go",
-      "bindings": [
-        {
-          "type": "service",
-          "service": "assistant",
-          "format": "url",
-          "env": "ASSISTANT_URL"
-        }
-      ]
+      "entrypoint": "cmd/api/main.go"
     },
     "assistant": {
       "root": "assistant",
