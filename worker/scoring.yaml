@@ -1,0 +1,42 @@
+version: scoring-1
+classes:
+  X: {approve: 75, counter: 55, base_rate: 26, auto_limit: 1000000}
+  U: {approve: 70, counter: 50, base_rate: 22, auto_limit: 5000000}
+  S: {approve: 65, counter: 45, base_rate: 17, auto_limit: 20000000}
+rate: {anchor_score: 80, slope_pp_per_point: 0.15, min_pp: -1.5, max_pp: 6.0}
+limiters: {ltv_max: 0.80, pti_max: 0.35}
+base_documents: [passport, bki_consent]
+products:
+  express: {class: X, factors: [], documents: []}
+  overdraft: {class: U, factors: [P1, P5], max_term_months: 12, documents: [account_statement]}
+  credit_line: {class: U, factors: [P1, P2], max_term_months: 24, documents: [account_statement]}
+  working_capital: {class: U, factors: [P1], max_term_months: 36, documents: [financial_statements]}
+  marketplace_seller: {class: U, factors: [P1, P7], max_term_months: 18, documents: [marketplace_sales_report]}
+  ip_loan: {class: U, factors: [], documents: []}
+  ooo_loan: {class: U, factors: [], documents: []}
+  loan_up_to_1m: {class: U, factors: [P1], max_term_months: 24, documents: [account_statement]}
+  equipment_loan: {class: S, factors: [P3], documents: [title_documents, equipment_purchase_contract, equipment_specification]}
+  auto_loan: {class: S, factors: [P3], documents: [title_documents, vehicle_registration]}
+  secured_property_equipment: {class: S, factors: [P3], documents: [title_documents, egrn_extract, technical_passport, valuation_report]}
+  business_purchase: {class: S, factors: [P3, P6a, P6b], documents: [title_documents, business_plan, target_financial_statements, business_purchase_contract]}
+  mortgage_ip: {class: S, factors: [P3, P4], documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]}
+  mortgage_business: {class: S, factors: [P3, P4], documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]}
+core_factors: [C1a, C1b, C2, C3, C4a, C4b]
+weights: {C1a: 17, C1b: 8, C2: 20, C3: 10, C4a: 6, C4b: 4, P1: 25, P2: 10, P3: 20, P4: 10, P5: 10, P6a: 5, P6b: 10, P7: 5}
+bins:
+  C1b: {edges: [3, 6], values: [1, 0.6, 0.2]}
+  C2: {edges: [0.5, 1, 2, 3], values: [1, 0.8, 0.5, 0.2, 0]}
+  C3: {edges: [6, 12, 36, 60], values: [0, 0.2, 0.5, 0.8, 1]}
+  P1: {edges: [0.10, 0.20, 0.35], values: [1, 0.7, 0.3, 0]}
+  P2: {edges: [0.15, 0.35, 0.60], values: [1, 0.6, 0.25, 0]}
+  P3: {edges: [0.5, 0.7, 0.8, 0.9], values: [1, 0.75, 0.5, 0.2, 0]}
+  P4: {edges: [0.10, 0.20, 0.30, 0.40], values: [0, 0.2, 0.5, 0.8, 1]}
+  P6a: {edges: [0, 0.03, 0.08, 0.15], values: [0, 0.15, 0.4, 0.7, 1]}
+  P6b: {edges: [3, 5, 8, 12], values: [1, 0.7, 0.4, 0.15, 0]}
+  P7: {edges: [50, 80], values: [1, 0.6, 0.3]}
+haircut: {real_estate: 0.85, vehicle: 0.80, equipment: 0.70, other: 0.50}
+industry_risk:
+  low: ['47.', '10.7']
+  medium: ['41.2', '49.41', '56.10']
+  high: ['41.1', '68.1', '92.1']
+counter: {ltv_target: 0.75, pti_target: 0.20, min_offer: 100000, round_to: 10000}
