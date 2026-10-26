@@ -47,15 +47,19 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if !demoMode {
 		pool, err := repository.NewPool(ctx, cfg.DatabaseURL)
 		if err != nil {
-			return fmt.Errorf("postgres: %w", err)
+			log.Printf("postgres connection error: %v (falling back to demo mode)", err)
+			demoMode = true
 		} else {
-			defer pool.Close()
-
 			rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
-			defer rdb.Close()
 			if err := rdb.Ping(ctx).Err(); err != nil {
-				return fmt.Errorf("redis: %w", err)
+				log.Printf("redis connection error: %v (falling back to demo mode)", err)
+				demoMode = true
+				pool.Close()
+				rdb.Close()
 			} else {
+				defer pool.Close()
+				defer rdb.Close()
+
 				aStore := repository.NewAuthStore(rdb)
 				authStore = aStore
 				idempotency = repository.NewIdempotencyStore(rdb)
@@ -113,7 +117,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 				}
 			}
 		}
-	} else {
+	}
+
+	if demoMode {
 		log.Printf("DEMO MODE: Postgres and Redis are not used, all data lives in memory and is lost on restart")
 		demo := service.NewDemoPackage()
 		authHandler = handler.NewAuthHandler(demo.Auth)

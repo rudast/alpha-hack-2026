@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math"
 	"sort"
@@ -29,7 +30,19 @@ type DemoPackage struct {
 	Idempotency *DemoIdempotency
 }
 
+var (
+	globalDemoOnce sync.Once
+	globalDemoPkg  *DemoPackage
+)
+
 func NewDemoPackage() *DemoPackage {
+	globalDemoOnce.Do(func() {
+		globalDemoPkg = initDemoPackage()
+	})
+	return globalDemoPkg
+}
+
+func initDemoPackage() *DemoPackage {
 	auth := &DemoAuth{
 		challenges: make(map[string]domain.Challenge),
 		sessions:   make(map[string]domain.Principal),
@@ -242,6 +255,7 @@ func NewDemoPackage() *DemoPackage {
 
 	demoApps := &DemoApplications{applications: apps, idCounter: 106}
 	demoReview := &DemoReview{apps: demoApps}
+	demoLoans := &DemoLoans{apps: demoApps}
 
 	return &DemoPackage{
 		Auth:        auth,
@@ -250,7 +264,7 @@ func NewDemoPackage() *DemoPackage {
 		Offers:      &DemoOffers{},
 		Profiles:    &DemoProfiles{},
 		Apps:        demoApps,
-		Loans:       &DemoLoans{},
+		Loans:       demoLoans,
 		Review:      demoReview,
 		Idempotency: &DemoIdempotency{},
 	}
@@ -659,7 +673,9 @@ func (p *DemoProfiles) Profile(ctx context.Context, pr domain.Principal) (Profil
 
 // ------------------- DemoLoans -------------------
 
-type DemoLoans struct{}
+type DemoLoans struct {
+	apps *DemoApplications
+}
 
 func makeDemoLoan(id, productID, productName, contractNumber string, amount int64, rate float64, termMonths, paymentsMade int, overdue bool) Loan {
 	now := time.Now()
@@ -771,7 +787,54 @@ func makeDemoClosedLoan(id, productID, productName, contractNumber string, amoun
 	}
 }
 
-func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
+func makeDemoLoanFromApp(app *domain.Application) Loan {
+	term := app.TermMonths
+	if term <= 0 {
+		term = 12
+	}
+	amt := app.Amount
+	if amt <= 0 {
+		amt = 1000000
+	}
+	rate := 16.5
+	if len(app.Decision) > 0 {
+		var dec struct {
+			Rate float64 `json:"rate"`
+		}
+		if err := json.Unmarshal(app.Decision, &dec); err == nil && dec.Rate > 0 {
+			rate = dec.Rate
+		}
+	}
+	hash := crc32.ChecksumIEEE([]byte(app.ID))
+	contractNum := fmt.Sprintf("0КР-%04d/%04d", time.Now().Year(), (hash%9000)+1000)
+	isOverdue := (app.Status == domain.StatusOverdue)
+	return makeDemoLoan(app.ID, app.ProductID, demoProductName(app.ProductID), contractNum, amt, rate, term, 0, isOverdue)
+}
+
+func makeDemoClosedLoanFromApp(app *domain.Application) Loan {
+	term := app.TermMonths
+	if term <= 0 {
+		term = 12
+	}
+	amt := app.Amount
+	if amt <= 0 {
+		amt = 1000000
+	}
+	rate := 16.5
+	if len(app.Decision) > 0 {
+		var dec struct {
+			Rate float64 `json:"rate"`
+		}
+		if err := json.Unmarshal(app.Decision, &dec); err == nil && dec.Rate > 0 {
+			rate = dec.Rate
+		}
+	}
+	hash := crc32.ChecksumIEEE([]byte(app.ID))
+	contractNum := fmt.Sprintf("0КР-%04d/%04d", time.Now().Year(), (hash%9000)+1000)
+	return makeDemoClosedLoan(app.ID, app.ProductID, demoProductName(app.ProductID), contractNum, amt, rate, term, 1)
+}
+
+func baselineLoans(inn string) Loans {
 	switch inn {
 	case "7700000001":
 		return Loans{
@@ -786,7 +849,7 @@ func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
 			OtherBanks: []OtherBankLoan{
 				{Bank: "Сбербанк", Kind: "Кредит на оборотные средства", Debt: 958805},
 			},
-		}, nil
+		}
 	case "7700000002":
 		return Loans{
 			Active: []Loan{},
@@ -796,7 +859,7 @@ func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
 			OtherBanks: []OtherBankLoan{
 				{Bank: "ВТБ", Kind: "Инвестиционный кредит", Debt: 2400000},
 			},
-		}, nil
+		}
 	case "7700000003":
 		return Loans{
 			Active: []Loan{
@@ -809,7 +872,7 @@ func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
 			OtherBanks: []OtherBankLoan{
 				{Bank: "Т-Банк", Kind: "Овердрафт", Debt: 504676},
 			},
-		}, nil
+		}
 	case "7700000004":
 		return Loans{
 			Active: []Loan{
@@ -823,7 +886,7 @@ func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
 				{Bank: "Сбербанк", Kind: "Кредит под залог недвижимости", Debt: 2214000},
 				{Bank: "ВТБ", Kind: "Оборотный кредит", Debt: 1476802},
 			},
-		}, nil
+		}
 	case "770000000005":
 		return Loans{
 			Active: []Loan{
@@ -835,14 +898,42 @@ func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
 			OtherBanks: []OtherBankLoan{
 				{Bank: "Совкомбанк", Kind: "Кредит для ИП", Debt: 386612},
 			},
-		}, nil
+		}
 	default:
 		return Loans{
 			Active:     []Loan{},
 			Closed:     []Loan{},
 			OtherBanks: []OtherBankLoan{},
-		}, nil
+		}
 	}
+}
+
+func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
+	base := baselineLoans(inn)
+	if l.apps != nil {
+		l.apps.mu.RLock()
+		var extraActive []Loan
+		var extraClosed []Loan
+		for _, app := range l.apps.applications {
+			if app.CompanyINN != inn {
+				continue
+			}
+			if app.Status == domain.StatusActive || app.Status == domain.StatusOverdue {
+				extraActive = append(extraActive, makeDemoLoanFromApp(app))
+			} else if app.Status == domain.StatusClosed {
+				extraClosed = append(extraClosed, makeDemoClosedLoanFromApp(app))
+			}
+		}
+		l.apps.mu.RUnlock()
+
+		if len(extraActive) > 0 {
+			base.Active = append(extraActive, base.Active...)
+		}
+		if len(extraClosed) > 0 {
+			base.Closed = append(extraClosed, base.Closed...)
+		}
+	}
+	return base, nil
 }
 
 // ------------------- DemoApplications -------------------
@@ -993,12 +1084,44 @@ func (a *DemoApplications) Submit(ctx context.Context, p domain.Principal, id st
 	app := a.getOrCreateLocked(id, p.CompanyINN)
 
 	now := time.Now()
-	app.Status = domain.StatusApproved
+	app.Status = domain.StatusManualReview
 	app.SubmittedAt = &now
 	app.UpdatedAt = now
+
+	rate := 16.5
+	switch app.ProductID {
+	case "working_capital", "working-capital":
+		rate = 15.5
+	case "equipment_loan", "equipment-leasing":
+		rate = 14.5
+	case "auto_loan":
+		rate = 15.0
+	case "express", "express-revolving":
+		rate = 19.5
+	case "mortgage_business":
+		rate = 13.0
+	}
+
+	decMap := map[string]any{
+		"score":      58,
+		"rate":       rate,
+		"status":     "MANUAL_REVIEW",
+		"thresholds": map[string]any{"approve": 65, "counter": 45},
+		"manual_review_reasons": []string{"BORDERLINE_SCORE", "FINANCIAL_STATEMENTS_NEEDED"},
+		"reasons_positive": []map[string]any{
+			{"factor": "revenue_trend", "name": "Положительная динамика выручки", "delta": 12},
+			{"factor": "business_age", "name": "Срок существования бизнеса > 3 лет", "delta": 8},
+		},
+		"reasons_negative": []map[string]any{
+			{"factor": "debt_load", "name": "Повышенная долговая нагрузка", "delta": -14},
+		},
+	}
+	decBytes, _ := json.Marshal(decMap)
+	app.Decision = decBytes
+
 	app.History = append(app.History, domain.HistoryEntry{
 		From: domain.StatusDraft,
-		To:   domain.StatusApproved,
+		To:   domain.StatusManualReview,
 		At:   now,
 		By:   p.UserID,
 	})
@@ -1011,8 +1134,16 @@ func (a *DemoApplications) Accept(ctx context.Context, p domain.Principal, id st
 
 	app := a.getOrCreateLocked(id, p.CompanyINN)
 	now := time.Now()
+	prev := app.Status
 	app.Status = domain.StatusActive
 	app.UpdatedAt = now
+	app.History = append(app.History, domain.HistoryEntry{
+		From:    prev,
+		To:      domain.StatusActive,
+		At:      now,
+		By:      p.UserID,
+		Comment: "Договор подписан клиентом",
+	})
 	return *app, nil
 }
 
@@ -1022,8 +1153,16 @@ func (a *DemoApplications) Decline(ctx context.Context, p domain.Principal, id s
 
 	app := a.getOrCreateLocked(id, p.CompanyINN)
 	now := time.Now()
+	prev := app.Status
 	app.Status = domain.StatusDraft
 	app.UpdatedAt = now
+	app.History = append(app.History, domain.HistoryEntry{
+		From:    prev,
+		To:      domain.StatusDraft,
+		At:      now,
+		By:      p.UserID,
+		Comment: "Клиент отказался от предложения, заявка возвращена в черновик",
+	})
 	return *app, nil
 }
 
@@ -1033,8 +1172,16 @@ func (a *DemoApplications) Resume(ctx context.Context, p domain.Principal, id st
 
 	app := a.getOrCreateLocked(id, p.CompanyINN)
 	now := time.Now()
-	app.Status = domain.StatusDataCheck
+	prev := app.Status
+	app.Status = domain.StatusManualReview
 	app.UpdatedAt = now
+	app.History = append(app.History, domain.HistoryEntry{
+		From:    prev,
+		To:      domain.StatusManualReview,
+		At:      now,
+		By:      p.UserID,
+		Comment: "Клиент предоставил запрошенные данные",
+	})
 	return *app, nil
 }
 
@@ -1250,6 +1397,27 @@ func (r *DemoReview) Decide(ctx context.Context, p domain.Principal, id string, 
 	switch d.Action {
 	case domain.ReviewApprove:
 		app.Status = domain.StatusApproved
+		rate := d.Rate
+		if rate <= 0 {
+			rate = 15.5
+		}
+		var decMap map[string]any
+		if len(app.Decision) > 0 {
+			_ = json.Unmarshal(app.Decision, &decMap)
+		}
+		if decMap == nil {
+			decMap = make(map[string]any)
+		}
+		decMap["rate"] = rate
+		decMap["approved_amount"] = app.Amount
+		decMap["approved_term"] = app.TermMonths
+		decMap["offer"] = map[string]any{
+			"product_id":  app.ProductID,
+			"amount":      app.Amount,
+			"term_months": app.TermMonths,
+			"rate":        rate,
+		}
+		app.Decision, _ = json.Marshal(decMap)
 		app.History = append(app.History, domain.HistoryEntry{
 			From:    domain.StatusManualReview,
 			To:      domain.StatusApproved,
@@ -1295,12 +1463,22 @@ func (r *DemoReview) Decide(ctx context.Context, p domain.Principal, id string, 
 		if d.TermMonths > 0 {
 			app.TermMonths = d.TermMonths
 		}
+		rate := d.Rate
+		if rate <= 0 {
+			rate = 16.0
+		}
 		counterData, _ := json.Marshal(map[string]any{
 			"product_id":  app.ProductID,
 			"amount":      app.Amount,
 			"term_months": app.TermMonths,
-			"rate":        d.Rate,
+			"rate":        rate,
 			"reason":      d.Reason,
+			"offer": map[string]any{
+				"product_id":  app.ProductID,
+				"amount":      app.Amount,
+				"term_months": app.TermMonths,
+				"rate":        rate,
+			},
 		})
 		app.Decision = counterData
 		app.History = append(app.History, domain.HistoryEntry{
