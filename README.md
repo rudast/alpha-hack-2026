@@ -145,7 +145,8 @@ Go API ──прокси /api/v1/assistant──▶ ассистент (assista
 | `APP_PORT`, `ASSISTANT_PORT` | `8080`, `8081` | Порты на хосте (только для `docker-compose.yml`) |
 | `HTTP_ADDR` | `:8080` | Адрес, который слушает API |
 | `WEB_DIR` | `web` | Каталог со статикой веб-интерфейса |
-| `DATABASE_URL` | в compose задана | Строка подключения к PostgreSQL. Без неё API работает в демо-режиме (см. «Допущения») |
+| `DATABASE_URL` | в compose задана | Строка подключения к PostgreSQL. При пустом значении или `DEMO_MODE=true` API работает в демо-режиме |
+| `DEMO_MODE` | не задан | `true`: интерфейс на данных в памяти без Postgres и Redis (демонстрация, Vercel). При пустом `DATABASE_URL` также включается демо-режим |
 | `REDIS_ADDR` | `localhost:6379`; в compose `redis:6379` | Адрес Redis (API и воркер) |
 | `OTP_STUB_CODE` | `000000` | Код, который принимает заглушка 2FA |
 | `TRUST_REFRESH_INTERVAL` | `12h` | Через сколько долговая нагрузка считается устаревшей |

@@ -9,13 +9,13 @@ import (
 func TestParseResult(t *testing.T) {
 	res, err := parseResult(map[string]any{
 		"event_id": "e1", "application_id": "a1", "from": "SCORING", "to": "APPROVED",
-		"decision": `{"score":82}`, "comment": "ok", "unknown_field": "ignored",
+		"decision": `{"score":82}`, "comment": "ok", "info_request": "Загрузите выписку", "unknown_field": "ignored",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.EventID != "e1" || res.ApplicationID != "a1" || res.From != domain.StatusScoring || res.To != domain.StatusApproved ||
-		string(res.Decision) != `{"score":82}` || res.Comment != "ok" {
+		string(res.Decision) != `{"score":82}` || res.Comment != "ok" || res.InfoRequest != "Загрузите выписку" {
 		t.Fatalf("got %+v", res)
 	}
 }

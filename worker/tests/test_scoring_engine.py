@@ -56,7 +56,7 @@ class ScoringEngineTests(unittest.TestCase):
         result = score_application(base())
         self.assertEqual(result["score"], 85.0)
         self.assertEqual(result["outcome"], "APPROVED")
-        self.assertEqual(result["rate"], 21.25)
+        self.assertEqual(result["rate"], 18.25)  # база working_capital 19 % − 0,75
         self.assertTrue(all("value" in factor for factor in result["factors"]))
 
     def test_s2_low_score_to_manual_review(self):
@@ -76,7 +76,7 @@ class ScoringEngineTests(unittest.TestCase):
         self.assertEqual(result["score"], 74.1)
         self.assertEqual(result["outcome"], "COUNTER_OFFER")
         self.assertEqual(result["offer"]["amount"], 1_500_000)
-        self.assertEqual(result["offer"]["rate"], 16.12)
+        self.assertEqual(result["offer"]["rate"], 14.62)  # база auto_loan 15,5 % − 0,88
 
     def test_stop_factor_and_unverified_evidence_prevent_approval(self):
         history = dict(base()["credit_history"], current_overdue_days=45)
@@ -103,10 +103,10 @@ class ScoringEngineTests(unittest.TestCase):
         result = score_application(base(turnover_monthly=700_000))
         self.assertEqual(result["outcome"], "COUNTER_OFFER")
         self.assertIn("L-PTI", result["limiters"])
-        # At 22% the requested 3 million first meets the 20% payment target
-        # at month 28, within the catalogue's 36-month maximum.
+        # At the product's 19% the requested 3 million first meets the 20% payment target
+        # at month 27, within the catalogue's 36-month maximum.
         self.assertEqual(result["offer"]["amount"], 3_000_000)
-        self.assertEqual(result["offer"]["term_months"], 28)
+        self.assertEqual(result["offer"]["term_months"], 27)
 
     def test_documented_scenarios_s4_to_s17(self):
         clean_history = base()["credit_history"]

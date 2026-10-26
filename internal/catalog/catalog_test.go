@@ -1,8 +1,12 @@
 package catalog
 
 import (
+	"errors"
+	"os"
 	"slices"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func load(t *testing.T) *Catalog {
@@ -115,5 +119,49 @@ func TestMissingFormFields(t *testing.T) {
 	got := c.MissingFormFields(auto, form)
 	if !slices.Equal(got, []string{"vehicle.vin"}) {
 		t.Fatalf("got %v, want only the blank VIN (false and numbers count as filled)", got)
+	}
+}
+
+// Базовые ставки и списки документов продуктов продублированы в конфигурации воркера скоринга
+// (worker/scoring.yaml). Тест не даёт им разойтись с каталогом: иначе ставка предложения и ставка
+// решения скоринга отличались бы, а воркер запрашивал бы не те документы.
+func TestWorkerConfigMatchesTheCatalog(t *testing.T) {
+	raw, err := os.ReadFile("../../worker/scoring.yaml")
+	if errors.Is(err, os.ErrNotExist) {
+		t.Skip("worker/scoring.yaml is not available")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		BaseDocuments []string `yaml:"base_documents"`
+		Products      map[string]struct {
+			BaseRate  *float64 `yaml:"base_rate"`
+			Documents []string `yaml:"documents"`
+		} `yaml:"products"`
+	}
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	c := load(t)
+	if got := len(cfg.Products); got != len(c.Products()) {
+		t.Errorf("worker has %d products, catalog has %d", got, len(c.Products()))
+	}
+	for _, p := range c.Products() {
+		w, ok := cfg.Products[p.ID]
+		if !ok {
+			t.Errorf("%s: not configured in worker/scoring.yaml", p.ID)
+			continue
+		}
+		if w.BaseRate == nil || *w.BaseRate != p.BaseRate {
+			t.Errorf("%s: worker base_rate %v, catalog %v", p.ID, w.BaseRate, p.BaseRate)
+		}
+		if !slices.Equal(slices.Sorted(slices.Values(w.Documents)), slices.Sorted(slices.Values(p.Documents))) {
+			t.Errorf("%s: worker documents %v, catalog %v", p.ID, w.Documents, p.Documents)
+		}
+	}
+	if !slices.Equal(cfg.BaseDocuments, c.RequiredDocuments(Product{})) {
+		t.Errorf("base documents: worker %v, catalog %v", cfg.BaseDocuments, c.RequiredDocuments(Product{}))
 	}
 }

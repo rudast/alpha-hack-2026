@@ -119,6 +119,10 @@ def inspect_application(fields: dict[str, str]) -> tuple[list[str], dict[str, An
     company = _json_field(fields, "company", dict, {})
     form = _json_field(fields, "form", dict, {})
     documents = _json_field(fields, "documents", list, [])
+    # Согласие на запрос в БКИ клиент даёт галочкой в форме (form.consents.bki_request): она заменяет
+    # подписанный документ bki_consent, который интерфейс не собирает.
+    consents = form.get("consents")
+    consent_given = isinstance(consents, dict) and consents.get("bki_request") is True
     if company.get("org_type") not in ("IP", "OOO"):
         missing.append("company.org_type")
 
@@ -148,6 +152,8 @@ def inspect_application(fields: dict[str, str]) -> tuple[list[str], dict[str, An
     required = load_config()["base_documents"] + (
         products[product_id]["documents"] if product_id in products else [])
     for kind in required:
+        if kind == "bki_consent" and consent_given:
+            continue
         if kind not in present:
             missing.append("documents." + kind)
 
@@ -162,8 +168,6 @@ def inspect_application(fields: dict[str, str]) -> tuple[list[str], dict[str, An
                 and (doc.get("kind") != "bki_consent" or doc.get("subject_inn") == inn)}
     registry = company.get("registry")
     director = registry.get("director") if isinstance(registry, dict) else None
-    consents = form.get("consents")
-    consent_given = isinstance(consents, dict) and consents.get("bki_request") is True
     for item in parsed_documents:
         attestation = item.pop("_demo_attestation", None)
         if (inn in BUREAU_DEMO and item["status"] in ("PARSED", "TEXT_EXTRACTED")
@@ -185,6 +189,8 @@ def inspect_application(fields: dict[str, str]) -> tuple[list[str], dict[str, An
         for item in unavailable_documents if (item["id"], item["kind"]) not in verified
     ]
     for item in parsed_documents:
+        if item["kind"] == "bki_consent" and consent_given:
+            continue  # согласие дано галочкой: приложенный файл не нужен для подтверждения
         if item["kind"] in ("passport", "bki_consent") and (item["id"], item["kind"]) not in verified:
             review_reasons.append({
                 "document_id": item["id"],

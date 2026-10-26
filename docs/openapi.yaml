@@ -510,6 +510,16 @@ paths:
                 oneOf:
                   - { $ref: "#/components/schemas/ValidationError" }
                   - { $ref: "#/components/schemas/Error" }
+        "503":
+          description: >
+            Показатели компании (долг, капитал) ещё ни разу не получены, а воркер не ответил вовремя.
+            Заявка остаётся черновиком: повторите отправку через `Retry-After` секунд.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/applications/{id}/accept:
     post:
       tags: [client]

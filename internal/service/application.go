@@ -49,7 +49,20 @@ type ApplicationService struct {
 	publisher ApplicationPublisher
 	documents DocumentStore
 	debts     DebtRecalculator
+	financials FinancialsEnsurer
 	now       func() time.Time
+}
+
+// FinancialsEnsurer получает показатели компании у воркера, если их ещё не запрашивали
+// (TrustService.EnsureTrustRatio).
+type FinancialsEnsurer interface {
+	EnsureTrustRatio(ctx context.Context, inn string) (domain.Company, error)
+}
+
+// WithFinancials включает получение финансовых данных компании перед отправкой заявки.
+func (s *ApplicationService) WithFinancials(f FinancialsEnsurer) *ApplicationService {
+	s.financials = f
+	return s
 }
 
 func NewApplicationService(apps ApplicationRepository, companies CompanyGetter, offers OfferGetter, cat *catalog.Catalog, publisher ApplicationPublisher, documents DocumentStore, debts DebtRecalculator) *ApplicationService {
@@ -212,6 +225,14 @@ func (s *ApplicationService) Submit(ctx context.Context, p domain.Principal, id 
 	company, err := s.companies.GetByINN(ctx, p.CompanyINN)
 	if err != nil {
 		return domain.Application{}, err
+	}
+	// Воркер скоринга не может посчитать заявку без долга и капитала, а клиент их дать не может. Поэтому
+	// если показатели ни разу не запрашивались (клиент не вызвал /me/bootstrap или воркер тогда не ответил),
+	// получаем их сейчас. Заявка при сбое остаётся черновиком: клиент повторит отправку.
+	if s.financials != nil && company.FetchedAt == nil {
+		if company, err = s.financials.EnsureTrustRatio(ctx, p.CompanyINN); err != nil {
+			return domain.Application{}, err
+		}
 	}
 	if !s.catalog.Available(product, company.OrgType, a.Amount, a.TermMonths) ||
 		!s.catalog.AvailableForAge(product, businessAgeMonths(company.RegistrationDate, s.now()), a.Amount) {

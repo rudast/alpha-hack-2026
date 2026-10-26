@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -34,22 +35,26 @@ func Run(ctx context.Context, cfg config.Config) error {
 	// Каталог продуктов встроен в бинарник и доступен независимо от подключения к БД.
 	products, err := catalog.Load()
 	if err != nil {
-		log.Printf("catalog load error: %v", err)
-	} else {
-		prodHandler = handler.NewProductHandler(products)
+		return fmt.Errorf("catalog: %w", err)
 	}
+	prodHandler = handler.NewProductHandler(products)
 
-	if cfg.DatabaseURL != "" {
+	// Режим на данных в памяти (демонстрация без Postgres и Redis, деплой на Vercel) включается только явно:
+	// DEMO_MODE=true или не задан DATABASE_URL. Если DATABASE_URL задан, а Postgres или Redis недоступны,
+	// сервис не стартует, а не подменяет настоящие данные вымышленными.
+	demoMode := cfg.DemoMode || cfg.DatabaseURL == ""
+
+	if !demoMode {
 		pool, err := repository.NewPool(ctx, cfg.DatabaseURL)
 		if err != nil {
-			log.Printf("postgres connection error: %v (running in web presentation mode)", err)
+			return fmt.Errorf("postgres: %w", err)
 		} else {
 			defer pool.Close()
 
 			rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 			defer rdb.Close()
 			if err := rdb.Ping(ctx).Err(); err != nil {
-				log.Printf("redis connection error: %v (running in web presentation mode)", err)
+				return fmt.Errorf("redis: %w", err)
 			} else {
 				aStore := repository.NewAuthStore(rdb)
 				authStore = aStore
@@ -57,10 +62,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 
 				auth, err := service.NewAuthService(repository.NewUserRepo(pool), aStore, service.StubOTP{Code: cfg.OTPStubCode})
 				if err != nil {
-					log.Printf("auth service error: %v", err)
-				} else {
-					authHandler = handler.NewAuthHandler(auth)
+					return fmt.Errorf("auth: %w", err)
 				}
+				authHandler = handler.NewAuthHandler(auth)
 
 				companies := repository.NewCompanyRepo(pool)
 				// Общий долг компании: наши кредиты (из заявок) плюс кредиты в других банках от воркера.
@@ -86,10 +90,10 @@ func Run(ctx context.Context, cfg config.Config) error {
 					}
 					documents, err := repository.NewDocumentStore(docDir)
 					if err != nil {
-						log.Printf("documents store error: %v", err)
+						return fmt.Errorf("documents: %w", err)
 					}
 
-					applications := service.NewApplicationService(applicationRepo, companies, offerRepo, products, applicationPublisher, documents, debts)
+					applications := service.NewApplicationService(applicationRepo, companies, offerRepo, products, applicationPublisher, documents, debts).WithFinancials(trust)
 					appHandler = handler.NewApplicationHandler(applications)
 					loanHandler = handler.NewLoanHandler(service.NewLoanService(applicationRepo, companies, products))
 
@@ -110,32 +114,14 @@ func Run(ctx context.Context, cfg config.Config) error {
 			}
 		}
 	} else {
-		log.Printf("DATABASE_URL is not set; running in web presentation mode with in-memory DemoService")
-	}
-
-	// Если внешняя БД или Redis не подключены (деплой на Vercel или демонстрационный режим),
-	// активируем демо-сервисы, чтобы весь интерфейс оставался полностью интерактивным.
-	if authHandler == nil || authStore == nil || meHandler == nil || appHandler == nil {
-		log.Printf("initializing in-memory DemoService (auth, company bootstrap, applications enabled)")
+		log.Printf("DEMO MODE: Postgres and Redis are not used, all data lives in memory and is lost on restart")
 		demo := service.NewDemoPackage()
-		if authHandler == nil {
-			authHandler = handler.NewAuthHandler(demo.Auth)
-		}
-		if authStore == nil {
-			authStore = demo.Sessions
-		}
-		if meHandler == nil {
-			meHandler = handler.NewMeHandler(demo.Trust, demo.Offers, demo.Profiles)
-		}
-		if appHandler == nil {
-			appHandler = handler.NewApplicationHandler(demo.Apps)
-		}
-		if loanHandler == nil {
-			loanHandler = handler.NewLoanHandler(demo.Loans)
-		}
-		if idempotency == nil {
-			idempotency = demo.Idempotency
-		}
+		authHandler = handler.NewAuthHandler(demo.Auth)
+		authStore = demo.Sessions
+		meHandler = handler.NewMeHandler(demo.Trust, demo.Offers, demo.Profiles)
+		appHandler = handler.NewApplicationHandler(demo.Apps)
+		loanHandler = handler.NewLoanHandler(demo.Loans)
+		idempotency = demo.Idempotency
 	}
 
 	srv := &http.Server{

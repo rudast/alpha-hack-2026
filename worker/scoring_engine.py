@@ -61,6 +61,9 @@ def load_config() -> dict[str, Any]:
     for product, policy in config["products"].items():
         if policy["class"] not in config["classes"]:
             raise ValueError(f"unknown class for {product}")
+        if "base_rate" in policy and (isinstance(policy["base_rate"], bool)
+                                      or not isinstance(policy["base_rate"], (int, float)) or policy["base_rate"] <= 0):
+            raise ValueError(f"invalid base_rate for {product}")
         codes = config["core_factors"] + policy["factors"]
         if not codes or any(code not in weights for code in codes):
             raise ValueError(f"invalid factors for {product}")
@@ -166,7 +169,7 @@ def _factor_shares(data: dict[str, Any], config: dict[str, Any],
 
     if "P1" in required:
         turnover = _number(data, "turnover_monthly", zero=False)
-        pti = _payment(amount, months, config["classes"][policy["class"]]["base_rate"]) / turnover
+        pti = _payment(amount, months, policy.get("base_rate", config["classes"][policy["class"]]["base_rate"])) / turnover
         shares["P1"] = (_bin(config, "P1", pti), round(pti, 4))
         if pti > config["limiters"]["pti_max"]:
             limiters.append("L-PTI")
@@ -256,7 +259,9 @@ def score_application(data: dict[str, Any], config: dict[str, Any] | None = None
     amount, months = data["amount"], data["term_months"]
     product_policy = config["products"][product]
     class_name = product_policy["class"]
-    policy = config["classes"][class_name]
+    policy = dict(config["classes"][class_name])
+    # Базовая ставка у продукта своя (как в каталоге и калькуляторе), у класса — запасная.
+    policy["base_rate"] = product_policy.get("base_rate", policy["base_rate"])
     calculated = _score(data, config, amount, months)
     score, ko, limiters = calculated["score"], calculated["ko"], calculated["limiters"]
     review_reasons = list(data.get("review_reasons", []))

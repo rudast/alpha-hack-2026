@@ -6,21 +6,23 @@ classes:
 rate: {anchor_score: 80, slope_pp_per_point: 0.15, min_pp: -1.5, max_pp: 6.0}
 limiters: {ltv_max: 0.80, pti_max: 0.35}
 base_documents: [passport, bki_consent]
+# base_rate продукта: ставка из каталога API (internal/catalog/products.yaml), которую клиент видит в калькуляторе;
+# от неё скоринг отсчитывает ставку решения. base_rate класса используется, только если у продукта своей нет.
 products:
-  express: {class: X, factors: [], documents: []}
-  overdraft: {class: U, factors: [P1, P5], max_term_months: 12, documents: [account_statement]}
-  credit_line: {class: U, factors: [P1, P2], max_term_months: 24, documents: [account_statement]}
-  working_capital: {class: U, factors: [P1], max_term_months: 36, documents: [financial_statements]}
-  marketplace_seller: {class: U, factors: [P1, P7], max_term_months: 18, documents: [marketplace_sales_report]}
-  ip_loan: {class: U, factors: [], documents: []}
-  ooo_loan: {class: U, factors: [], documents: []}
-  loan_up_to_1m: {class: U, factors: [P1], max_term_months: 24, documents: [account_statement]}
-  equipment_loan: {class: S, factors: [P3], documents: [title_documents, equipment_purchase_contract, equipment_specification]}
-  auto_loan: {class: S, factors: [P3], documents: [title_documents, vehicle_registration]}
-  secured_property_equipment: {class: S, factors: [P3], documents: [title_documents, egrn_extract, technical_passport, valuation_report]}
-  business_purchase: {class: S, factors: [P3, P6a, P6b], documents: [title_documents, business_plan, target_financial_statements, business_purchase_contract]}
-  mortgage_ip: {class: S, factors: [P3, P4], documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]}
-  mortgage_business: {class: S, factors: [P3, P4], documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]}
+  express: {class: X, base_rate: 20.5, factors: [], documents: []}
+  overdraft: {class: U, base_rate: 17.5, factors: [P1, P5], max_term_months: 12, documents: [account_statement]}
+  credit_line: {class: U, base_rate: 17.0, factors: [P1, P2], max_term_months: 24, documents: [account_statement]}
+  working_capital: {class: U, base_rate: 19.0, factors: [P1], max_term_months: 36, documents: [financial_statements]}
+  marketplace_seller: {class: U, base_rate: 18.5, factors: [P1, P7], max_term_months: 18, documents: [marketplace_sales_report]}
+  ip_loan: {class: U, base_rate: 21.0, factors: [], documents: []}
+  ooo_loan: {class: U, base_rate: 20.0, factors: [], documents: []}
+  loan_up_to_1m: {class: U, base_rate: 22.0, factors: [P1], max_term_months: 24, documents: [account_statement]}
+  equipment_loan: {class: S, base_rate: 16.5, factors: [P3], documents: [title_documents, equipment_purchase_contract, equipment_specification]}
+  auto_loan: {class: S, base_rate: 15.5, factors: [P3], documents: [title_documents, vehicle_registration]}
+  secured_property_equipment: {class: S, base_rate: 15.0, factors: [P3], documents: [title_documents, egrn_extract, technical_passport, valuation_report]}
+  business_purchase: {class: S, base_rate: 16.0, factors: [P3, P6a, P6b], documents: [title_documents, business_plan, target_financial_statements, business_purchase_contract]}
+  mortgage_ip: {class: S, base_rate: 14.5, factors: [P3, P4], documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]}
+  mortgage_business: {class: S, base_rate: 14.5, factors: [P3, P4], documents: [title_documents, preliminary_purchase_contract, egrn_extract, valuation_report]}
 core_factors: [C1a, C1b, C2, C3, C4a, C4b]
 weights: {C1a: 17, C1b: 8, C2: 20, C3: 10, C4a: 6, C4b: 4, P1: 25, P2: 10, P3: 20, P4: 10, P5: 10, P6a: 5, P6b: 10, P7: 5}
 bins:

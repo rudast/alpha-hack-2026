@@ -246,6 +246,27 @@ class BackendProtocolTests(unittest.TestCase):
         ])
         self.assertIn("бухгалтерскую отчётность", events[0]["info_request"])
 
+    def test_consent_checkbox_replaces_the_bki_consent_document(self):
+        form = json.dumps({"applicant": {"position": "Директор"}, "consents": {"bki_request": True}})
+        missing, _ = inspect_application(submission(form=form))
+        self.assertNotIn("documents.bki_consent", missing)
+        self.assertIn("documents.passport", missing)
+
+    def test_without_the_checkbox_the_bki_consent_document_is_still_required(self):
+        missing, _ = inspect_application(submission())
+        self.assertIn("documents.bki_consent", missing)
+
+    def test_unverified_consent_file_is_not_a_review_reason_when_the_checkbox_is_set(self):
+        form = json.dumps({"applicant": {"position": "Директор"}, "consents": {"bki_request": True}})
+        documents = json.dumps([
+            {"id": "p", "kind": "passport", "verification_status": "VERIFIED", "content_text": "x"},
+            {"id": "c", "kind": "bki_consent", "content_text": "согласие"},
+        ])
+        missing, decision = inspect_application(submission(form=form, documents=documents))
+        self.assertEqual(missing, [])
+        reasons = [item["reason"] for item in decision["review_reasons"]]
+        self.assertNotIn("BKI_CONSENT_NOT_VERIFIED", reasons)
+
     def test_secured_product_requests_its_catalog_documents(self):
         events = completion_events(submission(product_id="mortgage_business"))
         self.assertEqual(json.loads(events[0]["decision"])["missing_fields"], [
