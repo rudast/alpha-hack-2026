@@ -832,6 +832,20 @@
     return h.length ? h[h.length - 1].comment : '';
   }
 
+  // Что просит банк: текст сотрудника в info_request, у воркера — комментарий последнего перехода в INFO_REQUESTED
+  function requestText(a) {
+    if (a.info_request) return a.info_request;
+    var h = (a.history || []).filter(function (e) { return e.to === 'INFO_REQUESTED' && e.comment; });
+    return h.length ? h[h.length - 1].comment : '';
+  }
+
+  // Поля, которые воркер не смог получить из документов: объясняем, откуда они берутся
+  var DATA_HINTS = {
+    turnover_monthly: 'Подтверждённый месячный оборот банк считает по бухгалтерской отчётности или выписке по счёту. Приложите такой документ в виде PDF с текстом (не фотографию): по фото цифры прочитать нельзя.',
+    monthly_turnovers: 'Нужны помесячные обороты минимум за 6 месяцев — приложите выписку по расчётному счёту (PDF с текстом).',
+    collateral_confirmed_value: 'Нужна оценка залога — приложите отчёт об оценке.',
+  };
+
   function bankComment(text) {
     return text ? '<div class="bank-comment"><span>Комментарий специалиста</span>' + esc(text) + '</div>' : '';
   }
@@ -885,8 +899,10 @@
       return (
         '<section class="decision decision-warning">' +
         '<div class="decision-title">' + icon('file', 20) + 'Банк запросил данные</div>' +
-        (a.info_request ? '<div class="bank-comment"><span>Что нужно</span>' + esc(a.info_request) + '</div>' : '') +
-        (otherFields.length ? '<p class="decision-text">Дополните в заявке: ' + esc(otherFields.map(Catalog.fieldLabel).join(', ')) + '.</p>' : '') +
+        (requestText(a) ? '<div class="bank-comment"><span>Что нужно</span>' + esc(requestText(a)) + '</div>' : '') +
+        otherFields.map(function (f) {
+          return '<p class="decision-text">' + esc(DATA_HINTS[f] || 'Дополните в заявке: ' + Catalog.fieldLabel(f) + '.') + '</p>';
+        }).join('') +
         '<ul class="docs req-docs">' +
         kinds.map(function (k) {
           var doc = have[k];
