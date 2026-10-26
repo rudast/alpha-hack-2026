@@ -369,7 +369,23 @@
     CONTENT_UNAVAILABLE: 'Содержимое документа воркеру недоступно — проверьте файл вручную',
     BKI_CONSENT_NOT_VERIFIED: 'Согласие на запрос в БКИ не проверено',
     PASSPORT_NOT_VERIFIED: 'Паспорт не проверен',
+    FIELDS_NOT_EXTRACTED: 'Из документа не удалось прочитать данные — проверьте вручную',
+    FINANCIAL_STATEMENTS_UNVERIFIED: 'Бухгалтерская отчётность не подтверждена',
+    ACCOUNT_STATEMENT_UNVERIFIED: 'Выписка по счёту не подтверждена',
+    MARKETPLACE_REPORT_UNVERIFIED: 'Отчёт маркетплейса не подтверждён',
+    VALUATION_UNVERIFIED: 'Оценка залога не подтверждена',
+    TARGET_FINANCIALS_UNVERIFIED: 'Отчётность покупаемого бизнеса не подтверждена',
   };
+
+  // review_reasons приходит то списком кодов, то списком { reason, document_id }; убираем повторы
+  function reviewCodes(d) {
+    var seen = {};
+    return (d.review_reasons || []).map(function (r) { return typeof r === 'string' ? r : r && r.reason; }).filter(function (code) {
+      if (!code || seen[code]) return false;
+      seen[code] = true;
+      return true;
+    });
+  }
 
   function checkText(code) {
     return CHECK_CODES[code] || code;
@@ -381,12 +397,7 @@
     var c = a.company || {};
     var after = c.equity > 0 ? (c.total_debt + a.amount) / c.equity : null;
     var flags = d.risk_flags || [];
-    var seen = {};
-    var review = (d.review_reasons || []).map(function (r) { return r.reason; }).filter(function (code) {
-      if (seen[code]) return false;
-      seen[code] = true;
-      return true;
-    });
+    var review = reviewCodes(d);
     var list = function (items, cls, title) {
       if (!items.length) return '';
       return '<div class="sc-reasons ' + cls + '"><div class="sc-reasons-title">' + title + '</div><ul>' +
@@ -437,6 +448,7 @@
       '</dl>' +
       reasons(d.reasons_negative, 'sc-neg', 'Что снижает балл') +
       reasons(d.reasons_positive, 'sc-pos', 'Что повышает балл') +
+      reasons(reviewCodes(d).map(function (code) { return { text: checkText(code) }; }), 'sc-neg', 'Почему нужна ручная проверка') +
       '</section>'
     );
   }
