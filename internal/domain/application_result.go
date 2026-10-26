@@ -11,4 +11,6 @@ type ApplicationResult struct {
 	To            Status
 	Decision      json.RawMessage
 	Comment       string
+	// InfoRequest — что воркер просит дополнить у клиента (при переходе в INFO_REQUESTED).
+	InfoRequest string
 }

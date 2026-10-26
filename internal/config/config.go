@@ -15,6 +15,7 @@ type Config struct {
 	TrustRefreshInterval time.Duration
 	WorkerTimeout        time.Duration
 	AssistantURL         string
+	DemoMode             bool   // DEMO_MODE=true: интерфейс на данных в памяти, без Postgres и Redis
 	DocumentsDir         string // каталог (Docker-том) с файлами заявок
 }
 
@@ -47,13 +48,14 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		HTTPAddr:             httpAddr,
-		WebDir:               webDir,
-		DatabaseURL:          dbURL,
-		RedisAddr:            getenv("REDIS_ADDR", "localhost:6379"),
-		OTPStubCode:          getenv("OTP_STUB_CODE", "000000"),
-		AssistantURL:         getenv("ASSISTANT_URL", "http://assistant:8081"),
-		DocumentsDir:         getenv("DOCUMENTS_DIR", "data/documents"),
+		HTTPAddr:     httpAddr,
+		WebDir:       webDir,
+		DatabaseURL:  dbURL,
+		RedisAddr:    getenv("REDIS_ADDR", "localhost:6379"),
+		OTPStubCode:  getenv("OTP_STUB_CODE", "000000"),
+		AssistantURL: getenv("ASSISTANT_URL", "http://assistant:8081"),
+		DocumentsDir: getenv("DOCUMENTS_DIR", "data/documents"),
+		DemoMode:     os.Getenv("DEMO_MODE") == "true",
 	}
 
 	var err error

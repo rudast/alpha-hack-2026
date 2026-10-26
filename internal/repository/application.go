@@ -255,11 +255,13 @@ func (r *ApplicationRepo) ApplyResult(ctx context.Context, res domain.Applicatio
 			version    = version + 1,
 			updated_at = now(),
 			decision   = COALESCE($4::jsonb, decision),
+			-- Запрос клиенту: текст воркера, а если его нет, комментарий к переходу.
+			info_request = CASE WHEN $3::text = 'INFO_REQUESTED' THEN COALESCE(NULLIF($8::text, ''), NULLIF($7::text, '')) ELSE info_request END,
 			history    = history || jsonb_build_array(
 				jsonb_build_object('from', $2::text, 'to', $3::text, 'at', $5::timestamptz, 'by', $6::text)
 				|| CASE WHEN $7::text = '' THEN '{}'::jsonb ELSE jsonb_build_object('comment', $7::text) END)
 		WHERE id = $1::text::uuid AND status = $2`,
-		res.ApplicationID, string(res.From), string(res.To), decision, at, "worker", res.Comment)
+		res.ApplicationID, string(res.From), string(res.To), decision, at, "worker", res.Comment, res.InfoRequest)
 	if err != nil {
 		return mapNotFound(err)
 	}

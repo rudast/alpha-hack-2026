@@ -222,6 +222,11 @@ func (h *ApplicationHandler) fail(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusRequestEntityTooLarge, "file is larger than 10 MB")
 	case errors.Is(err, domain.ErrNotInfoRequested):
 		writeError(w, http.StatusConflict, "application is not waiting for additional documents")
+	case errors.Is(err, domain.ErrUpstreamTimeout), errors.Is(err, domain.ErrUpstreamFailed):
+		// Показатели компании ещё не получены, а воркер не ответил: заявка осталась черновиком.
+		log.Printf("applications: company financials unavailable: %v", err)
+		w.Header().Set("Retry-After", "5")
+		writeError(w, http.StatusServiceUnavailable, "company financials are not available yet, try again")
 	case errors.Is(err, domain.ErrNotAwaitingDecision):
 		writeError(w, http.StatusConflict, "application is not awaiting client decision")
 	case errors.Is(err, domain.ErrConflict):

@@ -710,3 +710,59 @@ func TestContractNumber(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+type fakeFinancials struct {
+	calls   int
+	company domain.Company
+	err     error
+}
+
+func (f *fakeFinancials) EnsureTrustRatio(context.Context, string) (domain.Company, error) {
+	f.calls++
+	return f.company, f.err
+}
+
+func TestApplicationSubmit_GetsCompanyFinancialsFirst(t *testing.T) {
+	ctx := context.Background()
+	debt, equity := int64(2_400_000), int64(4_000_000)
+	fetched := testNow
+	registered := testNow.AddDate(-4, 0, 0)
+	fresh := domain.Company{INN: clientA.CompanyINN, OrgType: "OOO", RegistrationDate: &registered, TotalDebt: &debt, Equity: &equity, FetchedAt: &fetched}
+
+	t.Run("never requested: fetched before the task is sent", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		f := &fakeFinancials{company: fresh}
+		s.WithFinancials(f)
+		a, _ := s.Create(ctx, clientA, completeExpress())
+		if _, err := s.Submit(ctx, clientA, a.ID); err != nil {
+			t.Fatal(err)
+		}
+		task := publishedBy(s).tasks[0]
+		if f.calls != 1 || task.Debt == nil || *task.Debt != debt || task.Equity == nil || *task.Equity != equity {
+			t.Fatalf("calls %d, task debt %v equity %v", f.calls, task.Debt, task.Equity)
+		}
+	})
+
+	t.Run("the worker does not answer: the application stays a draft", func(t *testing.T) {
+		s, repo := newApplications(t, "OOO")
+		s.WithFinancials(&fakeFinancials{err: domain.ErrUpstreamTimeout})
+		a, _ := s.Create(ctx, clientA, completeExpress())
+		if _, err := s.Submit(ctx, clientA, a.ID); !errors.Is(err, domain.ErrUpstreamTimeout) {
+			t.Fatalf("got %v, want ErrUpstreamTimeout", err)
+		}
+		if repo.submits != 0 || len(publishedBy(s).tasks) != 0 {
+			t.Fatal("nothing must be submitted or sent")
+		}
+	})
+
+	t.Run("already known: the worker is not asked again", func(t *testing.T) {
+		s, _ := newApplications(t, "OOO")
+		s.companies = &fakeCompanies{c: fresh}
+		f := &fakeFinancials{company: fresh}
+		s.WithFinancials(f)
+		a, _ := s.Create(ctx, clientA, completeExpress())
+		if _, err := s.Submit(ctx, clientA, a.ID); err != nil || f.calls != 0 {
+			t.Fatalf("err %v, calls %d", err, f.calls)
+		}
+	})
+}

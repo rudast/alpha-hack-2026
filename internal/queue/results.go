@@ -163,6 +163,7 @@ func parseResult(values map[string]any) (domain.ApplicationResult, error) {
 		From:          domain.Status(text("from")),
 		To:            domain.Status(text("to")),
 		Comment:       text("comment"),
+		InfoRequest:   text("info_request"),
 	}
 	for name, v := range map[string]string{"application_id": res.ApplicationID, "from": string(res.From), "to": string(res.To)} {
 		if v == "" {

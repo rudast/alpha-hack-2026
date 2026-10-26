@@ -93,6 +93,7 @@ goose -dir migrations postgres "$DATABASE_URL" up
 | `HTTP_ADDR` | `:8080` | Адрес, который слушает сервис |
 | `WEB_DIR` | `web` | Каталог со статикой веб-интерфейса |
 | `DATABASE_URL` | обязательна; в compose задана | Строка подключения к PostgreSQL |
+| `DEMO_MODE` | не задан | `true`: интерфейс на данных в памяти без Postgres и Redis (демонстрация, Vercel). Без него и с заданным `DATABASE_URL` недоступная база останавливает запуск |
 | `REDIS_ADDR` | `localhost:6379`; в compose `redis:6379` | Адрес Redis (API и воркер) |
 | `OTP_STUB_CODE` | `000000` | Код, который принимает заглушка 2FA |
 | `TRUST_REFRESH_INTERVAL` | `12h` | Через сколько коэффициент долговой нагрузки считается устаревшим |
