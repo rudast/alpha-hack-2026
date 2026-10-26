@@ -1048,6 +1048,13 @@
       appError(res.status === 400 ? 'Подходят только PDF, JPG и PNG.' : 'Не удалось загрузить файл. Попробуйте ещё раз.');
       return;
     }
+    // Заменили файл — прежние того же вида удаляем: два документа одного вида воркер не читает
+    var stale = (a.documents || []).filter(function (d) { return d.kind === kind && d.id !== res.data.id; });
+    for (var i = 0; i < stale.length; i++) {
+      await api('/applications/' + encodeURIComponent(a.id) + '/documents/' + encodeURIComponent(stale[i].id), {
+        method: 'DELETE', idempotencyKey: api.newKey(),
+      });
+    }
     showApplication(a.id, true);
   }
 

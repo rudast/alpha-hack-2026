@@ -60,6 +60,7 @@
       purpose: '',
       form: {},
       files: {}, // вид документа → имя загруженного на сервер файла
+      fileIds: {}, // вид документа → id документа на сервере (чтобы заменить, а не добавить второй)
       consents: { bki: false, pd: false },
       errors: {}, // ошибки полей анкеты: 'группа.поле' → текст
       dateRaw: {}, // что введено в поля дат как текст: нужно, чтобы отличить «пусто» от «такой даты нет»
@@ -862,7 +863,15 @@
       fail(res.status === 413 ? 'Файл больше 10 МБ.' : res.status === 400 ? 'Подходят только PDF, JPG и PNG.' : 'Не удалось загрузить файл. Попробуйте ещё раз.');
       return;
     }
+    // Заменили файл — прежний того же вида удаляем: два документа одного вида воркер не читает
+    var old = s.fileIds[kind];
+    if (old && old !== res.data.id) {
+      await api('/applications/' + encodeURIComponent(s.app.id) + '/documents/' + encodeURIComponent(old), {
+        method: 'DELETE', idempotencyKey: api.newKey(),
+      });
+    }
     s.files[kind] = res.data.filename || file.name;
+    s.fileIds[kind] = res.data.id;
     s.changed = true;
     render();
   }
@@ -919,7 +928,10 @@
     s.purpose = a.purpose || g.purpose;
     s.form = Catalog.decomposeForm(form);
     s.consents = { bki: !!consents.bki_request, pd: !!consents.personal_data };
-    (a.documents || []).forEach(function (d) { s.files[d.kind] = d.filename; });
+    (a.documents || []).forEach(function (d) {
+      s.files[d.kind] = d.filename;
+      s.fileIds[d.kind] = d.id;
+    });
     s.collateral = form.applicant && form.applicant.has_collateral ? 'with' : g.collateral === 'with' ? 'with' : 'without';
     s.productId = front;
     go(front ? STEP.FORM : STEP.GOAL);
