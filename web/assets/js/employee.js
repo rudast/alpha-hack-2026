@@ -533,7 +533,8 @@
     var panel = state.panel ? panelHtml(state.panel) : '';
     foot.innerHTML =
       (panel ? '<div class="action-panel">' + panel + '</div>' : '') +
-      '<div class="action-bar">' +
+      // Пока открыта панель действия, строку кнопок прячем: у панели свои «Отмена» и «подтвердить»
+      '<div class="action-bar"' + (panel ? ' hidden' : '') + '>' +
       '<div class="action-group">' +
       btn('docs', 'Запросить документы', 'file') +
       btn('postpone', 'Отложить', 'clock') +

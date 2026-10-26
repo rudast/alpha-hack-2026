@@ -822,3 +822,8 @@
     gap: 2px;
   }
 }
+
+/* Пока открыта панель действия, строка кнопок скрыта (display:flex перебивает атрибут hidden) */
+.action-bar[hidden] {
+  display: none;
+}
