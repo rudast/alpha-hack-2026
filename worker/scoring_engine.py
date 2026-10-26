@@ -83,17 +83,24 @@ def _payment(amount: float, months: int, annual_rate_percent: float) -> float:
     return amount / months if monthly == 0 else amount * monthly / (1 - (1 + monthly) ** -months)
 
 
+# Отраслевой риск — справочник банка, а не данные клиента: если ОКВЭД неизвестен или его нет
+# в справочнике, фактор получает нейтральное значение и попадает в data_gaps (scoring.md, раздел 7.4),
+# а клиенту ничего не запрашивается.
+INDUSTRY_UNKNOWN = "unknown"
+INDUSTRY_SHARES = {"low": 1.0, "medium": 0.6, "high": 0.2, INDUSTRY_UNKNOWN: 0.5}
+
+
 def _industry(config: dict[str, Any], data: dict[str, Any]) -> str:
     explicit = data.get("industry_risk")
     if explicit in ("low", "medium", "high"):
         return explicit
     okved = data.get("okved")
     if not isinstance(okved, str) or not okved:
-        raise MissingData(["okved"])
+        return INDUSTRY_UNKNOWN
     for group, prefixes in config["industry_risk"].items():
         if any(okved.startswith(prefix) for prefix in prefixes):
             return group
-    raise MissingData(["industry_risk"])
+    return INDUSTRY_UNKNOWN
 
 
 def _factor_shares(data: dict[str, Any], config: dict[str, Any],
@@ -155,7 +162,7 @@ def _factor_shares(data: dict[str, Any], config: dict[str, Any],
     shares["C4a"] = (0.0 if red else 0.5 if yellow else 1.0,
                      {"red_flags": red, "yellow_flags": yellow})
     industry = _industry(config, data)
-    shares["C4b"] = ({"low": 1.0, "medium": 0.6, "high": 0.2}[industry], industry)
+    shares["C4b"] = (INDUSTRY_SHARES[industry], industry)
 
     if "P1" in required:
         turnover = _number(data, "turnover_monthly", zero=False)
@@ -261,7 +268,8 @@ def score_application(data: dict[str, Any], config: dict[str, Any] | None = None
         "score": score, "outcome": outcome,
         "thresholds": {"approve": policy["approve"], "counter": policy["counter"]},
         "ko": ko, "limiters": limiters, "factors": calculated["factors"],
-        "data_gaps": [], "review_reasons": review_reasons,
+        "data_gaps": ["industry_risk"] if _industry(config, data) == INDUSTRY_UNKNOWN else [],
+        "review_reasons": review_reasons,
         "rate": _rate(score, policy["base_rate"], config),
     }
     if outcome == "COUNTER_OFFER":

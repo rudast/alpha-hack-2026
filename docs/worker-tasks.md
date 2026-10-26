@@ -1,4 +1,6 @@
-# Контракт Go API ↔ Python worker
+# Контракт Go API ↔ Python worker (режим `legacy`)
+
+> **Устарело для текущего API.** Go API работает с воркером только в режиме `WORKER_PROTOCOL=backend` (потоки `credit-history:requests`, `applications:submitted`, `applications:results`), см. [worker-protocol.md](worker-protocol.md) и [scoring-worker-tz.md](scoring-worker-tz.md). Поток `worker:requests`, таблицы `worker_jobs` и `application_documents` и Go-методы `Submit`/`Await` удалены; документ описывает только режим `legacy`, оставшийся в самом воркере.
 
 Go API — единственная внешняя точка входа. Он отправляет задачи в Redis Stream `worker:requests`. Python worker читает их, выбирает сервис по `kind` и переносит сообщение в `worker:fast` или `worker:slow`. Сервисы находятся отдельно в `worker/services/`; маршруты перечислены в `worker/router.py`.
 
