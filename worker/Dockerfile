@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/worker
+RUN mkdir -p /data/documents && chown 10001:10001 /data/documents
 
 USER 10001:10001
 CMD ["python", "-m", "worker.main"]

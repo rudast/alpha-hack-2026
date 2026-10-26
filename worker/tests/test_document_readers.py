@@ -41,6 +41,29 @@ def _text_pdf() -> bytes:
 
 
 class DocumentReadersTest(unittest.TestCase):
+    def test_docx_statement_table_extracts_reconciled_turnover(self):
+        document = Document()
+        table = document.add_table(rows=3, cols=4)
+        for row, values in zip(table.rows, [
+            ("Дата", "Поступление", "Списание", "Остаток"),
+            ("02.01.2025", "100", "0", "1100"),
+            ("03.01.2025", "0", "25", "1075"),
+        ]):
+            for cell, value in zip(row.cells, values):
+                cell.text = value
+        output = io.BytesIO()
+        document.save(output)
+        item = parse_documents({"application_id": "application-1", "documents": [{
+            "id": "statement-1", "kind": "account_statement", "filename": "statement.docx",
+            "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "content": output.getvalue(),
+        }]})["documents"][0]
+        self.assertEqual(item["status"], "TEXT_EXTRACTED")
+        fields = item["extracted_fields"]
+        self.assertEqual(fields["turnover_monthly"]["value"][0]["credit"], "100.00")
+        self.assertEqual(fields["closing_balance"]["value"], "1075.00")
+        self.assertEqual(fields["turnover_monthly"]["source_document_id"], "statement-1")
+
     def test_docx_paragraphs_and_table(self):
         document = Document()
         document.add_paragraph("Revenue report 2026")

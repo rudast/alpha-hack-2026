@@ -45,9 +45,13 @@ services:
   worker:
     build:
       context: ./worker
+    volumes:
+      - documents:/data/documents:ro
     environment:
       REDIS_ADDR: redis:6379
       WORKER_PROTOCOL: ${WORKER_PROTOCOL:-backend}
+      WORKER_DOCUMENT_ROOT: /data/documents
+      WORKER_DEMO_ATTESTATION_KEY: ${WORKER_DEMO_ATTESTATION_KEY:-}
     depends_on:
       redis:
         condition: service_healthy
