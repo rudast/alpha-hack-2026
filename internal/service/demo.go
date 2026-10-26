@@ -817,7 +817,7 @@ func (r *DemoReview) Employee(ctx context.Context, p domain.Principal) (domain.U
 		Role:     domain.RoleEmployee,
 		FullName: "Сидорова Анна Сергеевна",
 		Phone:    phone,
-		Email:    &email,
+		Email:    email,
 		Position: &pos,
 	}, nil
 }
