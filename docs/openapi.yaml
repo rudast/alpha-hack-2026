@@ -252,23 +252,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-  /api/v1/calculator:
-    post:
-      tags: [client]
-      summary: Расчёт платежа по будущему кредиту
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CalculatorRequest"
-      responses:
-        "200":
-          description: Результат расчёта
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CalculatorResponse"
   /api/v1/applications:
     post:
       tags: [client]
@@ -724,6 +707,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/employee/me:
+    get:
+      tags: [employee]
+      summary: Текущий сотрудник
+      description: ФИО, должность и почта сотрудника, который вошёл, — для шапки рабочего места.
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: Сотрудник
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  full_name: { type: string, example: Сидорова Анна Сергеевна }
+                  position: { type: string, nullable: true, example: Андеррайтер МСБ }
+                  email: { type: string, nullable: true, example: underwriter@example.test }
+        "403":
+          description: Метод только для сотрудников
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/employee/applications:
     get:
       tags: [employee]
@@ -1105,19 +1110,6 @@ components:
               bank: { type: string }
               kind: { type: string }
               debt: { type: integer, format: int64 }
-    CalculatorRequest:
-      type: object
-      required: [product_id, amount, term_months]
-      properties:
-        product_id: { type: string }
-        amount: { type: number }
-        term_months: { type: integer }
-    CalculatorResponse:
-      type: object
-      properties:
-        monthly_payment: { type: number }
-        total_payment: { type: number }
-        rate: { type: number }
     OfferResponse:
       type: object
       properties:
