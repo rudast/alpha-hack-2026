@@ -1,11 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +24,7 @@ type DemoPackage struct {
 	Profiles    *DemoProfiles
 	Apps        *DemoApplications
 	Loans       *DemoLoans
+	Review      *DemoReview
 	Idempotency *DemoIdempotency
 }
 
@@ -50,20 +54,67 @@ func NewDemoPackage() *DemoPackage {
 		UpdatedAt:   submittedAt,
 	}
 	app2 := &domain.Application{
-		ID:          "app_demo_102",
-		Version:     1,
-		CompanyINN:  "7700000002",
-		ProductID:   "equipment-leasing",
-		Amount:      5000000,
-		TermMonths:  36,
-		Purpose:     "Закупка оборудования",
-		Status:      domain.StatusManualReview,
-		Form:        map[string]any{"org": "ooo", "purpose": "Закупка оборудования"},
-		Documents:   []domain.Document{},
+		ID:         "app_demo_102",
+		Version:    1,
+		CompanyINN: "7700000002",
+		ProductID:  "equipment-leasing",
+		Amount:     5000000,
+		TermMonths: 36,
+		Purpose:    "Закупка оборудования",
+		Status:     domain.StatusManualReview,
+		Form: map[string]any{
+			"loan_params": map[string]any{
+				"amount":      5000000,
+				"term_months": 36,
+				"purpose":     "Закупка оборудования",
+			},
+			"equipment": map[string]any{
+				"equipment_type": "Производственная линия",
+				"equipment_cost": 6500000,
+				"supplier_inn":   "7700000099",
+			},
+			"consents": map[string]any{
+				"bki_request":     true,
+				"data_processing": true,
+			},
+		},
+		Documents: []domain.Document{
+			{
+				ID:         "doc_demo_201",
+				Kind:       "passport",
+				Filename:   "Паспорт_руководителя.pdf",
+				Size:       2450000,
+				Status:     domain.DocumentUploaded,
+				UploadedAt: submittedAt,
+			},
+			{
+				ID:         "doc_demo_202",
+				Kind:       "account_statement",
+				Filename:   "Выписка_по_счету_6мес.pdf",
+				Size:       5200000,
+				Status:     domain.DocumentUploaded,
+				UploadedAt: submittedAt,
+			},
+		},
 		History:     []domain.HistoryEntry{{From: domain.StatusDraft, To: domain.StatusManualReview, At: submittedAt, By: "system"}},
 		SubmittedAt: &submittedAt,
 		CreatedAt:   now,
 		UpdatedAt:   submittedAt,
+		Decision: []byte(`{
+			"score": 58,
+			"model_version": "v1.2",
+			"thresholds": {"approve": 65, "counter": 45},
+			"debt_to_equity": 0.8,
+			"reasons_positive": [
+				{"factor": "C3", "delta": 10, "text": "Стабильный возраст бизнеса (более 3 лет)"},
+				{"factor": "P5", "delta": 5, "text": "Наличие расчетного счета в банке"}
+			],
+			"reasons_negative": [
+				{"factor": "C2", "delta": -12, "text": "Повышенная долговая нагрузка"},
+				{"factor": "C1b", "delta": -5, "text": "Запросы в БКИ за последние 90 дней"}
+			],
+			"manual_review_reasons": ["LTV_BORDERLINE", "FINANCIALS_UNAUDITED"]
+		}`),
 	}
 	app3 := &domain.Application{
 		ID:          "app_demo_103",
@@ -112,11 +163,84 @@ func NewDemoPackage() *DemoPackage {
 		CreatedAt:   now,
 		UpdatedAt:   submittedAt,
 	}
+	assignedTime := submittedAt.Add(15 * time.Minute)
+	empID := "demo-emp-1"
+	app6 := &domain.Application{
+		ID:         "app_demo_106",
+		Version:    1,
+		CompanyINN: "7700000003",
+		ProductID:  "investment",
+		Amount:     8000000,
+		TermMonths: 48,
+		Purpose:    "Модернизация производства",
+		Status:     domain.StatusManualReview,
+		AssignedTo: &empID,
+		AssignedAt: &assignedTime,
+		Form: map[string]any{
+			"loan_params": map[string]any{
+				"amount":      8000000,
+				"term_months": 48,
+				"purpose":     "Модернизация производства",
+			},
+			"investment": map[string]any{
+				"project_name": "Расширение цеха №2",
+				"total_budget": 12000000,
+			},
+			"consents": map[string]any{
+				"bki_request":     true,
+				"data_processing": true,
+			},
+		},
+		Documents: []domain.Document{
+			{
+				ID:         "doc_demo_601",
+				Kind:       "passport",
+				Filename:   "Паспорт_директора.pdf",
+				Size:       1800000,
+				Status:     domain.DocumentUploaded,
+				UploadedAt: submittedAt,
+			},
+			{
+				ID:         "doc_demo_602",
+				Kind:       "financial_statements",
+				Filename:   "Бухгалтерская_отчетность_2025.pdf",
+				Size:       3400000,
+				Status:     domain.DocumentUploaded,
+				UploadedAt: submittedAt,
+			},
+		},
+		History: []domain.HistoryEntry{
+			{From: domain.StatusDraft, To: domain.StatusManualReview, At: submittedAt, By: "system"},
+			{From: domain.StatusManualReview, To: domain.StatusManualReview, At: assignedTime, By: empID, Comment: "Взята в работу"},
+		},
+		SubmittedAt: &submittedAt,
+		CreatedAt:   now,
+		UpdatedAt:   assignedTime,
+		Decision: []byte(`{
+			"score": 62,
+			"model_version": "v1.2",
+			"thresholds": {"approve": 65, "counter": 45},
+			"debt_to_equity": 1.1,
+			"reasons_positive": [
+				{"factor": "C3", "delta": 15, "text": "Успешная кредитная история компании"},
+				{"factor": "P2", "delta": 8, "text": "Высокая стабильность оборота"}
+			],
+			"reasons_negative": [
+				{"factor": "C2", "delta": -8, "text": "Коэффициент долг/капитал на границе нормы"}
+			],
+			"manual_review_reasons": ["COLLATERAL_VERIFICATION"]
+		}`),
+	}
+
 	apps[app1.ID] = app1
 	apps[app2.ID] = app2
 	apps[app3.ID] = app3
 	apps[app4.ID] = app4
 	apps[app5.ID] = app5
+	apps[app6.ID] = app6
+
+	demoApps := &DemoApplications{applications: apps, idCounter: 106}
+	demoReview := &DemoReview{apps: demoApps}
 
 	return &DemoPackage{
 		Auth:        auth,
@@ -124,8 +248,9 @@ func NewDemoPackage() *DemoPackage {
 		Trust:       &DemoTrust{},
 		Offers:      &DemoOffers{},
 		Profiles:    &DemoProfiles{},
-		Apps:        &DemoApplications{applications: apps, idCounter: 105},
+		Apps:        demoApps,
 		Loans:       &DemoLoans{},
+		Review:      demoReview,
 		Idempotency: &DemoIdempotency{},
 	}
 }
@@ -144,7 +269,6 @@ func (d *DemoAuth) Login(ctx context.Context, in LoginInput) (string, error) {
 
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
-	challengeID := "ch_" + hex.EncodeToString(b)
 
 	role := domain.RoleClient
 	if in.Role == domain.RoleEmployee || in.Identifier == "underwriter@example.test" {
@@ -171,6 +295,14 @@ func (d *DemoAuth) Login(ctx context.Context, in LoginInput) (string, error) {
 		}
 	}
 
+	challengePrefix := "ch_cln_"
+	if role == domain.RoleEmployee {
+		challengePrefix = "ch_emp_"
+	} else if inn != "" {
+		challengePrefix = "ch_" + inn + "_"
+	}
+	challengeID := challengePrefix + hex.EncodeToString(b)
+
 	d.challenges[challengeID] = domain.Challenge{
 		UserID:      userID,
 		Role:        role,
@@ -186,10 +318,24 @@ func (d *DemoAuth) Verify(ctx context.Context, challengeID, code string) (Sessio
 
 	ch, ok := d.challenges[challengeID]
 	if !ok {
+		role := domain.RoleClient
+		inn := "7700000001"
+		userID := "demo-user-1"
+		if strings.HasPrefix(challengeID, "ch_emp_") {
+			role = domain.RoleEmployee
+			inn = ""
+			userID = "demo-emp-1"
+		} else {
+			parts := strings.Split(challengeID, "_")
+			if len(parts) >= 3 && parts[0] == "ch" && len(parts[1]) >= 10 {
+				inn = parts[1]
+				userID = "demo-user-" + inn
+			}
+		}
 		ch = domain.Challenge{
-			UserID:     "demo-user-1",
-			Role:       domain.RoleClient,
-			CompanyINN: "7700000001",
+			UserID:     userID,
+			Role:       role,
+			CompanyINN: inn,
 		}
 	}
 
@@ -198,6 +344,8 @@ func (d *DemoAuth) Verify(ctx context.Context, challengeID, code string) (Sessio
 	tokenPrefix := "tok_"
 	if ch.Role == domain.RoleEmployee {
 		tokenPrefix = "tok_emp_"
+	} else if ch.CompanyINN != "" {
+		tokenPrefix = "tok_" + ch.CompanyINN + "_"
 	}
 	token := tokenPrefix + hex.EncodeToString(b)
 
@@ -232,10 +380,15 @@ func (d *DemoAuth) GetSession(ctx context.Context, token string) (domain.Princip
 			}, nil
 		}
 		if token != "" {
+			inn := "7700000001"
+			parts := strings.Split(token, "_")
+			if len(parts) >= 3 && parts[0] == "tok" && len(parts[1]) >= 10 {
+				inn = parts[1]
+			}
 			return domain.Principal{
-				UserID:     "demo-user-1",
+				UserID:     "demo-user-" + inn,
 				Role:       domain.RoleClient,
-				CompanyINN: "7700000001",
+				CompanyINN: inn,
 			}, nil
 		}
 		return domain.Principal{}, domain.ErrUnauthorized
@@ -647,4 +800,307 @@ func (i *DemoIdempotency) Finish(ctx context.Context, scope, key, fingerprint st
 
 func (i *DemoIdempotency) Abort(ctx context.Context, scope, key string) error {
 	return nil
+}
+
+// ------------------- DemoReview -------------------
+
+type DemoReview struct {
+	apps *DemoApplications
+}
+
+func (r *DemoReview) Employee(ctx context.Context, p domain.Principal) (domain.User, error) {
+	pos := "Андеррайтер МСБ"
+	email := "underwriter@example.test"
+	phone := "+7 (999) 000-00-99"
+	return domain.User{
+		ID:       p.UserID,
+		Role:     domain.RoleEmployee,
+		FullName: "Сидорова Анна Сергеевна",
+		Phone:    phone,
+		Email:    &email,
+		Position: &pos,
+	}, nil
+}
+
+func (r *DemoReview) Pool(ctx context.Context, p domain.Principal, mine bool) ([]domain.ReviewSummary, error) {
+	r.apps.mu.RLock()
+	defer r.apps.mu.RUnlock()
+
+	var result []domain.ReviewSummary
+	for _, app := range r.apps.applications {
+		if app.Status != domain.StatusManualReview {
+			continue
+		}
+		if mine {
+			if app.AssignedTo == nil || *app.AssignedTo != p.UserID {
+				continue
+			}
+		} else {
+			if app.AssignedTo != nil && *app.AssignedTo != "" {
+				continue
+			}
+		}
+
+		card := r.cardLocked(app)
+		var assignedName *string
+		if card.AssignedName != "" {
+			name := card.AssignedName
+			assignedName = &name
+		}
+		result = append(result, domain.ReviewSummary{
+			ID:           app.ID,
+			CompanyINN:   app.CompanyINN,
+			CompanyName:  card.Company.Name,
+			ProductID:    app.ProductID,
+			ProductName:  card.ProductName,
+			Amount:       app.Amount,
+			TermMonths:   app.TermMonths,
+			SubmittedAt:  app.SubmittedAt,
+			AssignedTo:   app.AssignedTo,
+			AssignedName: assignedName,
+			AssignedAt:   app.AssignedAt,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].SubmittedAt == nil {
+			return false
+		}
+		if result[j].SubmittedAt == nil {
+			return true
+		}
+		return result[i].SubmittedAt.Before(*result[j].SubmittedAt)
+	})
+
+	return result, nil
+}
+
+func (r *DemoReview) Card(ctx context.Context, id string) (ReviewCard, error) {
+	r.apps.mu.RLock()
+	defer r.apps.mu.RUnlock()
+
+	app, ok := r.apps.applications[id]
+	if !ok {
+		return ReviewCard{}, domain.ErrNotFound
+	}
+	return r.cardLocked(app), nil
+}
+
+func (r *DemoReview) Take(ctx context.Context, p domain.Principal, id string) (ReviewCard, error) {
+	r.apps.mu.Lock()
+	defer r.apps.mu.Unlock()
+
+	app, ok := r.apps.applications[id]
+	if !ok {
+		return ReviewCard{}, domain.ErrNotFound
+	}
+	if app.Status != domain.StatusManualReview {
+		return ReviewCard{}, domain.ErrNotInReview
+	}
+	if app.AssignedTo != nil && *app.AssignedTo != "" && *app.AssignedTo != p.UserID {
+		return ReviewCard{}, &domain.AssignedError{Name: "Другой сотрудник"}
+	}
+	now := time.Now()
+	app.AssignedTo = &p.UserID
+	app.AssignedAt = &now
+	app.UpdatedAt = now
+	app.History = append(app.History, domain.HistoryEntry{
+		From:    domain.StatusManualReview,
+		To:      domain.StatusManualReview,
+		At:      now,
+		By:      p.UserID,
+		Comment: "Взята в работу",
+	})
+	return r.cardLocked(app), nil
+}
+
+func (r *DemoReview) Release(ctx context.Context, p domain.Principal, id string) (ReviewCard, error) {
+	r.apps.mu.Lock()
+	defer r.apps.mu.Unlock()
+
+	app, ok := r.apps.applications[id]
+	if !ok {
+		return ReviewCard{}, domain.ErrNotFound
+	}
+	if app.AssignedTo == nil || *app.AssignedTo != p.UserID {
+		return ReviewCard{}, domain.ErrNotAssignedToYou
+	}
+	now := time.Now()
+	app.AssignedTo = nil
+	app.AssignedAt = nil
+	app.UpdatedAt = now
+	app.History = append(app.History, domain.HistoryEntry{
+		From:    domain.StatusManualReview,
+		To:      domain.StatusManualReview,
+		At:      now,
+		By:      p.UserID,
+		Comment: "Возвращена в общий пул",
+	})
+	return r.cardLocked(app), nil
+}
+
+func (r *DemoReview) Decide(ctx context.Context, p domain.Principal, id string, d domain.ReviewDecision) (ReviewCard, error) {
+	r.apps.mu.Lock()
+	defer r.apps.mu.Unlock()
+
+	app, ok := r.apps.applications[id]
+	if !ok {
+		return ReviewCard{}, domain.ErrNotFound
+	}
+	if app.Status != domain.StatusManualReview {
+		return ReviewCard{}, domain.ErrNotInReview
+	}
+
+	now := time.Now()
+	switch d.Action {
+	case domain.ReviewApprove:
+		app.Status = domain.StatusApproved
+		app.History = append(app.History, domain.HistoryEntry{
+			From:    domain.StatusManualReview,
+			To:      domain.StatusApproved,
+			At:      now,
+			By:      p.UserID,
+			Comment: strings.TrimSpace(d.Reason),
+		})
+	case domain.ReviewReject:
+		reason := strings.TrimSpace(d.Reason)
+		if reason == "" {
+			return ReviewCard{}, &domain.ValidationError{Fields: []string{"reason"}}
+		}
+		app.Status = domain.StatusRejected
+		app.History = append(app.History, domain.HistoryEntry{
+			From:    domain.StatusManualReview,
+			To:      domain.StatusRejected,
+			At:      now,
+			By:      p.UserID,
+			Comment: reason,
+		})
+	case domain.ReviewRequestInfo:
+		text := strings.TrimSpace(d.InfoRequest)
+		if text == "" {
+			return ReviewCard{}, &domain.ValidationError{Fields: []string{"info_request"}}
+		}
+		app.Status = domain.StatusInfoRequested
+		app.InfoRequest = &text
+		app.History = append(app.History, domain.HistoryEntry{
+			From:    domain.StatusManualReview,
+			To:      domain.StatusInfoRequested,
+			At:      now,
+			By:      p.UserID,
+			Comment: text,
+		})
+	case domain.ReviewCounterOffer:
+		app.Status = domain.StatusCounterOffer
+		if d.ProductID != "" {
+			app.ProductID = d.ProductID
+		}
+		if d.Amount > 0 {
+			app.Amount = d.Amount
+		}
+		if d.TermMonths > 0 {
+			app.TermMonths = d.TermMonths
+		}
+		counterData, _ := json.Marshal(map[string]any{
+			"product_id":  app.ProductID,
+			"amount":      app.Amount,
+			"term_months": app.TermMonths,
+			"rate":        d.Rate,
+			"reason":      d.Reason,
+		})
+		app.Decision = counterData
+		app.History = append(app.History, domain.HistoryEntry{
+			From:    domain.StatusManualReview,
+			To:      domain.StatusCounterOffer,
+			At:      now,
+			By:      p.UserID,
+			Comment: strings.TrimSpace(d.Reason),
+		})
+	default:
+		return ReviewCard{}, domain.ErrInvalidInput
+	}
+	app.UpdatedAt = now
+	return r.cardLocked(app), nil
+}
+
+func (r *DemoReview) OpenDocument(ctx context.Context, id, documentID string) (io.ReadCloser, domain.Document, error) {
+	r.apps.mu.RLock()
+	defer r.apps.mu.RUnlock()
+
+	app, ok := r.apps.applications[id]
+	if !ok {
+		return nil, domain.Document{}, domain.ErrNotFound
+	}
+	for _, doc := range app.Documents {
+		if doc.ID == documentID {
+			pdfData := []byte("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 300 144]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF\n")
+			doc.Size = int64(len(pdfData))
+			return io.NopCloser(bytes.NewReader(pdfData)), doc, nil
+		}
+	}
+	return nil, domain.Document{}, domain.ErrDocumentNotFound
+}
+
+func (r *DemoReview) cardLocked(app *domain.Application) ReviewCard {
+	var companyName string
+	var orgType = "OOO"
+	if len(app.CompanyINN) == 12 {
+		orgType = "IP"
+	}
+	switch app.CompanyINN {
+	case "7700000001":
+		companyName = "ООО «Демо Торг»"
+	case "7700000002":
+		companyName = "ООО «Демо Строй»"
+	case "7700000003":
+		companyName = "ООО «Демо Логистик»"
+	case "7700000004":
+		companyName = "ООО «Демо Долг»"
+	case "770000000005":
+		companyName = "ИП Иванов Демо"
+	default:
+		companyName = "ООО «Бизнес»"
+	}
+	var productName string
+	switch app.ProductID {
+	case "working-capital":
+		productName = "Оборотный кредит"
+	case "equipment-leasing":
+		productName = "Лизинг оборудования"
+	case "investment":
+		productName = "Инвестиционный кредит"
+	case "express-revolving":
+		productName = "Экспресс-овердрафт"
+	case "micro-loan":
+		productName = "Микрокредит"
+	default:
+		productName = "Кредит для бизнеса"
+	}
+	debt := int64(3000000)
+	equity := int64(5000000)
+	ratio := float64(0.6)
+	now := time.Now()
+	co := domain.Company{
+		INN:          app.CompanyINN,
+		OrgType:      orgType,
+		Name:         companyName,
+		OKVED:        "47.19",
+		TotalDebt:    &debt,
+		Equity:       &equity,
+		DebtToEquity: &ratio,
+		FetchedAt:    &now,
+	}
+	var assignedName string
+	if app.AssignedTo != nil && *app.AssignedTo != "" {
+		if *app.AssignedTo == "demo-emp-1" {
+			assignedName = "Сидорова Анна Сергеевна"
+		} else {
+			assignedName = "Сотрудник банка"
+		}
+	}
+	return ReviewCard{
+		Application:  *app,
+		ProductName:  productName,
+		Company:      co,
+		AssignedName: assignedName,
+	}
 }

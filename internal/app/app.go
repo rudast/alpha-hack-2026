@@ -121,6 +121,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		meHandler = handler.NewMeHandler(demo.Trust, demo.Offers, demo.Profiles)
 		appHandler = handler.NewApplicationHandler(demo.Apps)
 		loanHandler = handler.NewLoanHandler(demo.Loans)
+		revHandler = handler.NewReviewHandler(demo.Review)
 		idempotency = demo.Idempotency
 	}
 
