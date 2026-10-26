@@ -41,7 +41,10 @@ class LegacyRedisTests(unittest.TestCase):
 
         try:
             history = request("credit_history", {"inn": "7700000002"})
-            self.assertEqual(history["debt"], 2400000)
+            self.assertEqual(history, {
+                "equity": 4_000_000,
+                "other_banks": [{"bank": "ВТБ", "kind": "Инвестиционный кредит", "debt": 2_400_000}],
+            })
 
             parsed = request("parse_documents", {"application_id": str(uuid4()), "documents": [{
                 "id": "statement-1", "kind": "account_statement", "filename": "statement.csv",
