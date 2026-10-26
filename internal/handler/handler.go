@@ -93,15 +93,19 @@ func New(d Deps) http.Handler {
 				// Рабочее место сотрудника: заявки на ручной проверке.
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireRole(domain.RoleEmployee))
-					r.Get("/employee/me", func(w http.ResponseWriter, _ *http.Request) {
-						writeJSON(w, http.StatusOK, map[string]string{
-							"full_name": "Сидорова Анна Сергеевна",
-							"position":  "Андеррайтер МСБ",
-							"email":     "underwriter@example.test",
+					if d.Review == nil {
+						// Демо-режим без базы: сотрудник один, из демо-данных.
+						r.Get("/employee/me", func(w http.ResponseWriter, _ *http.Request) {
+							writeJSON(w, http.StatusOK, map[string]string{
+								"full_name": "Сидорова Анна Сергеевна",
+								"position":  "Андеррайтер МСБ",
+								"email":     "underwriter@example.test",
+							})
 						})
-					})
+					}
 					if d.Review != nil {
 						idempotent := middleware.Idempotency(d.Idempotency)
+						r.Get("/employee/me", d.Review.Me)
 						r.Route("/employee/applications", func(r chi.Router) {
 							r.Get("/", d.Review.List)
 							r.Get("/{id}", d.Review.Get)

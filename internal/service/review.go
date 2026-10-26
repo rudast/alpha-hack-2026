@@ -68,6 +68,11 @@ func (s *ReviewService) Pool(ctx context.Context, p domain.Principal, mine bool)
 	return list, nil
 }
 
+// Employee возвращает текущего сотрудника: ФИО и должность для шапки рабочего места.
+func (s *ReviewService) Employee(ctx context.Context, p domain.Principal) (domain.User, error) {
+	return s.users.GetByID(ctx, p.UserID)
+}
+
 // Card возвращает заявку с данными компании, документами и ФИО взявшего её сотрудника.
 func (s *ReviewService) Card(ctx context.Context, id string) (ReviewCard, error) {
 	a, err := s.apps.GetByID(ctx, id)

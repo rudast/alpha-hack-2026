@@ -17,6 +17,7 @@ import (
 )
 
 type ReviewService interface {
+	Employee(ctx context.Context, p domain.Principal) (domain.User, error)
 	Pool(ctx context.Context, p domain.Principal, mine bool) ([]domain.ReviewSummary, error)
 	Card(ctx context.Context, id string) (service.ReviewCard, error)
 	Take(ctx context.Context, p domain.Principal, id string) (service.ReviewCard, error)
@@ -72,6 +73,27 @@ func reviewCard(c service.ReviewCard) reviewCardResponse {
 		resp.AssignedAt = &s
 	}
 	return resp
+}
+
+type employeeResponse struct {
+	FullName string  `json:"full_name"`
+	Position *string `json:"position"`
+	Email    *string `json:"email"`
+}
+
+// Me — ФИО, должность и почта сотрудника, который вошёл, для шапки рабочего места.
+func (h *ReviewHandler) Me(w http.ResponseWriter, r *http.Request) {
+	p, _ := middleware.PrincipalFrom(r.Context())
+	u, err := h.svc.Employee(r.Context(), p)
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "employee not found")
+		return
+	}
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, employeeResponse{FullName: u.FullName, Position: u.Position, Email: nullable(u.Email)})
 }
 
 // List — общий пул заявок на ручной проверке (никем не взятые), старые первыми.

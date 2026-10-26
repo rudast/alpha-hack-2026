@@ -80,8 +80,22 @@ func (f *fakeReview) Review(_ context.Context, _, employee string, u domain.Revi
 
 type fakeEmployees struct{}
 
-func (fakeEmployees) GetByID(context.Context, string) (domain.User, error) {
-	return domain.User{FullName: "Сидорова Анна Сергеевна"}, nil
+func (fakeEmployees) GetByID(_ context.Context, id string) (domain.User, error) {
+	if id == "emp-2" {
+		return domain.User{ID: id, FullName: "Петров Дмитрий Андреевич"}, nil
+	}
+	return domain.User{ID: id, FullName: "Сидорова Анна Сергеевна"}, nil
+}
+
+func TestReviewEmployee_ReturnsSignedInEmployee(t *testing.T) {
+	s, _, _ := newReview(t)
+	u, err := s.Employee(context.Background(), domain.Principal{UserID: "emp-2", Role: domain.RoleEmployee})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.FullName != "Петров Дмитрий Андреевич" {
+		t.Fatalf("FullName = %q, want the signed-in employee", u.FullName)
+	}
 }
 
 var employee = domain.Principal{UserID: "emp-1", Role: domain.RoleEmployee}
