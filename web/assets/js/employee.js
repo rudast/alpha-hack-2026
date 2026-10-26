@@ -497,7 +497,6 @@
   function renderApp() {
     var a = state.current;
     var c = a.company || {};
-    var app = c.applicant || {};
     var payment = Loans.annuity(a.amount, rateOf(a.product_id), a.term_months);
 
     $('review-title').textContent = c.name;
@@ -522,20 +521,10 @@
 
       '<section class="r-section"><h3>Компания <span class="source-badge">из ЕГРЮЛ и БКИ</span></h3>' +
       '<dl class="kv-list">' +
-      kv('ОГРН', esc(c.ogrn || '—')) +
       kv('Регистрация', esc(fmt.date(c.registration_date)) + '<span class="kv-sub">в бизнесе ' + esc(fmt.age(c.registration_date)) + '</span>') +
       kv('ОКВЭД', esc(c.okved || '—') + (c.okved_title ? '<span class="kv-sub">' + esc(c.okved_title) + '</span>' : '')) +
-      kv(c.org_type === 'IP' ? 'Предприниматель' : 'Руководитель', esc(c.director || '—')) +
-      kv('Адрес', esc(c.address || '—')) +
       kv('Общий долг', fmt.rub(c.total_debt)) +
       kv('Собственный капитал', fmt.rub(c.equity)) +
-      kv('Просрочки сейчас', c.has_overdue ? '<span class="pill pill-warning">есть просроченный платёж</span>' : 'нет') +
-      '</dl></section>' +
-
-      '<section class="r-section"><h3>Заявитель</h3><dl class="kv-list">' +
-      kv('ФИО', esc(app.full_name || '—') + (app.position ? '<span class="kv-sub">' + esc(app.position) + '</span>' : '')) +
-      kv('Телефон', esc(app.phone || '—')) +
-      kv('Почта', esc(app.email || '—')) +
       '</dl></section>' +
 
       '<section class="r-section"><h3>Документы</h3>' + documentsSection(a) + '</section>' +
