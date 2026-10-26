@@ -842,14 +842,23 @@
   // Сохраняем последние изменения и отправляем. Возвращает { ok } | { missing: [...] } | { res }
   // Файл уходит на сервер сразу, как выбран: POST /applications/{id}/documents (multipart: kind, file)
   async function uploadDoc(kind, file) {
-    var err = $('doc-error');
     var fail = function (text) {
-      err.textContent = text;
-      err.hidden = false;
+      render();
+      var el = $('doc-error');
+      if (el) {
+        el.textContent = text;
+        el.hidden = false;
+      }
     };
     if (file.size > 10 * 1024 * 1024) return fail('Файл больше 10 МБ — выберите поменьше.');
-    if (!s.app) return fail('Сначала сохраните заявку: вернитесь на шаг назад и нажмите «Далее».');
-    err.hidden = true;
+    if (!s.app) {
+      var saveRes = await save();
+      if (!saveRes || !saveRes.ok || !s.app) {
+        return fail('Сначала сохраните заявку: вернитесь на шаг назад и нажмите «Далее».');
+      }
+    }
+    var err = $('doc-error');
+    if (err) err.hidden = true;
     var form = new FormData();
     form.append('kind', kind);
     form.append('file', file);
@@ -859,19 +868,18 @@
     });
     s.busy = false;
     if (!res.ok) {
-      render();
       fail(res.status === 413 ? 'Файл больше 10 МБ.' : res.status === 400 ? 'Подходят только PDF, JPG и PNG.' : 'Не удалось загрузить файл. Попробуйте ещё раз.');
       return;
     }
     // Заменили файл — прежний того же вида удаляем: два документа одного вида воркер не читает
     var old = s.fileIds[kind];
-    if (old && old !== res.data.id) {
+    if (old && old !== (res.data && res.data.id)) {
       await api('/applications/' + encodeURIComponent(s.app.id) + '/documents/' + encodeURIComponent(old), {
         method: 'DELETE', idempotencyKey: api.newKey(),
       });
     }
-    s.files[kind] = res.data.filename || file.name;
-    s.fileIds[kind] = res.data.id;
+    s.files[kind] = (res.data && res.data.filename) || file.name;
+    s.fileIds[kind] = res.data && res.data.id;
     s.changed = true;
     render();
   }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -396,39 +397,190 @@ func (d *DemoAuth) GetSession(ctx context.Context, token string) (domain.Princip
 	return p, nil
 }
 
+// ------------------- Demo Data & Helpers -------------------
+
+type demoCompanyInfo struct {
+	Name             string
+	OrgType          string
+	OGRN             string
+	OKVED            string
+	OKVEDTitle       string
+	RegistrationDate string // YYYY-MM-DD
+	Director         string
+	Address          string
+	AccountNumber    string
+	Debt             int64
+	Equity           int64
+	DebtToEquity     float64
+	UserFullName     string
+	UserPhone        string
+	UserEmail        string
+	UserPosition     string
+}
+
+var demoCompanies = map[string]demoCompanyInfo{
+	"7700000001": {
+		Name:             "ООО «Демо Торг»",
+		OrgType:          "OOO",
+		OGRN:             "1027700000001",
+		OKVED:            "47.19",
+		OKVEDTitle:       "Прочая розничная торговля в неспециализированных магазинах",
+		RegistrationDate: "2016-03-14",
+		Director:         "Петров Пётр Петрович",
+		Address:          "г. Москва, ул. Демонстрационная, д. 1",
+		AccountNumber:    "40702810900000000001",
+		Debt:             3000000,
+		Equity:           5000000,
+		DebtToEquity:     0.60,
+		UserFullName:     "Петров Пётр Петрович",
+		UserPhone:        "+79990000001",
+		UserEmail:        "client1@example.test",
+		UserPosition:     "Генеральный директор",
+	},
+	"7700000002": {
+		Name:             "ООО «Демо Строй»",
+		OrgType:          "OOO",
+		OGRN:             "1027700000002",
+		OKVED:            "41.20",
+		OKVEDTitle:       "Строительство жилых и нежилых зданий",
+		RegistrationDate: "2022-09-01",
+		Director:         "Смирнова Ольга Ивановна",
+		Address:          "г. Москва, ул. Демонстрационная, д. 2",
+		AccountNumber:    "40702810900000000002",
+		Debt:             2400000,
+		Equity:           6000000,
+		DebtToEquity:     0.40,
+		UserFullName:     "Смирнова Ольга Ивановна",
+		UserPhone:        "+79990000002",
+		UserEmail:        "client2@example.test",
+		UserPosition:     "Генеральный директор",
+	},
+	"7700000003": {
+		Name:             "ООО «Демо Логистик»",
+		OrgType:          "OOO",
+		OGRN:             "1027700000003",
+		OKVED:            "49.41",
+		OKVEDTitle:       "Деятельность автомобильного грузового транспорта",
+		RegistrationDate: "2019-06-20",
+		Director:         "Кузнецов Андрей Викторович",
+		Address:          "г. Москва, ул. Демонстрационная, д. 3",
+		AccountNumber:    "40702810900000000003",
+		Debt:             1500000,
+		Equity:           3000000,
+		DebtToEquity:     0.50,
+		UserFullName:     "Кузнецов Андрей Викторович",
+		UserPhone:        "+79990000003",
+		UserEmail:        "client3@example.test",
+		UserPosition:     "Генеральный директор",
+	},
+	"7700000004": {
+		Name:             "ООО «Демо Долг»",
+		OrgType:          "OOO",
+		OGRN:             "1027700000004",
+		OKVED:            "46.90",
+		OKVEDTitle:       "Торговля оптовая неспециализированная",
+		RegistrationDate: "2012-11-05",
+		Director:         "Попов Сергей Николаевич",
+		Address:          "г. Москва, ул. Демонстрационная, д. 4",
+		AccountNumber:    "40702810900000000004",
+		Debt:             7000000,
+		Equity:           2000000,
+		DebtToEquity:     3.50,
+		UserFullName:     "Попов Сергей Николаевич",
+		UserPhone:        "+79990000004",
+		UserEmail:        "client4@example.test",
+		UserPosition:     "Генеральный директор",
+	},
+	"770000000005": {
+		Name:             "ИП Иванов Демо",
+		OrgType:          "IP",
+		OGRN:             "304770000000005",
+		OKVED:            "56.10",
+		OKVEDTitle:       "Деятельность ресторанов и услуги по доставке продуктов питания",
+		RegistrationDate: "2020-02-10",
+		Director:         "Иванов Иван Иванович",
+		Address:          "г. Москва, ул. Демонстрационная, д. 5",
+		AccountNumber:    "40802810900000000005",
+		Debt:             800000,
+		Equity:           2000000,
+		DebtToEquity:     0.40,
+		UserFullName:     "Иванов Иван Иванович",
+		UserPhone:        "+79990000005",
+		UserEmail:        "client5@example.test",
+		UserPosition:     "Индивидуальный предприниматель",
+	},
+}
+
+func demoProductName(id string) string {
+	switch id {
+	case "working_capital", "working-capital":
+		return "Кредит на пополнение оборотных средств"
+	case "equipment_loan", "equipment-leasing":
+		return "Кредит на оборудование"
+	case "investment":
+		return "Инвестиционный кредит"
+	case "express", "express-revolving":
+		return "Экспресс-кредит для бизнеса"
+	case "micro-loan":
+		return "Микрокредит"
+	case "ooo_loan":
+		return "Кредит для ООО"
+	case "ip_loan":
+		return "Кредит для ИП"
+	case "auto_loan":
+		return "Автокредит для бизнеса"
+	case "overdraft":
+		return "Овердрафт"
+	case "credit_line":
+		return "Возобновляемая кредитная линия (ВКЛ)"
+	case "loan_up_to_1m":
+		return "Кредит до 1 млн ₽"
+	case "marketplace_seller":
+		return "Кредит для селлеров маркетплейсов"
+	case "secured_property_equipment":
+		return "Кредит под залог недвижимости или оборудования"
+	case "business_purchase":
+		return "Кредит на покупку бизнеса"
+	case "mortgage_ip":
+		return "Ипотека для ИП"
+	case "mortgage_business":
+		return "Ипотека для бизнеса"
+	default:
+		return "Кредит для бизнеса"
+	}
+}
+
 // ------------------- DemoTrust -------------------
 
 type DemoTrust struct{}
 
 func (t *DemoTrust) EnsureTrustRatio(ctx context.Context, inn string) (domain.Company, error) {
-	debt := int64(3000000)
-	equity := int64(5000000)
-	ratio := float64(0.6)
-	now := time.Now()
-	name := "ООО «Демо Торг»"
-	orgType := "OOO"
-	switch inn {
-	case "7700000001":
-		name = "ООО «Демо Торг»"
-	case "7700000002":
-		name = "ООО «Демо Строй»"
-	case "7700000003":
-		name = "ООО «Демо Логистик»"
-	case "7700000004":
-		name = "ООО «Демо Долг»"
-	case "770000000005":
-		name = "ИП Иванов Демо"
-		orgType = "IP"
+	info, ok := demoCompanies[inn]
+	if !ok {
+		info = demoCompanies["7700000001"]
 	}
+	now := time.Now()
+	regDate, _ := time.Parse("2006-01-02", info.RegistrationDate)
+	debt := info.Debt
+	equity := info.Equity
+	ratio := info.DebtToEquity
+	ogrn := info.OGRN
+	acc := info.AccountNumber
+	title := info.OKVEDTitle
+
 	return domain.Company{
-		INN:          inn,
-		OrgType:      orgType,
-		Name:         name,
-		OKVED:        "47.19",
-		TotalDebt:    &debt,
-		Equity:       &equity,
-		DebtToEquity: &ratio,
-		FetchedAt:    &now,
+		INN:              inn,
+		OrgType:          info.OrgType,
+		Name:             info.Name,
+		OKVED:            info.OKVED,
+		OKVEDTitle:       &title,
+		OGRN:             &ogrn,
+		AccountNumber:    &acc,
+		RegistrationDate: &regDate,
+		TotalDebt:        &debt,
+		Equity:           &equity,
+		DebtToEquity:     &ratio,
+		FetchedAt:        &now,
 	}, nil
 }
 
@@ -453,16 +605,7 @@ func (o *DemoOffers) Current(ctx context.Context, inn string) (*domain.Offer, st
 }
 
 func (o *DemoOffers) ProductName(id string) string {
-	switch id {
-	case "working-capital":
-		return "Оборотный кредит"
-	case "equipment-leasing":
-		return "Лизинг оборудования"
-	case "investment":
-		return "Инвестиционный кредит"
-	default:
-		return "Кредит для бизнеса"
-	}
+	return demoProductName(id)
 }
 
 // ------------------- DemoProfiles -------------------
@@ -470,48 +613,47 @@ func (o *DemoOffers) ProductName(id string) string {
 type DemoProfiles struct{}
 
 func (p *DemoProfiles) Profile(ctx context.Context, pr domain.Principal) (Profile, error) {
-	phone := "+7 (999) 000-00-01"
-	email := "demo@example.com"
-	pos := "Генеральный директор"
-	name := "ООО «Демо Торг»"
-	orgType := "OOO"
-	if pr.CompanyINN == "770000000005" {
-		name = "ИП Иванов Демо"
-		orgType = "IP"
-		pos = "Индивидуальный предприниматель"
+	info, ok := demoCompanies[pr.CompanyINN]
+	if !ok {
+		info = demoCompanies["7700000001"]
 	}
-	debt := int64(3000000)
-	equity := int64(5000000)
-	ratio := float64(0.6)
 	now := time.Now()
-	ogrn := "1027700000001"
-	director := "Иванов Иван Иванович"
-	address := "г. Москва, ул. Ленина, д. 10"
-	status := "Действующая"
+	regDate, _ := time.Parse("2006-01-02", info.RegistrationDate)
+	ogrn := info.OGRN
+	acc := info.AccountNumber
+	title := info.OKVEDTitle
+	debt := info.Debt
+	equity := info.Equity
+	ratio := info.DebtToEquity
+	pos := info.UserPosition
 
 	return Profile{
 		User: domain.User{
-			ID:       pr.UserID,
-			Role:     pr.Role,
-			FullName: "Иванов Иван Иванович",
-			Phone:    phone,
-			Email:    email,
-			Position: &pos,
+			ID:         pr.UserID,
+			Role:       pr.Role,
+			FullName:   info.UserFullName,
+			Phone:      info.UserPhone,
+			Email:      info.UserEmail,
+			Position:   &pos,
+			CompanyINN: pr.CompanyINN,
 		},
 		Company: domain.Company{
-			INN:          pr.CompanyINN,
-			OrgType:      orgType,
-			Name:         name,
-			OGRN:         &ogrn,
-			OKVED:        "47.19",
-			TotalDebt:    &debt,
-			Equity:       &equity,
-			DebtToEquity: &ratio,
-			FetchedAt:    &now,
+			INN:              pr.CompanyINN,
+			OrgType:          info.OrgType,
+			Name:             info.Name,
+			OGRN:             &ogrn,
+			OKVED:            info.OKVED,
+			OKVEDTitle:       &title,
+			AccountNumber:    &acc,
+			RegistrationDate: &regDate,
+			TotalDebt:        &debt,
+			Equity:           &equity,
+			DebtToEquity:     &ratio,
+			FetchedAt:        &now,
 		},
-		Director: director,
-		Address:  address,
-		Status:   status,
+		Director: info.Director,
+		Address:  info.Address,
+		Status:   "ACTIVE",
 	}, nil
 }
 
@@ -519,48 +661,188 @@ func (p *DemoProfiles) Profile(ctx context.Context, pr domain.Principal) (Profil
 
 type DemoLoans struct{}
 
-func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
+func makeDemoLoan(id, productID, productName, contractNumber string, amount int64, rate float64, termMonths, paymentsMade int, overdue bool) Loan {
 	now := time.Now()
-	issued := now.Add(-60 * 24 * time.Hour)
-	maturity := issued.Add(24 * 30 * 24 * time.Hour)
+	issued := now.Add(time.Duration(-paymentsMade*30*24) * time.Hour)
+	maturity := issued.Add(time.Duration(termMonths*30*24) * time.Hour)
 	nextDate := now.Add(10 * 24 * time.Hour)
+	if overdue {
+		nextDate = now.Add(-5 * 24 * time.Hour)
+	}
 
-	return Loans{
-		Active: []Loan{
-			{
-				ID:             "loan_demo_1",
-				ProductID:      "working-capital",
-				ProductName:    "Оборотный кредит",
-				ContractNumber: "КР-2026/01-001",
-				Amount:         2000000,
-				Rate:           14.5,
-				TermMonths:     24,
-				IssuedAt:       issued,
-				MaturityDate:   maturity,
-				Status:         domain.StatusActive,
-				MonthlyPayment: 96500,
-				PrincipalLeft:  1850000,
-				PaidTotal:      193000,
-				PaymentsMade:   2,
-				NextPayment: &Payment{
-					Number:       3,
-					Date:         nextDate,
-					Amount:       96500,
-					Principal:    74000,
-					Interest:     22500,
-					BalanceAfter: 1776000,
-					Status:       PaymentNext,
-				},
-				Schedule: []Payment{
-					{Number: 1, Date: issued.Add(30 * 24 * time.Hour), Amount: 96500, Principal: 72000, Interest: 24500, BalanceAfter: 1928000, Status: PaymentPaid},
-					{Number: 2, Date: issued.Add(60 * 24 * time.Hour), Amount: 96500, Principal: 73000, Interest: 23500, BalanceAfter: 1855000, Status: PaymentPaid},
-					{Number: 3, Date: nextDate, Amount: 96500, Principal: 74000, Interest: 22500, BalanceAfter: 1781000, Status: PaymentNext},
-				},
+	monthlyRate := rate / 100 / 12
+	monthlyPayment := float64(amount) * monthlyRate / (1 - math.Pow(1+monthlyRate, -float64(termMonths)))
+	if math.IsNaN(monthlyPayment) || math.IsInf(monthlyPayment, 0) || monthlyPayment <= 0 {
+		monthlyPayment = float64(amount) / float64(termMonths)
+	}
+
+	paidTotal := int64(float64(paymentsMade) * monthlyPayment)
+	principalLeft := amount - int64(float64(paymentsMade)*(float64(amount)/float64(termMonths)))
+	if principalLeft < 0 {
+		principalLeft = 0
+	}
+
+	status := domain.StatusActive
+	var overdueAmount float64
+	if overdue {
+		status = domain.StatusOverdue
+		overdueAmount = math.Round(monthlyPayment)
+	}
+
+	schedule := make([]Payment, 0, termMonths)
+	for i := 1; i <= termMonths && i <= paymentsMade+3; i++ {
+		pStatus := PaymentPlanned
+		if i <= paymentsMade {
+			pStatus = PaymentPaid
+		} else if i == paymentsMade+1 {
+			if overdue {
+				pStatus = PaymentOverdue
+			} else {
+				pStatus = PaymentNext
+			}
+		}
+		pDate := issued.Add(time.Duration(i*30*24) * time.Hour)
+		schedule = append(schedule, Payment{
+			Number:       i,
+			Date:         pDate,
+			Amount:       math.Round(monthlyPayment),
+			Principal:    math.Round(float64(amount) / float64(termMonths)),
+			Interest:     math.Round(monthlyPayment - float64(amount)/float64(termMonths)),
+			BalanceAfter: math.Round(float64(amount) - float64(i)*(float64(amount)/float64(termMonths))),
+			Status:       pStatus,
+		})
+	}
+
+	var nextPayment *Payment
+	if paymentsMade < termMonths {
+		nextPayment = &Payment{
+			Number:       paymentsMade + 1,
+			Date:         nextDate,
+			Amount:       math.Round(monthlyPayment),
+			Principal:    math.Round(float64(amount) / float64(termMonths)),
+			Interest:     math.Round(monthlyPayment - float64(amount)/float64(termMonths)),
+			BalanceAfter: math.Round(float64(principalLeft)),
+			Status:       PaymentNext,
+		}
+		if overdue {
+			nextPayment.Status = PaymentOverdue
+		}
+	}
+
+	return Loan{
+		ID:             id,
+		ProductID:      productID,
+		ProductName:    productName,
+		ContractNumber: contractNumber,
+		Amount:         amount,
+		Rate:           rate,
+		TermMonths:     termMonths,
+		IssuedAt:       issued,
+		MaturityDate:   maturity,
+		Status:         status,
+		MonthlyPayment: math.Round(monthlyPayment),
+		PrincipalLeft:  principalLeft,
+		PaidTotal:      paidTotal,
+		PaymentsMade:   paymentsMade,
+		NextPayment:    nextPayment,
+		OverdueAmount:  overdueAmount,
+		Schedule:       schedule,
+	}
+}
+
+func makeDemoClosedLoan(id, productID, productName, contractNumber string, amount int64, rate float64, termMonths, closedMonthsAgo int) Loan {
+	now := time.Now()
+	issued := now.Add(time.Duration(-(termMonths+closedMonthsAgo)*30*24) * time.Hour)
+	closedAt := now.Add(time.Duration(-closedMonthsAgo*30*24) * time.Hour)
+	return Loan{
+		ID:             id,
+		ProductID:      productID,
+		ProductName:    productName,
+		ContractNumber: contractNumber,
+		Amount:         amount,
+		Rate:           rate,
+		TermMonths:     termMonths,
+		IssuedAt:       issued,
+		MaturityDate:   closedAt,
+		ClosedAt:       &closedAt,
+		Status:         domain.StatusClosed,
+		PaymentsMade:   termMonths,
+		PrincipalLeft:  0,
+	}
+}
+
+func (l *DemoLoans) Loans(ctx context.Context, inn string) (Loans, error) {
+	switch inn {
+	case "7700000001":
+		return Loans{
+			Active: []Loan{
+				makeDemoLoan("L-1001", "working_capital", "Кредит на пополнение оборотных средств", "0ОС-2026/1187", 2000000, 19.0, 18, 7, false),
+				makeDemoLoan("L-1002", "auto_loan", "Автокредит для бизнеса", "0АК-2025/0342", 1500000, 15.5, 36, 20, false),
 			},
-		},
-		Closed:     []Loan{},
-		OtherBanks: []OtherBankLoan{},
-	}, nil
+			Closed: []Loan{
+				makeDemoClosedLoan("C-1001", "working_capital", "Кредит на пополнение оборотных средств", "0ОС-2023/0412", 1500000, 18.0, 18, 20),
+				makeDemoClosedLoan("C-1002", "express", "Экспресс-кредит для бизнеса", "0ЭК-2024/1120", 500000, 21.0, 12, 10),
+			},
+			OtherBanks: []OtherBankLoan{
+				{Bank: "Сбербанк", Kind: "Кредит на оборотные средства", Debt: 958805},
+			},
+		}, nil
+	case "7700000002":
+		return Loans{
+			Active: []Loan{},
+			Closed: []Loan{
+				makeDemoClosedLoan("C-2001", "ooo_loan", "Кредит для ООО", "0КО-2023/0905", 800000, 20.0, 12, 24),
+			},
+			OtherBanks: []OtherBankLoan{
+				{Bank: "ВТБ", Kind: "Инвестиционный кредит", Debt: 2400000},
+			},
+		}, nil
+	case "7700000003":
+		return Loans{
+			Active: []Loan{
+				makeDemoLoan("L-3001", "equipment_loan", "Кредит на оборудование", "0ОБ-2024/2210", 2400000, 16.5, 48, 26, false),
+			},
+			Closed: []Loan{
+				makeDemoClosedLoan("C-3001", "auto_loan", "Автокредит для бизнеса", "0АК-2020/1015", 2000000, 14.5, 36, 36),
+				makeDemoClosedLoan("C-3002", "loan_up_to_1m", "Кредит до 1 млн ₽", "0КМ-2023/0301", 900000, 21.5, 12, 28),
+			},
+			OtherBanks: []OtherBankLoan{
+				{Bank: "Т-Банк", Kind: "Овердрафт", Debt: 504676},
+			},
+		}, nil
+	case "7700000004":
+		return Loans{
+			Active: []Loan{
+				makeDemoLoan("L-4001", "ooo_loan", "Кредит для ООО", "0КО-2026/0415", 3000000, 20.0, 18, 5, true),
+				makeDemoLoan("L-4002", "credit_line", "Возобновляемая кредитная линия (ВКЛ)", "0ВКЛ-2026/0098", 1500000, 17.0, 24, 8, false),
+			},
+			Closed: []Loan{
+				makeDemoClosedLoan("C-4001", "working_capital", "Кредит на пополнение оборотных средств", "0ОС-2022/0718", 2500000, 17.0, 24, 26),
+			},
+			OtherBanks: []OtherBankLoan{
+				{Bank: "Сбербанк", Kind: "Кредит под залог недвижимости", Debt: 2214000},
+				{Bank: "ВТБ", Kind: "Оборотный кредит", Debt: 1476802},
+			},
+		}, nil
+	case "770000000005":
+		return Loans{
+			Active: []Loan{
+				makeDemoLoan("L-5001", "express", "Экспресс-кредит для бизнеса", "0ЭК-2026/0731", 600000, 20.5, 12, 4, false),
+			},
+			Closed: []Loan{
+				makeDemoClosedLoan("C-5001", "ip_loan", "Кредит для ИП", "0КИ-2024/0210", 400000, 22.0, 12, 18),
+			},
+			OtherBanks: []OtherBankLoan{
+				{Bank: "Совкомбанк", Kind: "Кредит для ИП", Debt: 386612},
+			},
+		}, nil
+	default:
+		return Loans{
+			Active:     []Loan{},
+			Closed:     []Loan{},
+			OtherBanks: []OtherBankLoan{},
+		}, nil
+	}
 }
 
 // ------------------- DemoApplications -------------------
@@ -569,6 +851,31 @@ type DemoApplications struct {
 	mu           sync.RWMutex
 	applications map[string]*domain.Application
 	idCounter    int
+}
+
+func (a *DemoApplications) getOrCreateLocked(id, inn string) *domain.Application {
+	app, ok := a.applications[id]
+	if ok {
+		return app
+	}
+	now := time.Now()
+	pID := "working-capital"
+	app = &domain.Application{
+		ID:         id,
+		Version:    1,
+		CompanyINN: inn,
+		ProductID:  pID,
+		Amount:     1000000,
+		TermMonths: 12,
+		Purpose:    "Пополнение оборотных средств",
+		Status:     domain.StatusDraft,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Documents:  []domain.Document{},
+		History:    []domain.HistoryEntry{{From: domain.StatusDraft, To: domain.StatusDraft, At: now, By: "system"}},
+	}
+	a.applications[id] = app
+	return app
 }
 
 func (a *DemoApplications) Create(ctx context.Context, p domain.Principal, in domain.DraftPatch) (domain.Application, error) {
@@ -628,20 +935,17 @@ func (a *DemoApplications) Update(ctx context.Context, p domain.Principal, id st
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	app, ok := a.applications[id]
-	if !ok {
-		return domain.Application{}, domain.ErrNotFound
-	}
-	if in.ProductID != nil {
+	app := a.getOrCreateLocked(id, p.CompanyINN)
+	if in.ProductID != nil && *in.ProductID != "" {
 		app.ProductID = *in.ProductID
 	}
-	if in.Amount != nil {
+	if in.Amount != nil && *in.Amount > 0 {
 		app.Amount = *in.Amount
 	}
-	if in.TermMonths != nil {
+	if in.TermMonths != nil && *in.TermMonths > 0 {
 		app.TermMonths = *in.TermMonths
 	}
-	if in.Purpose != nil {
+	if in.Purpose != nil && *in.Purpose != "" {
 		app.Purpose = *in.Purpose
 	}
 	if in.Form != nil {
@@ -653,13 +957,10 @@ func (a *DemoApplications) Update(ctx context.Context, p domain.Principal, id st
 }
 
 func (a *DemoApplications) Get(ctx context.Context, p domain.Principal, id string) (domain.Application, error) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	app, ok := a.applications[id]
-	if !ok {
-		return domain.Application{}, domain.ErrNotFound
-	}
+	app := a.getOrCreateLocked(id, p.CompanyINN)
 	return *app, nil
 }
 
@@ -673,7 +974,7 @@ func (a *DemoApplications) List(ctx context.Context, p domain.Principal) ([]doma
 			res = append(res, domain.ApplicationSummary{
 				ID:          app.ID,
 				ProductID:   app.ProductID,
-				ProductName: "Кредит для бизнеса",
+				ProductName: demoProductName(app.ProductID),
 				Amount:      app.Amount,
 				TermMonths:  app.TermMonths,
 				Status:      app.Status,
@@ -689,10 +990,7 @@ func (a *DemoApplications) Submit(ctx context.Context, p domain.Principal, id st
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	app, ok := a.applications[id]
-	if !ok {
-		return domain.Application{}, domain.ErrNotFound
-	}
+	app := a.getOrCreateLocked(id, p.CompanyINN)
 
 	now := time.Now()
 	app.Status = domain.StatusApproved
@@ -711,10 +1009,7 @@ func (a *DemoApplications) Accept(ctx context.Context, p domain.Principal, id st
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	app, ok := a.applications[id]
-	if !ok {
-		return domain.Application{}, domain.ErrNotFound
-	}
+	app := a.getOrCreateLocked(id, p.CompanyINN)
 	now := time.Now()
 	app.Status = domain.StatusActive
 	app.UpdatedAt = now
@@ -725,10 +1020,7 @@ func (a *DemoApplications) Decline(ctx context.Context, p domain.Principal, id s
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	app, ok := a.applications[id]
-	if !ok {
-		return domain.Application{}, domain.ErrNotFound
-	}
+	app := a.getOrCreateLocked(id, p.CompanyINN)
 	now := time.Now()
 	app.Status = domain.StatusDraft
 	app.UpdatedAt = now
@@ -739,10 +1031,7 @@ func (a *DemoApplications) Resume(ctx context.Context, p domain.Principal, id st
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	app, ok := a.applications[id]
-	if !ok {
-		return domain.Application{}, domain.ErrNotFound
-	}
+	app := a.getOrCreateLocked(id, p.CompanyINN)
 	now := time.Now()
 	app.Status = domain.StatusDataCheck
 	app.UpdatedAt = now
@@ -753,15 +1042,21 @@ func (a *DemoApplications) UploadDocument(ctx context.Context, p domain.Principa
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	app, ok := a.applications[id]
-	if !ok {
-		return domain.Document{}, domain.ErrNotFound
+	app := a.getOrCreateLocked(id, p.CompanyINN)
+
+	var size int64 = 1024
+	if content != nil {
+		data, err := io.ReadAll(content)
+		if err == nil && len(data) > 0 {
+			size = int64(len(data))
+		}
 	}
+
 	doc := domain.Document{
 		ID:         fmt.Sprintf("doc_%d", time.Now().UnixNano()),
 		Kind:       kind,
 		Filename:   filename,
-		Size:       1024,
+		Size:       size,
 		Status:     domain.DocumentUploaded,
 		UploadedAt: time.Now(),
 	}
@@ -775,7 +1070,7 @@ func (a *DemoApplications) DeleteDocument(ctx context.Context, p domain.Principa
 
 	app, ok := a.applications[id]
 	if !ok {
-		return domain.ErrNotFound
+		return nil
 	}
 	for i, doc := range app.Documents {
 		if doc.ID == documentID {
@@ -783,7 +1078,7 @@ func (a *DemoApplications) DeleteDocument(ctx context.Context, p domain.Principa
 			return nil
 		}
 	}
-	return domain.ErrDocumentNotFound
+	return nil
 }
 
 // ------------------- DemoIdempotency -------------------
@@ -1026,69 +1321,60 @@ func (r *DemoReview) OpenDocument(ctx context.Context, id, documentID string) (i
 	r.apps.mu.RLock()
 	defer r.apps.mu.RUnlock()
 
+	pdfData := []byte("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 300 144]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF\n")
+
 	app, ok := r.apps.applications[id]
-	if !ok {
-		return nil, domain.Document{}, domain.ErrNotFound
-	}
-	for _, doc := range app.Documents {
-		if doc.ID == documentID {
-			pdfData := []byte("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 300 144]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF\n")
-			doc.Size = int64(len(pdfData))
-			return io.NopCloser(bytes.NewReader(pdfData)), doc, nil
+	if ok {
+		for _, doc := range app.Documents {
+			if doc.ID == documentID {
+				doc.Size = int64(len(pdfData))
+				return io.NopCloser(bytes.NewReader(pdfData)), doc, nil
+			}
 		}
 	}
-	return nil, domain.Document{}, domain.ErrDocumentNotFound
+
+	doc := domain.Document{
+		ID:         documentID,
+		Kind:       "document",
+		Filename:   "Документ.pdf",
+		Size:       int64(len(pdfData)),
+		Status:     domain.DocumentUploaded,
+		UploadedAt: time.Now(),
+	}
+	return io.NopCloser(bytes.NewReader(pdfData)), doc, nil
 }
 
 func (r *DemoReview) cardLocked(app *domain.Application) ReviewCard {
-	var companyName string
-	var orgType = "OOO"
-	if len(app.CompanyINN) == 12 {
-		orgType = "IP"
+	info, ok := demoCompanies[app.CompanyINN]
+	if !ok {
+		info = demoCompanies["7700000001"]
 	}
-	switch app.CompanyINN {
-	case "7700000001":
-		companyName = "ООО «Демо Торг»"
-	case "7700000002":
-		companyName = "ООО «Демо Строй»"
-	case "7700000003":
-		companyName = "ООО «Демо Логистик»"
-	case "7700000004":
-		companyName = "ООО «Демо Долг»"
-	case "770000000005":
-		companyName = "ИП Иванов Демо"
-	default:
-		companyName = "ООО «Бизнес»"
-	}
-	var productName string
-	switch app.ProductID {
-	case "working-capital":
-		productName = "Оборотный кредит"
-	case "equipment-leasing":
-		productName = "Лизинг оборудования"
-	case "investment":
-		productName = "Инвестиционный кредит"
-	case "express-revolving":
-		productName = "Экспресс-овердрафт"
-	case "micro-loan":
-		productName = "Микрокредит"
-	default:
-		productName = "Кредит для бизнеса"
-	}
-	debt := int64(3000000)
-	equity := int64(5000000)
-	ratio := float64(0.6)
+	debt := info.Debt
+	equity := info.Equity
+	ratio := info.DebtToEquity
 	now := time.Now()
+	regDate, _ := time.Parse("2006-01-02", info.RegistrationDate)
+	title := info.OKVEDTitle
+	ogrn := info.OGRN
+	acc := info.AccountNumber
+
 	co := domain.Company{
-		INN:          app.CompanyINN,
-		OrgType:      orgType,
-		Name:         companyName,
-		OKVED:        "47.19",
-		TotalDebt:    &debt,
-		Equity:       &equity,
-		DebtToEquity: &ratio,
-		FetchedAt:    &now,
+		INN:              app.CompanyINN,
+		OrgType:          info.OrgType,
+		Name:             info.Name,
+		OKVED:            info.OKVED,
+		OKVEDTitle:       &title,
+		OGRN:             &ogrn,
+		AccountNumber:    &acc,
+		RegistrationDate: &regDate,
+		TotalDebt:        &debt,
+		Equity:           &equity,
+		DebtToEquity:     &ratio,
+		FetchedAt:        &now,
 	}
+
+	productName := demoProductName(app.ProductID)
+
 	var assignedName string
 	if app.AssignedTo != nil && *app.AssignedTo != "" {
 		if *app.AssignedTo == "demo-emp-1" {
