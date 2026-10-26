@@ -1,8 +1,10 @@
 # Коллекция запросов (REST Client для VS Code / HTTP-файлы JetBrains).
-# Работают все запросы, кроме расчёта платежа и методов сотрудника (черновой контракт из openapi.yaml).
+# Работают все запросы. Для методов по конкретной заявке подставьте её id в переменную applicationId ниже
+# (заявка сотрудника должна быть в MANUAL_REVIEW: id из ответа «Очередь заявок андеррайтера»).
 # Тестовые учётные записи и пароль описаны в README. Код 2FA-заглушки: 000000.
 
 @host = http://localhost:8080
+@applicationId = 00000000-0000-0000-0000-000000000000
 
 ### Проверка работоспособности
 GET {{host}}/healthz
@@ -145,11 +147,9 @@ Content-Type: application/json
 ### Каталог продуктов (без входа)
 GET {{host}}/api/v1/products
 
-### Расчёт платежа
-POST {{host}}/api/v1/calculator
-Content-Type: application/json
-
-{ "product_id": "working-capital", "amount": 1000000, "term_months": 12 }
+### Текущий сотрудник (ФИО и должность для шапки)
+GET {{host}}/api/v1/employee/me
+Authorization: Bearer {{employeeVerify.response.body.token}}
 
 ### Очередь заявок андеррайтера
 GET {{host}}/api/v1/employee/applications
@@ -160,9 +160,32 @@ POST {{host}}/api/v1/employee/applications/{{applicationId}}/take
 Idempotency-Key: {{$guid}}
 Authorization: Bearer {{employeeVerify.response.body.token}}
 
-### Решение по заявке
+### Решение по заявке (approve, reject с reason, counter_offer, request_info)
 POST {{host}}/api/v1/employee/applications/{{applicationId}}/decision
+Idempotency-Key: {{$guid}}
 Authorization: Bearer {{employeeVerify.response.body.token}}
 Content-Type: application/json
 
 { "action": "counter_offer", "product_id": "ooo_loan", "amount": 700000, "term_months": 24, "rate": 18.5, "reason": "Снижена сумма" }
+
+### Карточка заявки: анкета, компания, решение скоринга, документы
+GET {{host}}/api/v1/employee/applications/{{applicationId}}
+Authorization: Bearer {{employeeVerify.response.body.token}}
+
+### Вернуть заявку в общую очередь
+POST {{host}}/api/v1/employee/applications/{{applicationId}}/release
+Idempotency-Key: {{$guid}}
+Authorization: Bearer {{employeeVerify.response.body.token}}
+
+### Запросить у клиента документы (заявка уходит в INFO_REQUESTED)
+POST {{host}}/api/v1/employee/applications/{{applicationId}}/decision
+Idempotency-Key: {{$guid}}
+Authorization: Bearer {{employeeVerify.response.body.token}}
+Content-Type: application/json
+
+{ "action": "request_info", "info_request": "Приложите бухгалтерскую отчётность за 2025 год" }
+
+### Клиент дослал документы и возвращает заявку банку
+POST {{host}}/api/v1/applications/{{applicationId}}/resume
+Idempotency-Key: {{$guid}}
+Authorization: Bearer {{clientVerify.response.body.token}}

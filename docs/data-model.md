@@ -2,7 +2,8 @@
 
 В PostgreSQL четыре таблицы: компании, пользователи, заявки и предварительные предложения. Всё, что принадлежит заявке (история статусов, документы, решение, данные формы), хранится в ней самой, без отдельных таблиц. Каталог продуктов лежит в приложении ([internal/catalog/products.yaml](../internal/catalog/products.yaml)). Временные данные и обмен с воркером живут в Redis.
 
-Схема целиком создаётся миграцией [`00001_init.sql`](../migrations/00001_init.sql), демо-данные загружает [`00002_seed_demo_data.sql`](../migrations/00002_seed_demo_data.sql).
+Схема целиком создаётся миграцией [`00001_init.sql`](../migrations/00001_init.sql), демо-данные загружает [`00002_seed_demo_data.sql`](../migrations/00002_seed_demo_data.sql), второго сотрудника — [`00003_second_employee.sql`](../migrations/00003_second_employee.sql).
+
 ```mermaid
 erDiagram
     COMPANY ||--o{ USER : "работает в"
@@ -128,8 +129,8 @@ erDiagram
 | Результат воркера скоринга | Redis stream | `applications:results` (группа `api`) | обрезается не автоматически, подтверждённые записи остаются в журнале |
 | Запрос кредитной истории воркеру | Redis stream | `credit-history:requests` | обрезается до 10 000 записей |
 | Ответ воркера | Redis list | `credit-history:reply:<request_id>` | 1 минута |
-| Запросы банка клиенту (`INFO_REQUEST`) и ответы | Redis | не реализовано | пока заявка в обработке |
-| Документы заявки | Docker-том (`DOCUMENTS_DIR`) | — | файлы по схеме `<id заявки>/<вид>/<имя файла>`; в базе о документах ничего нет, список — содержимое папки; разбор не хранится |
+| Запрос банка клиенту | PostgreSQL | вопрос сотрудника — `applications.info_request`; запрос воркера — `decision.missing_fields` и комментарий перехода в `history` | пока заявка в `INFO_REQUESTED`; ответ клиента — документы и `POST /applications/{id}/resume` |
+| Документы заявки | Docker-том (`DOCUMENTS_DIR`) | — | файлы по схеме `<id заявки>/<вид>/<имя файла>`; в базе о документах ничего нет, список — содержимое папки. Менять можно в `DRAFT` и `INFO_REQUESTED`. Воркер читает том только на чтение; извлечённые данные он кладёт в `decision.documents` |
 | Каталог продуктов | [internal/catalog/products.yaml](../internal/catalog/products.yaml) | — | статичный список, встроен в бинарник |
 | Кредит после выдачи | отдельной сущности нет | — | заявка в `ACTIVE`, `OVERDUE` или `CLOSED`; график платежей считается на лету (`GET /loans`) |
 | Кредиты в других банках | `companies.credit_history.other_banks` | — | список `{bank, kind, debt}` из ответа БКИ |
