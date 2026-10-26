@@ -66,11 +66,7 @@ type Loan struct {
 }
 
 // OtherBankLoan — кредит компании в другом банке (из ответа БКИ, companies.credit_history.other_banks).
-type OtherBankLoan struct {
-	Bank string `json:"bank"`
-	Kind string `json:"kind"`
-	Debt int64  `json:"debt"`
-}
+type OtherBankLoan = domain.OtherBankLoan
 
 // Loans — всё для разделов «Мои кредиты», «Кредитная история» и «Кредиты в других банках».
 type Loans struct {

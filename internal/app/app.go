@@ -63,7 +63,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 				}
 
 				companies := repository.NewCompanyRepo(pool)
-				trust := service.NewTrustService(companies, queue.NewClient(rdb), cfg.TrustRefreshInterval, cfg.WorkerTimeout)
+				// Общий долг компании: наши кредиты (из заявок) плюс кредиты в других банках от воркера.
+				debts := service.NewDebtService(repository.NewApplicationRepo(pool), companies)
+				trust := service.NewTrustService(companies, queue.NewClient(rdb), debts, cfg.TrustRefreshInterval, cfg.WorkerTimeout)
 
 				var offers *service.OfferService
 				var offerRepo *repository.OfferRepo
@@ -87,7 +89,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 						log.Printf("documents store error: %v", err)
 					}
 
-					applications := service.NewApplicationService(applicationRepo, companies, offerRepo, products, applicationPublisher, documents)
+					applications := service.NewApplicationService(applicationRepo, companies, offerRepo, products, applicationPublisher, documents, debts)
 					appHandler = handler.NewApplicationHandler(applications)
 					loanHandler = handler.NewLoanHandler(service.NewLoanService(applicationRepo, companies, products))
 

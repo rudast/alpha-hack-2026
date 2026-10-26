@@ -15,7 +15,12 @@ import (
 
 type CompanyRepository interface {
 	GetByINN(ctx context.Context, inn string) (domain.Company, error)
-	UpdateFinancials(ctx context.Context, inn string, debt, equity int64, fetchedAt time.Time) error
+	UpdateExternal(ctx context.Context, inn string, equity int64, otherBanks []domain.OtherBankLoan, fetchedAt time.Time) error
+}
+
+// DebtRecalculator пересчитывает общий долг компании (наши кредиты + кредиты в других банках).
+type DebtRecalculator interface {
+	Recalculate(ctx context.Context, inn string) (domain.Company, error)
 }
 
 type CreditHistoryProvider interface {
@@ -27,14 +32,15 @@ type CreditHistoryProvider interface {
 type TrustService struct {
 	companies CompanyRepository
 	history   CreditHistoryProvider
+	debts     DebtRecalculator
 	ttl       time.Duration
 	timeout   time.Duration
 	now       func() time.Time
 	inflight  singleflight.Group
 }
 
-func NewTrustService(c CompanyRepository, h CreditHistoryProvider, ttl, timeout time.Duration) *TrustService {
-	return &TrustService{companies: c, history: h, ttl: ttl, timeout: timeout, now: time.Now}
+func NewTrustService(c CompanyRepository, h CreditHistoryProvider, debts DebtRecalculator, ttl, timeout time.Duration) *TrustService {
+	return &TrustService{companies: c, history: h, debts: debts, ttl: ttl, timeout: timeout, now: time.Now}
 }
 
 // EnsureTrustRatio возвращает компанию с актуальным коэффициентом. Если данных нет
@@ -49,7 +55,9 @@ func (s *TrustService) EnsureTrustRatio(ctx context.Context, inn string) (domain
 		return domain.Company{}, err
 	}
 	if !company.NeedsRefresh(s.now(), s.ttl) {
-		return company, nil
+		// Внешние данные свежие, но наши кредиты могли измениться (выдача, погашение): долг
+		// пересчитывается каждый раз, это дёшево и не даёт ему разойтись с кредитами.
+		return s.debts.Recalculate(ctx, inn)
 	}
 
 	// Одновременные входы одной компании делят один запрос к воркеру.
@@ -62,16 +70,18 @@ func (s *TrustService) EnsureTrustRatio(ctx context.Context, inn string) (domain
 		if err != nil {
 			return nil, err
 		}
-		return nil, s.companies.UpdateFinancials(fetchCtx, inn, h.Debt, h.Equity, s.now())
+		return nil, s.companies.UpdateExternal(fetchCtx, inn, h.Equity, h.OtherBanks, s.now())
 	})
 	if err != nil {
 		if company.FetchedAt != nil && isUpstreamUnavailable(err) {
 			log.Printf("trust ratio for %s is stale, using previous values: %v", inn, err)
-			return company, nil
+			// Внешние данные прежние, но наши кредиты учитываются актуальными.
+			return s.debts.Recalculate(ctx, inn)
 		}
 		return domain.Company{}, err
 	}
-	return s.companies.GetByINN(ctx, inn)
+	// Общий долг = наши кредиты (их банк знает сам) + кредиты в других банках из ответа воркера.
+	return s.debts.Recalculate(ctx, inn)
 }
 
 func isUpstreamUnavailable(err error) bool {

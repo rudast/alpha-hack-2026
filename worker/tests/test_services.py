@@ -6,11 +6,37 @@ from worker.router import dispatch, lane_for
 
 class WorkerServicesTest(unittest.TestCase):
     def test_credit_history_preserves_existing_demo_data(self):
-        self.assertEqual(
-            dispatch("credit_history", {"inn": "7700000002"}),
-            {"debt": 2_400_000, "equity": 4_000_000},
-        )
+        cases = {
+            "7700000001": (5_000_000, [("Сбербанк", "Кредит на оборотные средства", 958_805)]),
+            "7700000002": (4_000_000, [("ВТБ", "Инвестиционный кредит", 2_400_000)]),
+            "7700000003": (3_000_000, [("Т-Банк", "Овердрафт", 504_676)]),
+            "7700000004": (2_000_000, [
+                ("Сбербанк", "Кредит под залог недвижимости", 2_214_000),
+                ("ВТБ", "Оборотный кредит", 1_476_802)]),
+            "770000000005": (2_000_000, [("Совкомбанк", "Кредит для ИП", 386_612)]),
+        }
+        for inn, (equity, loans) in cases.items():
+            with self.subTest(inn=inn):
+                self.assertEqual(dispatch("credit_history", {"inn": inn}), {
+                    "equity": equity,
+                    "other_banks": [{"bank": bank, "kind": kind, "debt": debt}
+                                    for bank, kind, debt in loans],
+                })
         self.assertEqual(lane_for("credit_history"), "fast")
+
+    def test_credit_history_unknown_inn_has_one_external_loan(self):
+        first = dispatch("credit_history", {"inn": "1234567890"})
+        self.assertEqual(first, dispatch("credit_history", {"inn": "1234567890"}))
+        self.assertEqual(set(first), {"equity", "other_banks"})
+        self.assertGreater(first["equity"], 0)
+        self.assertEqual(len(first["other_banks"]), 1)
+        self.assertGreater(first["other_banks"][0]["debt"], 0)
+
+    def test_credit_history_demo_response_is_not_shared_between_requests(self):
+        first = dispatch("credit_history", {"inn": "7700000002"})
+        first["other_banks"][0]["debt"] = 0
+        self.assertEqual(dispatch("credit_history", {"inn": "7700000002"})[
+            "other_banks"][0]["debt"], 2_400_000)
 
     def test_application_verifier_flags_high_debt_and_missing_consent(self):
         result = dispatch("verify_application", {

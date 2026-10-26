@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 
 KNOWN_HISTORY = {
-    "7700000001": {"debt": 3_000_000, "equity": 5_000_000},
-    "7700000002": {"debt": 2_400_000, "equity": 4_000_000},
-    "7700000003": {"debt": 1_800_000, "equity": 3_000_000},
-    "7700000004": {"debt": 7_000_000, "equity": 2_000_000},
-    "770000000005": {"debt": 800_000, "equity": 2_000_000},
+    "7700000001": {"equity": 5_000_000, "other_banks": [
+        {"bank": "Сбербанк", "kind": "Кредит на оборотные средства", "debt": 958_805}]},
+    "7700000002": {"equity": 4_000_000, "other_banks": [
+        {"bank": "ВТБ", "kind": "Инвестиционный кредит", "debt": 2_400_000}]},
+    "7700000003": {"equity": 3_000_000, "other_banks": [
+        {"bank": "Т-Банк", "kind": "Овердрафт", "debt": 504_676}]},
+    "7700000004": {"equity": 2_000_000, "other_banks": [
+        {"bank": "Сбербанк", "kind": "Кредит под залог недвижимости", "debt": 2_214_000},
+        {"bank": "ВТБ", "kind": "Оборотный кредит", "debt": 1_476_802}]},
+    "770000000005": {"equity": 2_000_000, "other_banks": [
+        {"bank": "Совкомбанк", "kind": "Кредит для ИП", "debt": 386_612}]},
 }
 
 
@@ -22,16 +29,17 @@ def _fnv1a32(value: str) -> int:
     return result
 
 
-def credit_history(payload: dict[str, Any]) -> dict[str, int]:
+def credit_history(payload: dict[str, Any]) -> dict[str, Any]:
     inn = payload.get("inn")
     if not isinstance(inn, str) or not inn.isdigit() or len(inn) not in (10, 12):
         raise ValueError("inn must contain 10 or 12 digits")
     if inn in KNOWN_HISTORY:
-        return KNOWN_HISTORY[inn].copy()
+        return deepcopy(KNOWN_HISTORY[inn])
     value = _fnv1a32(inn)
     return {
-        "debt": 1_000_000 + value % 5_000_000,
         "equity": 2_000_000 + (value // 7) % 6_000_000,
+        "other_banks": [{"bank": "Синтетический банк", "kind": "Кредит",
+                         "debt": 1_000_000 + value % 5_000_000}],
     }
 
 

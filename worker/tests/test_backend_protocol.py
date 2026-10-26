@@ -159,7 +159,10 @@ class BackendProtocolTests(unittest.TestCase):
         BackendWorker(client)._history("1-0", {"request_id": "req", "inn": "7700000002"})
         calls = client.pipelines[0].calls
         self.assertEqual(calls[0][0:2], ("lpush", HISTORY_REPLY_PREFIX + "req"))
-        self.assertEqual(json.loads(calls[0][2]), {"debt": 2400000, "equity": 4000000})
+        self.assertEqual(json.loads(calls[0][2]), {
+            "equity": 4_000_000,
+            "other_banks": [{"bank": "ВТБ", "kind": "Инвестиционный кредит", "debt": 2_400_000}],
+        })
         self.assertEqual(calls[-2], ("xack", HISTORY_STREAM, FAST_GROUP, "1-0"))
 
     def test_submission_is_routed_to_slow_pool_and_emits_flat_events(self):

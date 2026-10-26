@@ -27,10 +27,13 @@ const (
 	defaultWait        = 10 * time.Second
 )
 
-// History — кредитная история в виде двух показателей по всем банкам.
+// History — то, чего банк сам не знает: собственный капитал компании и её кредиты в других банках.
+// Кредиты, выданные нашим банком, API считает сам (service.DebtService). OtherBanks равен nil, если
+// воркер прислал ответ старого формата ({"debt", "equity"}): тогда общий долг воркера не используется,
+// а кредиты в других банках остаются прежними (из демо-данных).
 type History struct {
-	Debt   int64 `json:"debt"`
-	Equity int64 `json:"equity"`
+	Equity     int64                  `json:"equity"`
+	OtherBanks []domain.OtherBankLoan `json:"other_banks"`
 }
 
 // Client — сторона API.

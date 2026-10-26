@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -27,12 +28,28 @@ func (f *fakeCompanies) GetByINN(context.Context, string) (domain.Company, error
 	return f.c, nil
 }
 
-func (f *fakeCompanies) UpdateFinancials(_ context.Context, _ string, debt, equity int64, at time.Time) error {
+func (f *fakeCompanies) UpdateExternal(_ context.Context, _ string, equity int64, others []domain.OtherBankLoan, at time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.updates++
-	f.c.TotalDebt, f.c.Equity, f.c.DebtToEquity, f.c.FetchedAt = &debt, &equity, domain.DebtToEquity(debt, equity), &at
+	b, _ := json.Marshal(map[string]any{"other_banks": others})
+	f.c.Equity, f.c.CreditHistory, f.c.FetchedAt = &equity, b, &at
 	return nil
+}
+
+func (f *fakeCompanies) UpdateDebt(_ context.Context, _ string, debt int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.c.TotalDebt = &debt
+	if f.c.Equity != nil {
+		f.c.DebtToEquity = domain.DebtToEquity(debt, *f.c.Equity)
+	}
+	return nil
+}
+
+// history — ответ воркера: капитал и один кредит в другом банке на сумму debt.
+func history(debt, equity int64) queue.History {
+	return queue.History{Equity: equity, OtherBanks: []domain.OtherBankLoan{{Bank: "Другой банк", Debt: debt}}}
 }
 
 type fakeHistory struct {
@@ -52,7 +69,7 @@ func (f *fakeHistory) FetchHistory(context.Context, string) (queue.History, erro
 
 func newTrust(c domain.Company, h *fakeHistory) (*TrustService, *fakeCompanies) {
 	repo := &fakeCompanies{c: c}
-	s := NewTrustService(repo, h, 12*time.Hour, time.Second)
+	s := NewTrustService(repo, h, NewDebtService(fakeLoanRepo{}, repo), 12*time.Hour, time.Second)
 	s.now = func() time.Time { return testNow }
 	return s, repo
 }
@@ -72,7 +89,7 @@ func TestEnsureTrustRatio_FreshDataIsNotRefetched(t *testing.T) {
 }
 
 func TestEnsureTrustRatio_NeverFetchedAsksWorkerAndStores(t *testing.T) {
-	h := &fakeHistory{h: queue.History{Debt: 3_000_000, Equity: 5_000_000}}
+	h := &fakeHistory{h: history(3_000_000, 5_000_000)}
 	s, repo := newTrust(domain.Company{INN: "1"}, h)
 
 	c, err := s.EnsureTrustRatio(context.Background(), "1")
@@ -85,7 +102,7 @@ func TestEnsureTrustRatio_NeverFetchedAsksWorkerAndStores(t *testing.T) {
 }
 
 func TestEnsureTrustRatio_StaleDataIsRefreshed(t *testing.T) {
-	h := &fakeHistory{h: queue.History{Debt: 1_800_000, Equity: 3_000_000}}
+	h := &fakeHistory{h: history(1_800_000, 3_000_000)}
 	old := int64(1_500_000)
 	s, _ := newTrust(domain.Company{INN: "1", TotalDebt: &old, FetchedAt: ago(13 * time.Hour)}, h)
 
@@ -110,7 +127,7 @@ func TestEnsureTrustRatio_WorkerTimeout(t *testing.T) {
 
 	t.Run("stale data is used as is", func(t *testing.T) {
 		debt := int64(100)
-		s, _ := newTrust(domain.Company{INN: "1", TotalDebt: &debt, FetchedAt: ago(48 * time.Hour)}, timeout)
+		s, _ := newTrust(domain.Company{INN: "1", TotalDebt: &debt, FetchedAt: ago(48 * time.Hour), CreditHistory: json.RawMessage(`{"other_banks":[{"debt":100}]}`)}, timeout)
 		c, err := s.EnsureTrustRatio(context.Background(), "1")
 		if err != nil || *c.TotalDebt != 100 {
 			t.Fatalf("got %v, %v", c.TotalDebt, err)
@@ -133,7 +150,7 @@ func TestEnsureTrustRatio_WorkerError(t *testing.T) {
 
 	t.Run("stale data is used as is", func(t *testing.T) {
 		debt := int64(100)
-		s, repo := newTrust(domain.Company{INN: "1", TotalDebt: &debt, FetchedAt: ago(48 * time.Hour)}, failed)
+		s, repo := newTrust(domain.Company{INN: "1", TotalDebt: &debt, FetchedAt: ago(48 * time.Hour), CreditHistory: json.RawMessage(`{"other_banks":[{"debt":100}]}`)}, failed)
 		c, err := s.EnsureTrustRatio(context.Background(), "1")
 		if err != nil || *c.TotalDebt != 100 {
 			t.Fatalf("got %v, %v", c.TotalDebt, err)
@@ -145,7 +162,7 @@ func TestEnsureTrustRatio_WorkerError(t *testing.T) {
 }
 
 func TestEnsureTrustRatio_ConcurrentCallsShareOneRequest(t *testing.T) {
-	h := &fakeHistory{h: queue.History{Debt: 1, Equity: 2}, gate: make(chan struct{})}
+	h := &fakeHistory{h: history(1, 2), gate: make(chan struct{})}
 	s, _ := newTrust(domain.Company{INN: "1"}, h)
 
 	var wg sync.WaitGroup

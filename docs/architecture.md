@@ -100,10 +100,11 @@ sequenceDiagram
     else нет данных или устарели
         A->>R: XADD credit-history:requests (request_id, ИНН)
         W->>R: XREADGROUP
-        W->>R: LPUSH credit-history:reply:request_id {долг, капитал}
+        W->>R: LPUSH credit-history:reply:request_id {капитал, кредиты в других банках}
         W->>R: XACK
         A->>R: BLPOP ответ, таймаут 8 секунд
-        A->>DB: UPDATE долг, капитал, коэффициент, время
+        A->>DB: UPDATE капитал, кредиты в других банках, время
+        A->>DB: долг = наши кредиты + другие банки, коэффициент
     end
 ```
 

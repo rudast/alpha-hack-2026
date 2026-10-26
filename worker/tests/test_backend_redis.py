@@ -137,7 +137,10 @@ class BackendRedisTests(unittest.TestCase):
                                                      "inn": "7700000002"})
             reply = client.blpop(protocol.HISTORY_REPLY_PREFIX + history_id, timeout=5)
             self.assertIsNotNone(reply)
-            self.assertEqual(json.loads(reply[1])["debt"], 2400000)
+            self.assertEqual(json.loads(reply[1]), {
+                "equity": 4_000_000,
+                "other_banks": [{"bank": "ВТБ", "kind": "Инвестиционный кредит", "debt": 2_400_000}],
+            })
 
             fields = submission()
             request_id = client.xadd(application_stream, fields)
