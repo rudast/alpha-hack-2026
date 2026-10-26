@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -19,7 +20,12 @@ const (
 
 	// Пауза после сбоя Redis, чтобы не крутить цикл вхолостую.
 	resultsErrorBackoff = 2 * time.Second
+	reclaimEvery        = 10 * time.Second
+	reclaimMinIdle      = 30 * time.Second
+	workerBlockTime     = 5 * time.Second
 )
+
+func isBusyGroup(err error) bool { return err != nil && strings.HasPrefix(err.Error(), "BUSYGROUP") }
 
 // ResultHandler применяет один результат. Ошибка означает «временный сбой, повторить позже»:
 // сообщение остаётся неподтверждённым. nil означает «сообщение обработано» (в том числе отклонено как

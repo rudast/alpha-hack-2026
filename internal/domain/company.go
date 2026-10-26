@@ -25,6 +25,13 @@ type Company struct {
 	Financials    json.RawMessage
 }
 
+// OtherBankLoan — кредит компании в другом банке (из внешних источников, companies.credit_history.other_banks).
+type OtherBankLoan struct {
+	Bank string `json:"bank"`
+	Kind string `json:"kind"`
+	Debt int64  `json:"debt"`
+}
+
 // NeedsRefresh сообщает, что показатели долговой нагрузки не запрашивались
 // или устарели.
 func (c Company) NeedsRefresh(now time.Time, ttl time.Duration) bool {

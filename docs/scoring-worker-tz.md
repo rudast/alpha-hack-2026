@@ -54,7 +54,7 @@ XREADGROUP GROUP scoring-workers <имя-экземпляра> COUNT 10 BLOCK 50
 | `form` | JSON-строка | Форма заявки блоками `группа.поле` (поля продукта описаны в каталоге) |
 | `documents` | JSON-строка | Загруженные документы: `[{"kind", "name", "path"}]`, `kind` — вид из каталога (`account_statement`, `financial_statements`…), `path` — путь внутри тома |
 | `company` | JSON-строка | `org_type`, `okved`, `registration_date` (`YYYY-MM-DD`, может отсутствовать), `registry`, `credit_history`, `financials` — то, что уже известно о компании; пустые данные приходят как `{}` |
-| `debt`, `equity` | целое | Долг и капитал, рубли; полей нет, если показатели не получены |
+| `debt`, `equity` | целое | Общий долг (наши кредиты плюс другие банки, считает API) и капитал, рубли; полей нет, если показатели не получены |
 | `debt_to_equity` | число строкой | Долг / капитал; поля нет, если не определён |
 
 Пример и подробности — [worker-protocol.md](worker-protocol.md), раздел «Задачи по заявкам».

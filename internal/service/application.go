@@ -48,11 +48,12 @@ type ApplicationService struct {
 	catalog   *catalog.Catalog
 	publisher ApplicationPublisher
 	documents DocumentStore
+	debts     DebtRecalculator
 	now       func() time.Time
 }
 
-func NewApplicationService(apps ApplicationRepository, companies CompanyGetter, offers OfferGetter, cat *catalog.Catalog, publisher ApplicationPublisher, documents DocumentStore) *ApplicationService {
-	return &ApplicationService{apps: apps, companies: companies, offers: offers, catalog: cat, publisher: publisher, documents: documents, now: time.Now}
+func NewApplicationService(apps ApplicationRepository, companies CompanyGetter, offers OfferGetter, cat *catalog.Catalog, publisher ApplicationPublisher, documents DocumentStore, debts DebtRecalculator) *ApplicationService {
+	return &ApplicationService{apps: apps, companies: companies, offers: offers, catalog: cat, publisher: publisher, documents: documents, debts: debts, now: time.Now}
 }
 
 // CreateFromOffer создаёт черновик по предварительному предложению: продукт, сумму и срок берёт
@@ -290,7 +291,19 @@ func (s *ApplicationService) Accept(ctx context.Context, p domain.Principal, id 
 	}
 	now := s.now()
 	terms := s.loanTerms(a, now)
-	return s.withDocuments(s.apps.Accept(ctx, id, p.CompanyINN, a.Status, terms, p.UserID, now))
+	issued, err := s.withDocuments(s.apps.Accept(ctx, id, p.CompanyINN, a.Status, terms, p.UserID, now))
+	if err != nil {
+		return domain.Application{}, err
+	}
+	// Новый кредит сразу увеличивает долг компании: от него зависят D/E, скоринг следующих заявок
+	// и предварительное предложение. Сбой пересчёта не отменяет выдачу: долг пересчитается при
+	// следующем обновлении данных компании.
+	if s.debts != nil {
+		if _, err := s.debts.Recalculate(context.WithoutCancel(ctx), p.CompanyINN); err != nil {
+			log.Printf("applications: %s: recalculate debt: %v", id, err)
+		}
+	}
+	return issued, nil
 }
 
 // Decline — клиент отказывается от встречного предложения: заявка возвращается в черновик,
