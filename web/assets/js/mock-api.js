@@ -24,9 +24,9 @@
   'use strict';
 
   var MOCKS = {
-    'GET /me': true,
-    'GET /loans': true,
-    'GET /me/offer': true,
+    'GET /me': false,
+    'GET /loans': false,
+    'GET /me/offer': false,
   };
 
   var DELAY_MS = 250; // имитация сети, чтобы были видны состояния загрузки

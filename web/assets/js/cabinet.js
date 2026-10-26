@@ -801,6 +801,14 @@
     );
   }
 
+  // Пояснение сотрудника: при отказе лежит в decision.reason, иначе — в комментарии последнего перехода
+  function staffComment(a, status) {
+    var d = a.decision || {};
+    if (d.reason) return d.reason;
+    var h = (a.history || []).filter(function (e) { return e.to === status && e.comment; });
+    return h.length ? h[h.length - 1].comment : '';
+  }
+
   function bankComment(text) {
     return text ? '<div class="bank-comment"><span>Комментарий специалиста</span>' + esc(text) + '</div>' : '';
   }
@@ -814,7 +822,7 @@
         '<section class="decision decision-success">' +
         '<div class="decision-title">' + icon('check', 20) + 'Банк одобрил кредит</div>' +
         '<div class="t-list">' + termsList(d.offer || a) + '</div>' +
-        bankComment(d.comment) +
+        bankComment(staffComment(a, a.status)) +
         '<div class="decision-actions"><button type="button" class="btn btn-primary btn-inline" data-app-action="accept">Подписать и получить</button></div>' +
         '<p class="decision-fine">После подписания деньги поступят на счёт ' + esc(account) + ', кредит появится в «Моих кредитах».</p>' +
         '</section>'
@@ -827,7 +835,7 @@
         '<div class="decision-title">' + icon('info', 20) + 'Банк предлагает другие условия</div>' +
         '<p class="decision-text">Зачёркнуто — то, что вы просили в заявке.</p>' +
         '<div class="t-list">' + termsList(d.offer, a) + '</div>' +
-        bankComment(d.comment) +
+        bankComment(staffComment(a, a.status)) +
         '<div class="decision-actions">' +
         '<button type="button" class="btn btn-primary btn-inline" data-app-action="accept">Принять и подписать</button>' +
         '<button type="button" class="btn btn-secondary btn-inline" data-app-action="decline-ask">Отказаться</button>' +
@@ -845,20 +853,20 @@
     if (a.status === 'INFO_REQUESTED') {
       var have = {};
       (a.documents || []).forEach(function (doc) { have[doc.kind] = doc; });
-      var need = d.requested_documents || [];
-      var ready = need.every(function (k) { return have[k]; });
+      var docs = Catalog.documentsFor(a.product_id);
+      var kinds = (d.requested_documents || docs.required.map(function (x) { return x.kind; }).filter(function (k) { return k !== 'bki_consent'; }));
       return (
         '<section class="decision decision-warning">' +
-        '<div class="decision-title">' + icon('file', 20) + 'Банк запросил документы</div>' +
-        bankComment(d.request_comment) +
+        '<div class="decision-title">' + icon('file', 20) + 'Банк запросил данные</div>' +
+        (a.info_request ? '<div class="bank-comment"><span>Что нужно</span>' + esc(a.info_request) + '</div>' : '') +
         '<ul class="docs req-docs">' +
-        need.map(function (k) {
+        kinds.map(function (k) {
           var doc = have[k];
           return (
             '<li class="doc' + (doc ? ' attached' : '') + '">' +
             '<span class="doc-icon">' + icon(doc ? 'check' : 'file', 18) + '</span>' +
             '<span class="doc-text"><span class="doc-title">' + esc(Catalog.documentTitle(k)) + '</span>' +
-            '<span class="doc-sub">' + (doc ? esc(doc.filename) : 'нужно приложить') + '</span></span>' +
+            '<span class="doc-sub">' + (doc ? esc(doc.filename) : 'можно приложить') + '</span></span>' +
             (doc ? '' :
               '<label class="btn btn-secondary btn-inline doc-btn">Прикрепить' +
               '<input type="file" class="visually-hidden" data-req-doc="' + k + '" accept=".pdf,.jpg,.jpeg,.png" /></label>') +
@@ -867,10 +875,9 @@
         }).join('') +
         '</ul>' +
         '<div class="decision-actions">' +
-        '<button type="button" class="btn btn-primary btn-inline" data-app-action="resubmit"' + (ready ? '' : ' disabled') + '>Отправить в банк</button>' +
+        '<button type="button" class="btn btn-primary btn-inline" data-app-action="resubmit">Отправить в банк</button>' +
         '</div>' +
-        '<p class="decision-fine">' + (ready ? 'Все документы приложены.' : 'Кнопка станет активной, когда приложите все документы.') +
-        ' Заявка вернётся к специалисту, который её рассматривает.</p>' +
+        '<p class="decision-fine">Приложите нужные документы и отправьте заявку обратно. Она вернётся к специалисту, который её рассматривает.</p>' +
         '</section>'
       );
     }
@@ -879,7 +886,7 @@
       return (
         '<section class="decision decision-danger">' +
         '<div class="decision-title">' + icon('alert', 20) + 'Банк отказал в кредите</div>' +
-        bankComment(d.comment) +
+        bankComment(staffComment(a, a.status)) +
         '<div class="decision-actions"><a href="#new-loan" class="btn btn-secondary btn-inline" data-close-dialog>Подать новую заявку</a></div>' +
         '</section>'
       );
@@ -990,7 +997,7 @@
       $('decline-confirm').hidden = action === 'decline-cancel';
       return;
     }
-    var paths = { accept: '/accept', decline: '/decline', resubmit: '/resubmit' };
+    var paths = { accept: '/accept', decline: '/decline', resubmit: '/resume' };
     button.disabled = true;
     var res = await api('/applications/' + encodeURIComponent(a.id) + paths[action], {
       method: 'POST', json: {}, idempotencyKey: api.newKey(),
@@ -1117,8 +1124,9 @@
 
   window.addEventListener('hashchange', route);
 
-  // Банк ответил по заявке (в демо — кабинет сотрудника в соседней вкладке): обновляем списки и окно
-  window.addEventListener('demo-review-change', function () {
+  // Банк мог ответить по заявке: обновляем списки и открытое окно, когда вкладку открывают, и раз в 20 секунд
+  function refreshFromBank() {
+    if (document.hidden) return;
     reloadApplications();
     api('/loans').then(function (res) {
       if (!res.ok) return;
@@ -1127,7 +1135,9 @@
       renderLoans(res);
     });
     if (openedApp) showApplication(openedApp, true);
-  });
+  }
+  document.addEventListener('visibilitychange', refreshFromBank);
+  setInterval(refreshFromBank, 20000);
 
   ready = loadAll();
   route();
