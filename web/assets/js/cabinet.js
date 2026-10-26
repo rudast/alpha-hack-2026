@@ -844,6 +844,8 @@
     turnover_monthly: 'Подтверждённый месячный оборот банк считает по бухгалтерской отчётности или выписке по счёту. Приложите такой документ в виде PDF с текстом (не фотографию): по фото цифры прочитать нельзя.',
     monthly_turnovers: 'Нужны помесячные обороты минимум за 6 месяцев — приложите выписку по расчётному счёту (PDF с текстом).',
     collateral_confirmed_value: 'Нужна оценка залога — приложите отчёт об оценке.',
+    industry_risk: 'Банк не смог оценить риск вашей отрасли по ОКВЭД. Это внутренняя настройка банка, от вас ничего не требуется: сообщите об этом специалисту поддержки.',
+    okved: 'В данных компании не указан ОКВЭД. Это внутренняя настройка банка, от вас ничего не требуется.',
   };
 
   function bankComment(text) {
@@ -893,9 +895,16 @@
       // Что просит воркер — в decision.missing_fields (documents.<kind>), сотрудник — текстом в info_request
       var kinds = (d.missing_fields || []).filter(function (f) { return f.indexOf('documents.') === 0; }).map(function (f) { return f.slice(10); });
       var otherFields = (d.missing_fields || []).filter(function (f) { return f.indexOf('documents.') !== 0; });
-      if (!kinds.length) {
-        kinds = Catalog.documentsFor(a.product_id).required.map(function (x) { return x.kind; });
-      }
+      var asked = {};
+      kinds.forEach(function (k) { asked[k] = true; });
+      // Кроме запрошенного показываем все документы продукта (и необязательные): любой можно приложить или заменить
+      var all = Catalog.documentsFor(a.product_id);
+      all.required.concat(all.optional).forEach(function (x) {
+        if (kinds.indexOf(x.kind) === -1) kinds.push(x.kind);
+      });
+      (a.documents || []).forEach(function (x) {
+        if (kinds.indexOf(x.kind) === -1) kinds.push(x.kind);
+      });
       return (
         '<section class="decision decision-warning">' +
         '<div class="decision-title">' + icon('file', 20) + 'Банк запросил данные</div>' +
@@ -910,10 +919,9 @@
             '<li class="doc' + (doc ? ' attached' : '') + '">' +
             '<span class="doc-icon">' + icon(doc ? 'check' : 'file', 18) + '</span>' +
             '<span class="doc-text"><span class="doc-title">' + esc(Catalog.documentTitle(k)) + '</span>' +
-            '<span class="doc-sub">' + (doc ? esc(doc.filename) : 'можно приложить') + '</span></span>' +
-            (doc ? '' :
-              '<label class="btn btn-secondary btn-inline doc-btn">Прикрепить' +
-              '<input type="file" class="visually-hidden" data-req-doc="' + k + '" accept=".pdf,.jpg,.jpeg,.png" /></label>') +
+            '<span class="doc-sub">' + (doc ? esc(doc.filename) : asked[k] ? 'запрошено банком' : 'можно приложить') + '</span></span>' +
+            '<label class="btn btn-secondary btn-inline doc-btn">' + (doc ? 'Заменить' : 'Прикрепить') +
+            '<input type="file" class="visually-hidden" data-req-doc="' + k + '" accept=".pdf,.jpg,.jpeg,.png" /></label>' +
             '</li>'
           );
         }).join('') +

@@ -417,6 +417,30 @@
     );
   }
 
+  // Воркер присылает причины кодом фактора без текста (docs/scoring.md, раздел 5)
+  var FACTOR_NAMES = {
+    C1a: 'Просрочки в кредитной истории',
+    C1b: 'Кредитная активность (запросы в БКИ за 90 дней)',
+    C2: 'Долговая нагрузка',
+    C3: 'Возраст бизнеса',
+    C4a: 'Чистота реестров',
+    C4b: 'Отраслевой риск по ОКВЭД',
+    P1: 'Платёж к обороту',
+    P2: 'Стабильность оборота',
+    P3: 'Покрытие залогом (LTV)',
+    P4: 'Собственный взнос',
+    P5: 'РКО в банке',
+    P6a: 'Маржинальность приобретаемого бизнеса',
+    P6b: 'Окупаемость приобретаемого бизнеса',
+    P7: 'Концентрация выручки на маркетплейсе',
+  };
+
+  function reasonText(r) {
+    if (r.text) return r.text;
+    var name = FACTOR_NAMES[r.factor] || r.factor;
+    return r.delta != null ? name + ' (' + (r.delta > 0 ? '+' : '') + r.delta + ')' : name;
+  }
+
   function scoreCard(a) {
     var d = a.decision || {};
     if (d.score == null) return precheckCard(a);
@@ -428,7 +452,7 @@
     var reasons = function (list, cls, title) {
       if (!list || !list.length) return '';
       return '<div class="sc-reasons ' + cls + '"><div class="sc-reasons-title">' + title + '</div><ul>' +
-        list.map(function (r) { return '<li>' + esc(r.text) + '</li>'; }).join('') + '</ul></div>';
+        list.map(function (r) { return '<li>' + esc(reasonText(r)) + '</li>'; }).join('') + '</ul></div>';
     };
     return (
       '<section class="score-card">' +
