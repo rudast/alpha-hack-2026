@@ -335,22 +335,44 @@
 
   // ---------- Предодобренное предложение ----------
 
+  // GET /me/offer: { offer: { id, product_id, product_name, max_amount, term_months, rate_from, valid_until } }
+  // или { offer: null, reason }
   function renderOffer() {
-    var o = state.offer;
+    var o = state.offer && state.offer.offer;
     var el = $('offer');
-    if (!o || !o.preapproved_limit) {
+    if (!o || !o.max_amount) {
       el.classList.add('hidden');
       return;
     }
     el.innerHTML =
       '<div class="offer-icon">' + icon('spark', 26) + '</div>' +
       '<div class="offer-text">' +
-      '<div class="offer-title">Вам предварительно одобрено до ' + esc(fmt.short(o.preapproved_limit)) + '</div>' +
-      '<div class="offer-sub">Ставка от ' + esc(fmt.rate(o.rate_from)) + ' · предложение действует до ' + esc(fmt.dateShort(o.valid_until)) +
-      ' · решение быстрее, документов меньше</div>' +
+      '<div class="offer-title">Вам предварительно одобрено до ' + esc(fmt.short(o.max_amount)) + '</div>' +
+      '<div class="offer-sub">' + esc(o.product_name) + ' · ставка от ' + esc(fmt.rate(o.rate_from)) +
+      ' · предложение действует до ' + esc(fmt.dateShort(o.valid_until)) + ' · решение быстрее, документов меньше</div>' +
       '</div>' +
-      '<a href="#new-loan" class="btn btn-inline offer-btn">Оформить</a>' + demoTag('GET', '/me/offer');
+      '<button type="button" class="btn btn-inline offer-btn" id="offer-btn">Оформить</button>' + demoTag('GET', '/me/offer');
     el.classList.remove('hidden');
+    $('offer-btn').addEventListener('click', function () {
+      applyOffer(o, this);
+    });
+  }
+
+  // Заявка по предложению: продукт, сумму и срок сервер берёт из предложения, дальше — обычный черновик
+  async function applyOffer(o, button) {
+    button.disabled = true;
+    var res = await api('/applications', { method: 'POST', json: { offer_id: o.id }, idempotencyKey: api.newKey() });
+    button.disabled = false;
+    if (res.ok) {
+      window.location.hash = '#draft=' + encodeURIComponent(res.data.id);
+      reloadApplications();
+      return;
+    }
+    // Предложение истекло или уже использовано — показываем актуальное
+    var fresh = await api('/me/offer');
+    state.offer = fresh.ok ? fresh.data : null;
+    renderOffer();
+    showError(state.offer && state.offer.offer ? 'Предложение обновилось — посмотрите новые условия.' : 'Предложение больше не действует.');
   }
 
   // ---------- Кредиты ----------

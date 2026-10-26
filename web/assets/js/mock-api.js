@@ -15,7 +15,7 @@
  *   GET /me        — { user: {...}, company: {...} }        профиль пользователя и компании
  *   GET /loans     — { loans: [...], closed_loans: [...], other_banks: [...] }
  *                    действующие и закрытые кредиты в нашем банке с графиком, долги в других банках
- *   GET /me/offer  — { preapproved_limit, rate_from, ... }   предодобренный лимит для баннера
+ *   GET /me/offer  — { offer: { id, max_amount, rate_from, ... } | null }   предодобренное предложение
  *
  * Данные синтетические и зависят от ИНН демо-компании. Долг в других банках считается как
  * «общий долг из БКИ (/me/bootstrap) минус остаток по нашим кредитам», чтобы цифры сходились.
@@ -367,13 +367,13 @@
     // Лимит — грубая оценка: половина запаса до долговой нагрузки 2,0, кратно 100 тыс., не больше 30 млн.
     'GET /me/offer': function () {
       return withCompany(function (c, b) {
-        if (b.equity == null || b.total_debt == null) return respond(200, { preapproved_limit: null, reason: 'no_data' });
+        if (b.equity == null || b.total_debt == null) return respond(200, { offer: null, reason: 'no_data' });
         var room = (2 * b.equity - b.total_debt) / 2;
         var limit = Math.min(30000000, Math.floor(room / 100000) * 100000);
-        if (limit < 300000) return respond(200, { preapproved_limit: null, reason: 'high_debt_load' });
+        if (limit < 300000) return respond(200, { offer: null, reason: 'high_debt_load' });
         var valid = new Date();
         valid.setDate(valid.getDate() + 30);
-        return respond(200, { preapproved_limit: limit, rate_from: 17, valid_until: isoDate(valid) });
+        return respond(200, { offer: { id: 'demo-offer', product_id: 'working_capital', product_name: 'Кредит на пополнение оборотных средств', max_amount: limit, term_months: 12, rate_from: 17, valid_until: isoDate(valid) } });
       });
     },
   };
