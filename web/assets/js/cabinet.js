@@ -828,7 +828,7 @@
   function staffComment(a, status) {
     var d = a.decision || {};
     if (status === 'REJECTED' && d.reason) return d.reason;
-    var h = (a.history || []).filter(function (e) { return e.to === status && e.comment; });
+    var h = (a.history || []).filter(function (e) { return e.to === status && e.comment && e.by !== 'worker'; });
     return h.length ? h[h.length - 1].comment : '';
   }
 
@@ -844,7 +844,7 @@
       return (
         '<section class="decision decision-success">' +
         '<div class="decision-title">' + icon('check', 20) + 'Банк одобрил кредит</div>' +
-        '<div class="t-list">' + termsList(d.offer || a) + '</div>' +
+        '<div class="t-list">' + termsList(d.offer || Object.assign({}, a, { rate: d.rate })) + '</div>' +
         bankComment(staffComment(a, a.status)) +
         '<div class="decision-actions"><button type="button" class="btn btn-primary btn-inline" data-app-action="accept">Подписать и получить</button></div>' +
         '<p class="decision-fine">После подписания деньги поступят на счёт ' + esc(account) + ', кредит появится в «Моих кредитах».</p>' +
