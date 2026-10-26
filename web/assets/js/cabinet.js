@@ -915,6 +915,13 @@
       });
       var asked = {};
       kinds.forEach(function (k) { asked[k] = true; });
+      // Документ приложен, но нужных данных банк из него не получил — значит, файл не тот или это фото/скан
+      var unreadable = {};
+      otherFields.forEach(function (f) {
+        dataDocuments(f, a.product_id).forEach(function (k) {
+          if (have[k]) unreadable[k] = true;
+        });
+      });
       // Кроме запрошенного показываем все документы продукта (и необязательные): любой можно приложить или заменить
       var all = Catalog.documentsFor(a.product_id);
       all.required.concat(all.optional).forEach(function (x) {
@@ -933,11 +940,14 @@
         '<ul class="docs req-docs">' +
         kinds.map(function (k) {
           var doc = have[k];
+          var bad = unreadable[k];
+          var sub = bad ? 'Не удалось прочитать данные из «' + doc.filename + '» — замените файл'
+            : doc ? doc.filename : asked[k] ? 'запрошено банком' : 'можно приложить';
           return (
-            '<li class="doc' + (doc ? ' attached' : '') + '">' +
-            '<span class="doc-icon">' + icon(doc ? 'check' : 'file', 18) + '</span>' +
+            '<li class="doc' + (bad ? ' unreadable' : doc ? ' attached' : '') + '">' +
+            '<span class="doc-icon">' + icon(bad ? 'alert' : doc ? 'check' : 'file', 18) + '</span>' +
             '<span class="doc-text"><span class="doc-title">' + esc(Catalog.documentTitle(k)) + '</span>' +
-            '<span class="doc-sub">' + (doc ? esc(doc.filename) : asked[k] ? 'запрошено банком' : 'можно приложить') + '</span></span>' +
+            '<span class="doc-sub">' + esc(sub) + '</span></span>' +
             '<label class="btn btn-secondary btn-inline doc-btn">' + (doc ? 'Заменить' : 'Прикрепить') +
             '<input type="file" class="visually-hidden" data-req-doc="' + k + '" accept=".pdf,.jpg,.jpeg,.png" /></label>' +
             '</li>'

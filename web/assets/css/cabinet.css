@@ -1468,6 +1468,17 @@ select.text-input {
   color: var(--color-success);
 }
 
+/* Файл приложен, но банк не смог прочитать из него нужные данные */
+.doc.unreadable .doc-icon {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.doc.unreadable .doc-sub {
+  color: var(--color-warning);
+  white-space: normal;
+}
+
 .doc-text {
   flex: 1;
   min-width: 0;
