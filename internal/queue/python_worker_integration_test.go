@@ -24,7 +24,7 @@ func TestPythonWorkerCreditHistory(t *testing.T) {
 	defer cancel()
 
 	history, err := queue.NewClient(rdb).FetchHistory(ctx, "7700000002")
-	if err != nil || history.Debt != 2_400_000 || history.Equity != 4_000_000 {
+	if err != nil || history.Equity != 4_000_000 || (history.OtherBanks != nil && (len(history.OtherBanks) != 1 || history.OtherBanks[0].Debt != 2_400_000)) {
 		t.Fatalf("history = %+v, error = %v", history, err)
 	}
 }

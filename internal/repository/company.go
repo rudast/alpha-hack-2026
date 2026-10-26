@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -35,14 +36,46 @@ func (r *CompanyRepo) GetByINN(ctx context.Context, inn string) (domain.Company,
 	return c, err
 }
 
-// UpdateFinancials идемпотентно записывает показатели из кредитной истории:
-// параллельные записи одних и тех же данных безвредны.
-func (r *CompanyRepo) UpdateFinancials(ctx context.Context, inn string, debt, equity int64, fetchedAt time.Time) error {
+// UpdateExternal записывает данные внешних источников: капитал и кредиты в других банках
+// (в credit_history.other_banks, остальные поля credit_history сохраняются). Общий долг после этого
+// пересчитывает DebtService. Запись идемпотентна: параллельные записи одних и тех же данных безвредны.
+func (r *CompanyRepo) UpdateExternal(ctx context.Context, inn string, equity int64, otherBanks []domain.OtherBankLoan, fetchedAt time.Time) error {
+	// nil — воркер не прислал other_banks (старый формат ответа): прежний список не трогаем.
+	var others any
+	if otherBanks != nil {
+		b, err := json.Marshal(otherBanks)
+		if err != nil {
+			return err
+		}
+		others = string(b)
+	}
 	tag, err := r.db.Exec(ctx, `
 		UPDATE companies
-		SET total_debt = $2, equity = $3, debt_to_equity = $4, financials_fetched_at = $5, updated_at = now()
+		SET equity = $2,
+			credit_history = CASE WHEN $3::jsonb IS NULL THEN credit_history
+				ELSE credit_history || jsonb_build_object('other_banks', $3::jsonb) END,
+			financials_fetched_at = $4, updated_at = now()
 		WHERE inn = $1`,
-		inn, debt, equity, domain.DebtToEquity(debt, equity), fetchedAt,
+		inn, equity, others, fetchedAt,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+// UpdateDebt записывает общий долг и пересчитывает долговую нагрузку (NULL, если капитал не больше нуля).
+func (r *CompanyRepo) UpdateDebt(ctx context.Context, inn string, debt int64) error {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE companies
+		SET total_debt = $2::bigint,
+			debt_to_equity = CASE WHEN equity > 0 THEN round($2::bigint::numeric / equity, 4) END,
+			updated_at = now()
+		WHERE inn = $1`,
+		inn, debt,
 	)
 	if err != nil {
 		return err

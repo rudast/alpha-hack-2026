@@ -55,7 +55,10 @@ func (s *OfferService) Current(ctx context.Context, inn string) (*domain.Offer, 
 		if err := s.offers.Close(ctx, active.ID, domain.OfferExpired); err != nil {
 			return nil, "", err
 		}
-	case !sameTime(active.Basis.FinancialsFetchedAt, company.FetchedAt):
+	case !sameTime(active.Basis.FinancialsFetchedAt, company.FetchedAt),
+		company.TotalDebt != nil && *company.TotalDebt != active.Basis.TotalDebt,
+		company.Equity != nil && *company.Equity != active.Basis.Equity:
+		// Данные компании изменились после расчёта: обновились внешние данные или выдан новый кредит.
 		if err := s.offers.Close(ctx, active.ID, domain.OfferRevoked); err != nil {
 			return nil, "", err
 		}

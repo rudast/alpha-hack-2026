@@ -135,7 +135,7 @@ func newApplications(t *testing.T, orgType string) (*ApplicationService, *fakeAp
 	repo := newFakeApps()
 	registered := testNow.AddDate(-4, 0, 0) // бизнесу 4 года: правило «от 9 месяцев» выполняется
 	companies := &fakeCompanies{c: domain.Company{INN: clientA.CompanyINN, OrgType: orgType, RegistrationDate: &registered}}
-	s := NewApplicationService(repo, companies, newFakeOffers(), cat, &fakePublisher{}, newFakeDocuments())
+	s := NewApplicationService(repo, companies, newFakeOffers(), cat, &fakePublisher{}, newFakeDocuments(), nil)
 	s.now = func() time.Time { return testNow }
 	return s, repo
 }
