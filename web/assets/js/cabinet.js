@@ -998,7 +998,7 @@
     });
     $('dialog-body').querySelectorAll('[data-req-doc]').forEach(function (input) {
       input.addEventListener('change', function () {
-        if (input.files && input.files[0]) uploadRequested(a, input.dataset.reqDoc, input.files[0].name);
+        if (input.files && input.files[0]) uploadRequested(a, input.dataset.reqDoc, input.files[0]);
       });
     });
   }
@@ -1008,13 +1008,20 @@
     $('app-error').classList.add('visible');
   }
 
-  // Файл к запросу банка: POST /applications/{id}/documents (в заглушке — только имя файла)
-  async function uploadRequested(a, kind, filename) {
+  // Файл к запросу банка: POST /applications/{id}/documents (multipart: kind, file)
+  async function uploadRequested(a, kind, file) {
+    if (file.size > 10 * 1024 * 1024) {
+      appError('Файл больше 10 МБ — выберите поменьше.');
+      return;
+    }
+    var form = new FormData();
+    form.append('kind', kind);
+    form.append('file', file);
     var res = await api('/applications/' + encodeURIComponent(a.id) + '/documents', {
-      method: 'POST', json: { kind: kind, filename: filename }, idempotencyKey: api.newKey(),
+      method: 'POST', form: form, idempotencyKey: api.newKey(),
     });
     if (!res.ok) {
-      appError('Не удалось загрузить файл. Попробуйте ещё раз.');
+      appError(res.status === 400 ? 'Подходят только PDF, JPG и PNG.' : 'Не удалось загрузить файл. Попробуйте ещё раз.');
       return;
     }
     showApplication(a.id, true);

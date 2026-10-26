@@ -322,7 +322,7 @@
   }
 
   function documentsSection(a) {
-    var need = Catalog.documentsFor(a.product_id).required.filter(function (d) { return d.kind !== 'bki_consent'; });
+    var need = Catalog.documentsFor(a.product_id).required;
     var have = {};
     (a.documents || []).forEach(function (d) { have[d.kind] = d; });
     var kinds = need.map(function (d) { return d.kind; });
@@ -336,6 +336,7 @@
           '<span class="r-doc-icon">' + icon(d ? 'check' : 'alert', 16) + '</span>' +
           '<span class="r-doc-text"><span>' + esc(Catalog.documentTitle(k)) + '</span>' +
           '<span class="r-doc-sub">' + (d ? esc(d.filename) : 'не приложен') + '</span></span>' +
+          (d ? '<button type="button" class="link r-doc-open" data-open-doc="' + esc(d.id) + '">Открыть</button>' : '') +
           '</li>'
         );
       }).join('') +
@@ -765,7 +766,32 @@
 
   // ---------- Старт ----------
 
+  // Документ отдаётся только с токеном, поэтому обычной ссылкой его не открыть: качаем и показываем в новой вкладке
+  async function openDocument(docId) {
+    var a = state.current;
+    if (!a) return;
+    var response;
+    try {
+      response = await fetch('/api/v1/employee/applications/' + encodeURIComponent(a.id) + '/documents/' + encodeURIComponent(docId), {
+        headers: { Authorization: 'Bearer ' + Auth.token() },
+      });
+    } catch (e) {
+      response = null;
+    }
+    if (!response || !response.ok) {
+      toast('Не удалось открыть документ');
+      return;
+    }
+    var blob = await response.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
+  }
+
   document.addEventListener('click', function (e) {
+    var open = e.target.closest('[data-open-doc]');
+    if (open) {
+      openDocument(open.dataset.openDoc);
+      return;
+    }
     var r = e.target.closest('.q-row');
     if (r) openApp(r.dataset.id);
   });
