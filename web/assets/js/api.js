@@ -119,7 +119,7 @@
 
   /**
    * Запрос к API. path — например '/me/bootstrap' (префикс /api/v1 добавляется сам).
-   * options.json — объект, который нужно отправить как JSON; options.auth === false — без токена.
+   * options.json — объект, который нужно отправить как JSON; options.form — FormData (загрузка файла); options.auth === false — без токена.
    * options.idempotencyKey — ключ для заголовка Idempotency-Key. Его требуют изменяющие запросы
    *   по заявкам; при повторе того же действия (например, после сетевого сбоя) передавайте тот же ключ.
    * Возвращает { ok, status, data, headers }. Сетевые сбои превращаются в status 0.
@@ -132,6 +132,8 @@
     if (options.json !== undefined) {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(options.json);
+    } else if (options.form) {
+      init.body = options.form; // FormData: Content-Type с границей выставит сам браузер
     }
 
     if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;

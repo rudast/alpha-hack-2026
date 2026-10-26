@@ -59,7 +59,8 @@
       app: null, // { id, version } — черновик на сервере
       purpose: '',
       form: {},
-      files: {}, // вид документа → имя файла (только в браузере)
+      files: {}, // вид документа → имя загруженного на сервер файла
+      fileIds: {}, // вид документа → id документа на сервере (чтобы заменить, а не добавить второй)
       consents: { bki: false, pd: false },
       errors: {}, // ошибки полей анкеты: 'группа.поле' → текст
       dateRaw: {}, // что введено в поля дат как текст: нужно, чтобы отличить «пусто» от «такой даты нет»
@@ -529,13 +530,12 @@
   function renderDocs() {
     var docs = Catalog.documentsFor(Catalog.backId(s.productId));
     function docRow(d, optional) {
-      if (d.kind === 'bki_consent') return ''; // согласие даётся галочкой ниже
       var file = s.files[d.kind];
       return (
         '<li class="doc' + (file ? ' attached' : '') + '">' +
         '<span class="doc-icon">' + icon(file ? 'check' : 'file', 18) + '</span>' +
         '<span class="doc-text"><span class="doc-title">' + esc(d.title) + '</span>' +
-        '<span class="doc-sub">' + (file ? esc(file) : optional ? 'необязательно' : 'обязательно') + '</span></span>' +
+        '<span class="doc-sub">' + (file ? esc(file) : optional ? 'необязательно' : 'обязательно · PDF, JPG или PNG до 10 МБ') + '</span></span>' +
         '<label class="btn btn-secondary btn-inline doc-btn">' + (file ? 'Заменить' : 'Прикрепить') +
         '<input type="file" class="visually-hidden" data-doc="' + d.kind + '" accept=".pdf,.jpg,.jpeg,.png" /></label>' +
         '</li>'
@@ -548,7 +548,7 @@
       docs.required.map(function (d) { return docRow(d, false); }).join('') +
       docs.optional.map(function (d) { return docRow(d, true); }).join('') +
       '</ul>' +
-      '<p class="fine">Демо-версия: файлы остаются в браузере и пока не отправляются в банк.</p>' +
+      '<p class="fine doc-error" id="doc-error" hidden></p>' +
       '<div class="consents">' +
       '<label class="check"><input type="checkbox" id="c-bki"' + (s.consents.bki ? ' checked' : '') + ' />' +
       '<span>Даю согласие на запрос моей кредитной истории и кредитной истории компании в бюро кредитных историй</span></label>' +
@@ -577,7 +577,7 @@
     var backId = Catalog.backId(s.productId);
     var p = Loans.productById(s.productId);
     var o = Loans.offer(p, query());
-    var docs = Catalog.documentsFor(backId).required.filter(function (d) { return d.kind !== 'bki_consent'; });
+    var docs = Catalog.documentsFor(backId).required;
     var missingDocs = docs.filter(function (d) { return !s.files[d.kind]; });
     var c = s.ctx.company || {};
 
@@ -739,10 +739,7 @@
     function bindDocs() {
       $('wizard-body').querySelectorAll('[data-doc]').forEach(function (input) {
         input.addEventListener('change', function () {
-          if (input.files && input.files[0]) {
-            s.files[input.dataset.doc] = input.files[0].name;
-            render();
-          }
+          if (input.files && input.files[0]) uploadDoc(input.dataset.doc, input.files[0]);
         });
       });
       ['bki', 'pd'].forEach(function (k) {
@@ -843,6 +840,42 @@
   }
 
   // Сохраняем последние изменения и отправляем. Возвращает { ok } | { missing: [...] } | { res }
+  // Файл уходит на сервер сразу, как выбран: POST /applications/{id}/documents (multipart: kind, file)
+  async function uploadDoc(kind, file) {
+    var err = $('doc-error');
+    var fail = function (text) {
+      err.textContent = text;
+      err.hidden = false;
+    };
+    if (file.size > 10 * 1024 * 1024) return fail('Файл больше 10 МБ — выберите поменьше.');
+    if (!s.app) return fail('Сначала сохраните заявку: вернитесь на шаг назад и нажмите «Далее».');
+    err.hidden = true;
+    var form = new FormData();
+    form.append('kind', kind);
+    form.append('file', file);
+    s.busy = true;
+    var res = await api('/applications/' + encodeURIComponent(s.app.id) + '/documents', {
+      method: 'POST', form: form, idempotencyKey: api.newKey(),
+    });
+    s.busy = false;
+    if (!res.ok) {
+      render();
+      fail(res.status === 413 ? 'Файл больше 10 МБ.' : res.status === 400 ? 'Подходят только PDF, JPG и PNG.' : 'Не удалось загрузить файл. Попробуйте ещё раз.');
+      return;
+    }
+    // Заменили файл — прежний того же вида удаляем: два документа одного вида воркер не читает
+    var old = s.fileIds[kind];
+    if (old && old !== res.data.id) {
+      await api('/applications/' + encodeURIComponent(s.app.id) + '/documents/' + encodeURIComponent(old), {
+        method: 'DELETE', idempotencyKey: api.newKey(),
+      });
+    }
+    s.files[kind] = res.data.filename || file.name;
+    s.fileIds[kind] = res.data.id;
+    s.changed = true;
+    render();
+  }
+
   async function submit() {
     var saved = await save();
     if (!saved.ok) return { res: saved };
@@ -895,6 +928,10 @@
     s.purpose = a.purpose || g.purpose;
     s.form = Catalog.decomposeForm(form);
     s.consents = { bki: !!consents.bki_request, pd: !!consents.personal_data };
+    (a.documents || []).forEach(function (d) {
+      s.files[d.kind] = d.filename;
+      s.fileIds[d.kind] = d.id;
+    });
     s.collateral = form.applicant && form.applicant.has_collateral ? 'with' : g.collateral === 'with' ? 'with' : 'without';
     s.productId = front;
     go(front ? STEP.FORM : STEP.GOAL);

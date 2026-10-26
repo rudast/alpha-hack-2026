@@ -6,14 +6,16 @@
  * и принимает решение: одобрить, отклонить с причиной, предложить другие условия, запросить документы
  * или отложить. Всё, кроме «отложить», клиент сразу видит в своём кабинете.
  *
- * Бэкенд (пока заглушки в mock-review.js, контракт — web/BACKEND_TASKS.md):
+ * Бэкенд:
  *   GET  /employee/me                                — ФИО и должность
- *   GET  /employee/applications                       — все заявки, прошедшие через ручную проверку
- *   GET  /employee/applications/{id}                  — заявка целиком: анкета, компания, скоринг, история
+ *   GET  /employee/applications[?mine=true]          — общий пул ручной проверки / заявки, взятые мной
+ *   GET  /employee/applications/{id}                  — карточка: анкета, компания, скоринг, история
  *   POST /employee/applications/{id}/take             — взять в работу
- *   POST /employee/applications/{id}/postpone         — отложить { comment }
- *   POST /employee/applications/{id}/decision         — { outcome: APPROVED | REJECTED | COUNTER_OFFER, comment, offer }
- *   POST /employee/applications/{id}/request-documents — { documents: [kind], comment }
+ *   POST /employee/applications/{id}/release          — вернуть в общий пул
+ *   POST /employee/applications/{id}/decision         — { action: approve | reject | request_info | counter_offer, ... }
+ *
+ * «Отложенные» = заявки, которые я взял и не решил: они остаются за мной (через 2 часа без решения
+ * бэкенд сам вернёт их в пул). Списков «Ждут клиента» и «Рассмотренные» бэкенд пока не отдаёт.
  */
 (function () {
   'use strict';
@@ -88,6 +90,12 @@
   }
 
   function errorText(res) {
+    if (res.status === 422 && res.data && res.data.missing_fields) {
+      return 'Нельзя принять решение: в заявке не хватает — ' + res.data.missing_fields.map(function (f) {
+        return f.indexOf('documents.') === 0 ? Catalog.documentTitle(f.slice(10)) : f;
+      }).join(', ') + '.';
+    }
+    if (res.status === 409 && res.data && res.data.assigned_name) return 'Заявку уже взял ' + res.data.assigned_name + ': обновите список.';
     if (res.status === 0) return 'Не удалось связаться с сервером. Проверьте подключение.';
     if (res.status === 409) return 'Заявку уже изменили: обновите список.';
     if (res.status === 403) return 'Этот раздел доступен только сотрудникам банка.';
@@ -107,23 +115,54 @@
 
   // ---------- Списки ----------
 
+  async function fetchList(mine) {
+    var res = await api('/employee/applications' + (mine ? '?mine=true' : ''));
+    if (!res.ok) return res;
+    res.data = (res.data || []).map(function (a) {
+      return {
+        id: a.id,
+        status: 'MANUAL_REVIEW',
+        company: { name: a.company_name, inn: a.company_inn, org_type: String(a.company_inn).length === 12 ? 'IP' : 'LLC' },
+        product_id: a.product_id,
+        product_name: a.product_name,
+        amount: a.amount,
+        term_months: a.term_months,
+        submitted_at: a.submitted_at,
+        queued_at: a.submitted_at,
+        assigned_to: a.assigned_to,
+        assigned_to_me: mine,
+        score: null,
+      };
+    });
+    return res;
+  }
+
   async function loadList() {
-    var res = await api('/employee/applications');
-    if (!res.ok) {
-      showError(errorText(res));
+    var both = await Promise.all([fetchList(false), fetchList(true)]);
+    var bad = both.filter(function (r) { return !r.ok; })[0];
+    if (bad) {
+      showError(errorText(bad));
       return;
     }
     hideError();
-    state.items = res.data.items || [];
+    state.items = both[0].data.concat(both[1].data);
     renderLists();
+    // Балл скоринга в списке не приходит — подтягиваем из карточек
+    state.items.forEach(function (a) {
+      api('/employee/applications/' + encodeURIComponent(a.id)).then(function (r) {
+        if (r.ok && r.data.decision && r.data.decision.score != null) {
+          a.score = r.data.decision.score;
+          if (!state.current) renderLists();
+        }
+      });
+    });
   }
 
   function row(a) {
     var tone = scoreTone(a.score);
     var flags = '';
     if (a.docs_provided) flags += '<span class="pill pill-progress">' + icon('file', 14) + 'документы досланы</span>';
-    if (a.assigned_to_me && a.status === 'MANUAL_REVIEW' && !a.postponed_at) flags += '<span class="pill">у вас в работе</span>';
-    if (a.postponed_at) flags += '<span class="pill">отложена ' + esc(waited(a.postponed_at)) + ' назад</span>';
+    if (a.assigned_to_me) flags += '<span class="pill">у вас в работе</span>';
     var st = Catalog.status(a.status);
     var right = a.status === 'MANUAL_REVIEW'
       ? '<span class="q-wait" title="Сколько заявка ждёт в очереди">' + icon('clock', 16) + esc(waited(a.queued_at || a.submitted_at)) + '</span>'
@@ -177,14 +216,14 @@
   function renderLists() {
     var items = state.items;
     var review = items.filter(function (a) { return a.status === 'MANUAL_REVIEW'; });
-    // В очереди: свои в работе и ничьи; чужие в работе другим сотрудникам не показываем.
+    // В очереди — общий пул; заявки, которые я взял, — ниже, отдельным списком.
     // Заявки, по которым клиент дослал документы, — наверху, дальше — кто дольше ждёт.
     var queue = review
-      .filter(function (a) { return !a.postponed_at && (!a.assigned_to || a.assigned_to_me); })
+      .filter(function (a) { return !a.assigned_to_me; })
       .sort(function (a, b) {
         return (b.docs_provided - a.docs_provided) || byTime('queued_at')(a, b);
       });
-    var postponed = review.filter(function (a) { return a.postponed_at && a.assigned_to_me; }).sort(byTime('postponed_at'));
+    var postponed = review.filter(function (a) { return a.assigned_to_me; }).sort(byTime('queued_at'));
     var waiting = items.filter(function (a) { return ['INFO_REQUESTED', 'COUNTER_OFFER', 'APPROVED'].indexOf(a.status) !== -1; })
       .sort(byTime('updated_at', true));
     var done = items.filter(function (a) { return ['REJECTED', 'ACTIVE', 'DRAFT', 'CLOSED'].indexOf(a.status) !== -1; })
@@ -243,7 +282,7 @@
     openDialog();
 
     // Открыть заявку на ручной проверке — значит взять её в работу
-    var res = summary && summary.status === 'MANUAL_REVIEW'
+    var res = summary && summary.status === 'MANUAL_REVIEW' && !summary.assigned_to_me
       ? await api('/employee/applications/' + encodeURIComponent(id) + '/take', { method: 'POST', json: {}, idempotencyKey: api.newKey() })
       : await api('/employee/applications/' + encodeURIComponent(id));
     if (!res.ok) {
@@ -283,7 +322,7 @@
   }
 
   function documentsSection(a) {
-    var need = Catalog.documentsFor(a.product_id).required.filter(function (d) { return d.kind !== 'bki_consent'; });
+    var need = Catalog.documentsFor(a.product_id).required;
     var have = {};
     (a.documents || []).forEach(function (d) { have[d.kind] = d; });
     var kinds = need.map(function (d) { return d.kind; });
@@ -297,6 +336,7 @@
           '<span class="r-doc-icon">' + icon(d ? 'check' : 'alert', 16) + '</span>' +
           '<span class="r-doc-text"><span>' + esc(Catalog.documentTitle(k)) + '</span>' +
           '<span class="r-doc-sub">' + (d ? esc(d.filename) : 'не приложен') + '</span></span>' +
+          (d ? '<button type="button" class="link r-doc-open" data-open-doc="' + esc(d.id) + '">Открыть</button>' : '') +
           '</li>'
         );
       }).join('') +
@@ -323,8 +363,87 @@
   }
 
   // Шкала балла 0–100 с порогами «встречное предложение» и «одобрение»
+  // Коды воркера предварительной проверки (балл он пока не считает)
+  var CHECK_CODES = {
+    DEMO_HIGH_DEBT_TO_EQUITY: 'Долг больше собственного капитала более чем в 2 раза',
+    CONTENT_UNAVAILABLE: 'Содержимое документа воркеру недоступно — проверьте файл вручную',
+    BKI_CONSENT_NOT_VERIFIED: 'Согласие на запрос в БКИ не проверено',
+    PASSPORT_NOT_VERIFIED: 'Паспорт не проверен',
+    FIELDS_NOT_EXTRACTED: 'Из документа не удалось прочитать данные — проверьте вручную',
+    FINANCIAL_STATEMENTS_UNVERIFIED: 'Бухгалтерская отчётность не подтверждена',
+    ACCOUNT_STATEMENT_UNVERIFIED: 'Выписка по счёту не подтверждена',
+    MARKETPLACE_REPORT_UNVERIFIED: 'Отчёт маркетплейса не подтверждён',
+    VALUATION_UNVERIFIED: 'Оценка залога не подтверждена',
+    TARGET_FINANCIALS_UNVERIFIED: 'Отчётность покупаемого бизнеса не подтверждена',
+  };
+
+  // review_reasons приходит то списком кодов, то списком { reason, document_id }; убираем повторы
+  function reviewCodes(d) {
+    var seen = {};
+    return (d.review_reasons || []).map(function (r) { return typeof r === 'string' ? r : r && r.reason; }).filter(function (code) {
+      if (!code || seen[code]) return false;
+      seen[code] = true;
+      return true;
+    });
+  }
+
+  function checkText(code) {
+    return CHECK_CODES[code] || code;
+  }
+
+  // Балла нет — показываем итог предварительной проверки: флаги риска и что проверить вручную
+  function precheckCard(a) {
+    var d = a.decision || {};
+    var c = a.company || {};
+    var after = c.equity > 0 ? (c.total_debt + a.amount) / c.equity : null;
+    var flags = d.risk_flags || [];
+    var review = reviewCodes(d);
+    var list = function (items, cls, title) {
+      if (!items.length) return '';
+      return '<div class="sc-reasons ' + cls + '"><div class="sc-reasons-title">' + title + '</div><ul>' +
+        items.map(function (code) { return '<li>' + esc(checkText(code)) + '</li>'; }).join('') + '</ul></div>';
+    };
+    return (
+      '<section class="score-card">' +
+      '<div class="sc-head"><span>Предварительная проверка</span><span class="sc-model">воркер</span></div>' +
+      '<div class="sc-verdict sc-' + (flags.length ? 'warning' : 'success') + '">Балл не рассчитан — решение за специалистом</div>' +
+      '<dl class="sc-metrics">' +
+      '<div><dt>Долг / капитал сейчас</dt><dd>' + fmt.ratio(c.debt_to_equity != null ? c.debt_to_equity : d.debt_to_equity) + '</dd></div>' +
+      '<div><dt>После кредита</dt><dd>' + (after != null ? fmt.ratio(after) : '—') + '</dd></div>' +
+      '</dl>' +
+      list(flags, 'sc-neg', 'Флаги риска') +
+      list(review, 'sc-neg', 'Проверьте вручную') +
+      '</section>'
+    );
+  }
+
+  // Воркер присылает причины кодом фактора без текста (docs/scoring.md, раздел 5)
+  var FACTOR_NAMES = {
+    C1a: 'Просрочки в кредитной истории',
+    C1b: 'Кредитная активность (запросы в БКИ за 90 дней)',
+    C2: 'Долговая нагрузка',
+    C3: 'Возраст бизнеса',
+    C4a: 'Чистота реестров',
+    C4b: 'Отраслевой риск по ОКВЭД',
+    P1: 'Платёж к обороту',
+    P2: 'Стабильность оборота',
+    P3: 'Покрытие залогом (LTV)',
+    P4: 'Собственный взнос',
+    P5: 'РКО в банке',
+    P6a: 'Маржинальность приобретаемого бизнеса',
+    P6b: 'Окупаемость приобретаемого бизнеса',
+    P7: 'Концентрация выручки на маркетплейсе',
+  };
+
+  function reasonText(r) {
+    if (r.text) return r.text;
+    var name = FACTOR_NAMES[r.factor] || r.factor;
+    return r.delta != null ? name + ' (' + (r.delta > 0 ? '+' : '') + r.delta + ')' : name;
+  }
+
   function scoreCard(a) {
     var d = a.decision || {};
+    if (d.score == null) return precheckCard(a);
     var t = d.thresholds || { approve: 65, counter: 45 };
     var tone = scoreTone(d.score);
     var verdict = d.score >= t.approve ? 'Модель одобрила бы' : d.score >= t.counter ? 'Пограничный случай' : 'Модель отказала бы';
@@ -333,7 +452,7 @@
     var reasons = function (list, cls, title) {
       if (!list || !list.length) return '';
       return '<div class="sc-reasons ' + cls + '"><div class="sc-reasons-title">' + title + '</div><ul>' +
-        list.map(function (r) { return '<li>' + esc(r.text) + '</li>'; }).join('') + '</ul></div>';
+        list.map(function (r) { return '<li>' + esc(reasonText(r)) + '</li>'; }).join('') + '</ul></div>';
     };
     return (
       '<section class="score-card">' +
@@ -353,6 +472,7 @@
       '</dl>' +
       reasons(d.reasons_negative, 'sc-neg', 'Что снижает балл') +
       reasons(d.reasons_positive, 'sc-pos', 'Что повышает балл') +
+      reasons(reviewCodes(d).map(function (code) { return { text: checkText(code) }; }), 'sc-neg', 'Почему нужна ручная проверка') +
       '</section>'
     );
   }
@@ -363,11 +483,12 @@
     var st = Catalog.status(a.status);
     var text = st.text;
     if (a.status === 'INFO_REQUESTED') {
-      text = 'Ждём от клиента: ' + (d.requested_documents || []).map(Catalog.documentTitle).join(', ') + '.';
+      var missing = (d.missing_fields || []).map(function (f) { return f.indexOf('documents.') === 0 ? Catalog.documentTitle(f.slice(10)) : Catalog.fieldLabel(f); });
+      text = 'Ждём от клиента: ' + (a.info_request || missing.join(', ') || 'дополнительные данные') + '.';
     } else if (a.status === 'COUNTER_OFFER' && d.offer) {
       text = 'Клиенту предложено: ' + Catalog.PRODUCTS[d.offer.product_id].name + ', ' + fmt.rub(d.offer.amount) + ' на ' + fmt.term(d.offer.term_months) + ' под ' + fmt.rate(d.offer.rate) + '. Ждём ответа.';
     } else if (a.status === 'REJECTED') {
-      text = 'Отказ: ' + (d.comment || 'причина не указана');
+      text = 'Отказ: ' + (d.reason || 'причина не указана');
     }
     return '<div class="notice notice-' + (st.tone === 'danger' ? 'danger' : st.tone === 'success' ? 'success' : st.tone === 'warning' ? 'warning' : 'info') +
       ' notice-compact r-notice">' + icon('info', 18) + '<div><strong>' + esc(st.label) + '.</strong> ' + esc(text) + '</div></div>';
@@ -448,7 +569,8 @@
     var panel = state.panel ? panelHtml(state.panel) : '';
     foot.innerHTML =
       (panel ? '<div class="action-panel">' + panel + '</div>' : '') +
-      '<div class="action-bar">' +
+      // Пока открыта панель действия, строку кнопок прячем: у панели свои «Отмена» и «подтвердить»
+      '<div class="action-bar"' + (panel ? ' hidden' : '') + '>' +
       '<div class="action-group">' +
       btn('docs', 'Запросить документы', 'file') +
       btn('postpone', 'Отложить', 'clock') +
@@ -632,12 +754,12 @@
 
     if (kind === 'approve') {
       path += '/decision';
-      body = { outcome: 'APPROVED', comment: comment };
+      body = { action: 'approve', reason: comment };
       done = 'Заявка одобрена — клиент увидит кнопку «Подписать и получить»';
     } else if (kind === 'reject') {
       if (!comment) return panelError('Укажите причину отказа — её увидит клиент.');
       path += '/decision';
-      body = { outcome: 'REJECTED', comment: comment };
+      body = { action: 'reject', reason: comment };
       done = 'Отказ отправлен клиенту';
     } else if (kind === 'counter') {
       var o = counterValues();
@@ -646,18 +768,23 @@
       if (o.term_months < p.term[0] || o.term_months > p.term[1]) return panelError('Срок для этого продукта — от ' + p.term[0] + ' до ' + p.term[1] + ' мес.');
       if (o.product_id === a.product_id && o.amount === a.amount && o.term_months === a.term_months) return panelError('Условия не изменились — поменяйте сумму, срок или вид кредита.');
       path += '/decision';
-      body = { outcome: 'COUNTER_OFFER', comment: comment, offer: o };
+      body = { action: 'counter_offer', reason: comment, product_id: o.product_id, amount: o.amount, term_months: o.term_months, rate: o.rate };
       done = 'Новые условия отправлены клиенту';
     } else if (kind === 'docs') {
       var docs = Array.prototype.slice.call($('review-foot').querySelectorAll('.ap-docs input:checked')).map(function (i) { return i.value; });
       if (!docs.length) return panelError('Отметьте хотя бы один документ.');
-      path += '/request-documents';
-      body = { documents: docs, comment: comment };
+      path += '/decision';
+      body = {
+        action: 'request_info',
+        info_request: 'Приложите: ' + docs.map(Catalog.documentTitle).join(', ') + (comment ? '. ' + comment : '') + '.',
+      };
       done = 'Запрос документов отправлен клиенту';
     } else {
-      path += '/postpone';
-      body = { comment: comment };
-      done = 'Заявка отложена';
+      // Заявка уже закреплена за сотрудником — «отложить» значит просто закрыть окно
+      closeDialog();
+      toast('Заявка отложена — она в списке «Отложенные»');
+      loadList();
+      return;
     }
 
     state.busy = true;
@@ -676,20 +803,34 @@
 
   // ---------- Старт ----------
 
+  // Документ отдаётся только с токеном, поэтому обычной ссылкой его не открыть: качаем и показываем в новой вкладке
+  async function openDocument(docId) {
+    var a = state.current;
+    if (!a) return;
+    var response;
+    try {
+      response = await fetch('/api/v1/employee/applications/' + encodeURIComponent(a.id) + '/documents/' + encodeURIComponent(docId), {
+        headers: { Authorization: 'Bearer ' + Auth.token() },
+      });
+    } catch (e) {
+      response = null;
+    }
+    if (!response || !response.ok) {
+      toast('Не удалось открыть документ');
+      return;
+    }
+    var blob = await response.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
+  }
+
   document.addEventListener('click', function (e) {
+    var open = e.target.closest('[data-open-doc]');
+    if (open) {
+      openDocument(open.dataset.openDoc);
+      return;
+    }
     var r = e.target.closest('.q-row');
     if (r) openApp(r.dataset.id);
-  });
-
-  // Клиент ответил в соседней вкладке — обновляем списки (открытую заявку не трогаем)
-  window.addEventListener('demo-review-change', function () {
-    if (!state.current) loadList();
-  });
-
-  $('btn-reset').addEventListener('click', function () {
-    MockReview.reset();
-    loadList();
-    toast('Демо-заявки сброшены');
   });
 
   $('btn-logout').addEventListener('click', function () {

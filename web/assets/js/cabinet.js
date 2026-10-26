@@ -335,22 +335,44 @@
 
   // ---------- Предодобренное предложение ----------
 
+  // GET /me/offer: { offer: { id, product_id, product_name, max_amount, term_months, rate_from, valid_until } }
+  // или { offer: null, reason }
   function renderOffer() {
-    var o = state.offer;
+    var o = state.offer && state.offer.offer;
     var el = $('offer');
-    if (!o || !o.preapproved_limit) {
+    if (!o || !o.max_amount) {
       el.classList.add('hidden');
       return;
     }
     el.innerHTML =
       '<div class="offer-icon">' + icon('spark', 26) + '</div>' +
       '<div class="offer-text">' +
-      '<div class="offer-title">Вам предварительно одобрено до ' + esc(fmt.short(o.preapproved_limit)) + '</div>' +
-      '<div class="offer-sub">Ставка от ' + esc(fmt.rate(o.rate_from)) + ' · предложение действует до ' + esc(fmt.dateShort(o.valid_until)) +
-      ' · решение быстрее, документов меньше</div>' +
+      '<div class="offer-title">Вам предварительно одобрено до ' + esc(fmt.short(o.max_amount)) + '</div>' +
+      '<div class="offer-sub">' + esc(o.product_name) + ' · ставка от ' + esc(fmt.rate(o.rate_from)) +
+      ' · предложение действует до ' + esc(fmt.dateShort(o.valid_until)) + ' · решение быстрее, документов меньше</div>' +
       '</div>' +
-      '<a href="#new-loan" class="btn btn-inline offer-btn">Оформить</a>' + demoTag('GET', '/me/offer');
+      '<button type="button" class="btn btn-inline offer-btn" id="offer-btn">Оформить</button>' + demoTag('GET', '/me/offer');
     el.classList.remove('hidden');
+    $('offer-btn').addEventListener('click', function () {
+      applyOffer(o, this);
+    });
+  }
+
+  // Заявка по предложению: продукт, сумму и срок сервер берёт из предложения, дальше — обычный черновик
+  async function applyOffer(o, button) {
+    button.disabled = true;
+    var res = await api('/applications', { method: 'POST', json: { offer_id: o.id }, idempotencyKey: api.newKey() });
+    button.disabled = false;
+    if (res.ok) {
+      window.location.hash = '#draft=' + encodeURIComponent(res.data.id);
+      reloadApplications();
+      return;
+    }
+    // Предложение истекло или уже использовано — показываем актуальное
+    var fresh = await api('/me/offer');
+    state.offer = fresh.ok ? fresh.data : null;
+    renderOffer();
+    showError(state.offer && state.offer.offer ? 'Предложение обновилось — посмотрите новые условия.' : 'Предложение больше не действует.');
   }
 
   // ---------- Кредиты ----------
@@ -801,6 +823,31 @@
     );
   }
 
+  // Пояснение сотрудника: при отказе лежит в decision.reason, иначе — в комментарии последнего перехода.
+  // В остальных статусах decision.reason пишет воркер для банка, клиенту его не показываем
+  function staffComment(a, status) {
+    var d = a.decision || {};
+    if (status === 'REJECTED' && d.reason) return d.reason;
+    var h = (a.history || []).filter(function (e) { return e.to === status && e.comment && e.by !== 'worker'; });
+    return h.length ? h[h.length - 1].comment : '';
+  }
+
+  // Что просит банк: текст сотрудника в info_request, у воркера — комментарий последнего перехода в INFO_REQUESTED
+  function requestText(a) {
+    if (a.info_request) return a.info_request;
+    var h = (a.history || []).filter(function (e) { return e.to === 'INFO_REQUESTED' && e.comment; });
+    return h.length ? h[h.length - 1].comment : '';
+  }
+
+  // Поля, которые воркер не смог получить из документов: объясняем, откуда они берутся
+  var DATA_HINTS = {
+    turnover_monthly: 'Подтверждённый месячный оборот банк считает по бухгалтерской отчётности или выписке по счёту. Приложите такой документ в виде PDF с текстом (не фотографию): по фото цифры прочитать нельзя.',
+    monthly_turnovers: 'Нужны помесячные обороты минимум за 6 месяцев — приложите выписку по расчётному счёту (PDF с текстом).',
+    collateral_confirmed_value: 'Нужна оценка залога — приложите отчёт об оценке.',
+    industry_risk: 'Банк не смог оценить риск вашей отрасли по ОКВЭД. Это внутренняя настройка банка, от вас ничего не требуется: сообщите об этом специалисту поддержки.',
+    okved: 'В данных компании не указан ОКВЭД. Это внутренняя настройка банка, от вас ничего не требуется.',
+  };
+
   function bankComment(text) {
     return text ? '<div class="bank-comment"><span>Комментарий специалиста</span>' + esc(text) + '</div>' : '';
   }
@@ -813,8 +860,8 @@
       return (
         '<section class="decision decision-success">' +
         '<div class="decision-title">' + icon('check', 20) + 'Банк одобрил кредит</div>' +
-        '<div class="t-list">' + termsList(d.offer || a) + '</div>' +
-        bankComment(d.comment) +
+        '<div class="t-list">' + termsList(d.offer || Object.assign({}, a, { rate: d.rate })) + '</div>' +
+        bankComment(staffComment(a, a.status)) +
         '<div class="decision-actions"><button type="button" class="btn btn-primary btn-inline" data-app-action="accept">Подписать и получить</button></div>' +
         '<p class="decision-fine">После подписания деньги поступят на счёт ' + esc(account) + ', кредит появится в «Моих кредитах».</p>' +
         '</section>'
@@ -827,7 +874,7 @@
         '<div class="decision-title">' + icon('info', 20) + 'Банк предлагает другие условия</div>' +
         '<p class="decision-text">Зачёркнуто — то, что вы просили в заявке.</p>' +
         '<div class="t-list">' + termsList(d.offer, a) + '</div>' +
-        bankComment(d.comment) +
+        bankComment(staffComment(a, a.status)) +
         '<div class="decision-actions">' +
         '<button type="button" class="btn btn-primary btn-inline" data-app-action="accept">Принять и подписать</button>' +
         '<button type="button" class="btn btn-secondary btn-inline" data-app-action="decline-ask">Отказаться</button>' +
@@ -845,32 +892,44 @@
     if (a.status === 'INFO_REQUESTED') {
       var have = {};
       (a.documents || []).forEach(function (doc) { have[doc.kind] = doc; });
-      var need = d.requested_documents || [];
-      var ready = need.every(function (k) { return have[k]; });
+      // Что просит воркер — в decision.missing_fields (documents.<kind>), сотрудник — текстом в info_request
+      var kinds = (d.missing_fields || []).filter(function (f) { return f.indexOf('documents.') === 0; }).map(function (f) { return f.slice(10); });
+      var otherFields = (d.missing_fields || []).filter(function (f) { return f.indexOf('documents.') !== 0; });
+      var asked = {};
+      kinds.forEach(function (k) { asked[k] = true; });
+      // Кроме запрошенного показываем все документы продукта (и необязательные): любой можно приложить или заменить
+      var all = Catalog.documentsFor(a.product_id);
+      all.required.concat(all.optional).forEach(function (x) {
+        if (kinds.indexOf(x.kind) === -1) kinds.push(x.kind);
+      });
+      (a.documents || []).forEach(function (x) {
+        if (kinds.indexOf(x.kind) === -1) kinds.push(x.kind);
+      });
       return (
         '<section class="decision decision-warning">' +
-        '<div class="decision-title">' + icon('file', 20) + 'Банк запросил документы</div>' +
-        bankComment(d.request_comment) +
+        '<div class="decision-title">' + icon('file', 20) + 'Банк запросил данные</div>' +
+        (requestText(a) ? '<div class="bank-comment"><span>Что нужно</span>' + esc(requestText(a)) + '</div>' : '') +
+        otherFields.map(function (f) {
+          return '<p class="decision-text">' + esc(DATA_HINTS[f] || 'Дополните в заявке: ' + Catalog.fieldLabel(f) + '.') + '</p>';
+        }).join('') +
         '<ul class="docs req-docs">' +
-        need.map(function (k) {
+        kinds.map(function (k) {
           var doc = have[k];
           return (
             '<li class="doc' + (doc ? ' attached' : '') + '">' +
             '<span class="doc-icon">' + icon(doc ? 'check' : 'file', 18) + '</span>' +
             '<span class="doc-text"><span class="doc-title">' + esc(Catalog.documentTitle(k)) + '</span>' +
-            '<span class="doc-sub">' + (doc ? esc(doc.filename) : 'нужно приложить') + '</span></span>' +
-            (doc ? '' :
-              '<label class="btn btn-secondary btn-inline doc-btn">Прикрепить' +
-              '<input type="file" class="visually-hidden" data-req-doc="' + k + '" accept=".pdf,.jpg,.jpeg,.png" /></label>') +
+            '<span class="doc-sub">' + (doc ? esc(doc.filename) : asked[k] ? 'запрошено банком' : 'можно приложить') + '</span></span>' +
+            '<label class="btn btn-secondary btn-inline doc-btn">' + (doc ? 'Заменить' : 'Прикрепить') +
+            '<input type="file" class="visually-hidden" data-req-doc="' + k + '" accept=".pdf,.jpg,.jpeg,.png" /></label>' +
             '</li>'
           );
         }).join('') +
         '</ul>' +
         '<div class="decision-actions">' +
-        '<button type="button" class="btn btn-primary btn-inline" data-app-action="resubmit"' + (ready ? '' : ' disabled') + '>Отправить в банк</button>' +
+        '<button type="button" class="btn btn-primary btn-inline" data-app-action="resubmit">Отправить в банк</button>' +
         '</div>' +
-        '<p class="decision-fine">' + (ready ? 'Все документы приложены.' : 'Кнопка станет активной, когда приложите все документы.') +
-        ' Заявка вернётся к специалисту, который её рассматривает.</p>' +
+        '<p class="decision-fine">Приложите нужные документы и отправьте заявку обратно. Она вернётся к специалисту, который её рассматривает.</p>' +
         '</section>'
       );
     }
@@ -879,7 +938,7 @@
       return (
         '<section class="decision decision-danger">' +
         '<div class="decision-title">' + icon('alert', 20) + 'Банк отказал в кредите</div>' +
-        bankComment(d.comment) +
+        bankComment(staffComment(a, a.status)) +
         '<div class="decision-actions"><a href="#new-loan" class="btn btn-secondary btn-inline" data-close-dialog>Подать новую заявку</a></div>' +
         '</section>'
       );
@@ -963,7 +1022,7 @@
     });
     $('dialog-body').querySelectorAll('[data-req-doc]').forEach(function (input) {
       input.addEventListener('change', function () {
-        if (input.files && input.files[0]) uploadRequested(a, input.dataset.reqDoc, input.files[0].name);
+        if (input.files && input.files[0]) uploadRequested(a, input.dataset.reqDoc, input.files[0]);
       });
     });
   }
@@ -973,14 +1032,28 @@
     $('app-error').classList.add('visible');
   }
 
-  // Файл к запросу банка: POST /applications/{id}/documents (в заглушке — только имя файла)
-  async function uploadRequested(a, kind, filename) {
+  // Файл к запросу банка: POST /applications/{id}/documents (multipart: kind, file)
+  async function uploadRequested(a, kind, file) {
+    if (file.size > 10 * 1024 * 1024) {
+      appError('Файл больше 10 МБ — выберите поменьше.');
+      return;
+    }
+    var form = new FormData();
+    form.append('kind', kind);
+    form.append('file', file);
     var res = await api('/applications/' + encodeURIComponent(a.id) + '/documents', {
-      method: 'POST', json: { kind: kind, filename: filename }, idempotencyKey: api.newKey(),
+      method: 'POST', form: form, idempotencyKey: api.newKey(),
     });
     if (!res.ok) {
-      appError('Не удалось загрузить файл. Попробуйте ещё раз.');
+      appError(res.status === 400 ? 'Подходят только PDF, JPG и PNG.' : 'Не удалось загрузить файл. Попробуйте ещё раз.');
       return;
+    }
+    // Заменили файл — прежние того же вида удаляем: два документа одного вида воркер не читает
+    var stale = (a.documents || []).filter(function (d) { return d.kind === kind && d.id !== res.data.id; });
+    for (var i = 0; i < stale.length; i++) {
+      await api('/applications/' + encodeURIComponent(a.id) + '/documents/' + encodeURIComponent(stale[i].id), {
+        method: 'DELETE', idempotencyKey: api.newKey(),
+      });
     }
     showApplication(a.id, true);
   }
@@ -990,7 +1063,7 @@
       $('decline-confirm').hidden = action === 'decline-cancel';
       return;
     }
-    var paths = { accept: '/accept', decline: '/decline', resubmit: '/resubmit' };
+    var paths = { accept: '/accept', decline: '/decline', resubmit: '/resume' };
     button.disabled = true;
     var res = await api('/applications/' + encodeURIComponent(a.id) + paths[action], {
       method: 'POST', json: {}, idempotencyKey: api.newKey(),
@@ -1117,8 +1190,9 @@
 
   window.addEventListener('hashchange', route);
 
-  // Банк ответил по заявке (в демо — кабинет сотрудника в соседней вкладке): обновляем списки и окно
-  window.addEventListener('demo-review-change', function () {
+  // Банк мог ответить по заявке: обновляем списки и открытое окно, когда вкладку открывают, и раз в 20 секунд
+  function refreshFromBank() {
+    if (document.hidden) return;
     reloadApplications();
     api('/loans').then(function (res) {
       if (!res.ok) return;
@@ -1127,7 +1201,9 @@
       renderLoans(res);
     });
     if (openedApp) showApplication(openedApp, true);
-  });
+  }
+  document.addEventListener('visibilitychange', refreshFromBank);
+  setInterval(refreshFromBank, 20000);
 
   ready = loadAll();
   route();
