@@ -20,6 +20,20 @@ def base(**changes):
 
 
 class ScoringEngineTests(unittest.TestCase):
+    def test_unknown_industry_is_neutral_and_not_asked_from_the_client(self):
+        data = base()
+        del data["industry_risk"]
+        data["okved"] = "46.90"  # нет в справочнике
+        result = score_application(data)
+        factor = next(f for f in result["factors"] if f["code"] == "C4b")
+        self.assertEqual(factor["r"], 0.5)
+        self.assertEqual(result["data_gaps"], ["industry_risk"])
+
+        known = base()
+        del known["industry_risk"]
+        known["okved"] = "47.19"
+        self.assertEqual(score_application(known)["data_gaps"], [])
+
     def test_configuration_covers_all_products(self):
         self.assertEqual(len(load_config()["products"]), 14)
 
