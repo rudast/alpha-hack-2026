@@ -362,8 +362,52 @@
   }
 
   // Шкала балла 0–100 с порогами «встречное предложение» и «одобрение»
+  // Коды воркера предварительной проверки (балл он пока не считает)
+  var CHECK_CODES = {
+    DEMO_HIGH_DEBT_TO_EQUITY: 'Долг больше собственного капитала более чем в 2 раза',
+    CONTENT_UNAVAILABLE: 'Содержимое документа воркеру недоступно — проверьте файл вручную',
+    BKI_CONSENT_NOT_VERIFIED: 'Согласие на запрос в БКИ не проверено',
+    PASSPORT_NOT_VERIFIED: 'Паспорт не проверен',
+  };
+
+  function checkText(code) {
+    return CHECK_CODES[code] || code;
+  }
+
+  // Балла нет — показываем итог предварительной проверки: флаги риска и что проверить вручную
+  function precheckCard(a) {
+    var d = a.decision || {};
+    var c = a.company || {};
+    var after = c.equity > 0 ? (c.total_debt + a.amount) / c.equity : null;
+    var flags = d.risk_flags || [];
+    var seen = {};
+    var review = (d.review_reasons || []).map(function (r) { return r.reason; }).filter(function (code) {
+      if (seen[code]) return false;
+      seen[code] = true;
+      return true;
+    });
+    var list = function (items, cls, title) {
+      if (!items.length) return '';
+      return '<div class="sc-reasons ' + cls + '"><div class="sc-reasons-title">' + title + '</div><ul>' +
+        items.map(function (code) { return '<li>' + esc(checkText(code)) + '</li>'; }).join('') + '</ul></div>';
+    };
+    return (
+      '<section class="score-card">' +
+      '<div class="sc-head"><span>Предварительная проверка</span><span class="sc-model">воркер</span></div>' +
+      '<div class="sc-verdict sc-' + (flags.length ? 'warning' : 'success') + '">Балл не рассчитан — решение за специалистом</div>' +
+      '<dl class="sc-metrics">' +
+      '<div><dt>Долг / капитал сейчас</dt><dd>' + fmt.ratio(c.debt_to_equity != null ? c.debt_to_equity : d.debt_to_equity) + '</dd></div>' +
+      '<div><dt>После кредита</dt><dd>' + (after != null ? fmt.ratio(after) : '—') + '</dd></div>' +
+      '</dl>' +
+      list(flags, 'sc-neg', 'Флаги риска') +
+      list(review, 'sc-neg', 'Проверьте вручную') +
+      '</section>'
+    );
+  }
+
   function scoreCard(a) {
     var d = a.decision || {};
+    if (d.score == null) return precheckCard(a);
     var t = d.thresholds || { approve: 65, counter: 45 };
     var tone = scoreTone(d.score);
     var verdict = d.score >= t.approve ? 'Модель одобрила бы' : d.score >= t.counter ? 'Пограничный случай' : 'Модель отказала бы';
@@ -402,7 +446,8 @@
     var st = Catalog.status(a.status);
     var text = st.text;
     if (a.status === 'INFO_REQUESTED') {
-      text = 'Ждём от клиента: ' + (a.info_request || 'дополнительные данные') + '.';
+      var missing = (d.missing_fields || []).map(function (f) { return f.indexOf('documents.') === 0 ? Catalog.documentTitle(f.slice(10)) : Catalog.fieldLabel(f); });
+      text = 'Ждём от клиента: ' + (a.info_request || missing.join(', ') || 'дополнительные данные') + '.';
     } else if (a.status === 'COUNTER_OFFER' && d.offer) {
       text = 'Клиенту предложено: ' + Catalog.PRODUCTS[d.offer.product_id].name + ', ' + fmt.rub(d.offer.amount) + ' на ' + fmt.term(d.offer.term_months) + ' под ' + fmt.rate(d.offer.rate) + '. Ждём ответа.';
     } else if (a.status === 'REJECTED') {

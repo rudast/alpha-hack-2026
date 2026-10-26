@@ -823,10 +823,11 @@
     );
   }
 
-  // Пояснение сотрудника: при отказе лежит в decision.reason, иначе — в комментарии последнего перехода
+  // Пояснение сотрудника: при отказе лежит в decision.reason, иначе — в комментарии последнего перехода.
+  // В остальных статусах decision.reason пишет воркер для банка, клиенту его не показываем
   function staffComment(a, status) {
     var d = a.decision || {};
-    if (d.reason) return d.reason;
+    if (status === 'REJECTED' && d.reason) return d.reason;
     var h = (a.history || []).filter(function (e) { return e.to === status && e.comment; });
     return h.length ? h[h.length - 1].comment : '';
   }
@@ -875,12 +876,17 @@
     if (a.status === 'INFO_REQUESTED') {
       var have = {};
       (a.documents || []).forEach(function (doc) { have[doc.kind] = doc; });
-      var docs = Catalog.documentsFor(a.product_id);
-      var kinds = (d.requested_documents || docs.required.map(function (x) { return x.kind; }).filter(function (k) { return k !== 'bki_consent'; }));
+      // Что просит воркер — в decision.missing_fields (documents.<kind>), сотрудник — текстом в info_request
+      var kinds = (d.missing_fields || []).filter(function (f) { return f.indexOf('documents.') === 0; }).map(function (f) { return f.slice(10); });
+      var otherFields = (d.missing_fields || []).filter(function (f) { return f.indexOf('documents.') !== 0; });
+      if (!kinds.length) {
+        kinds = Catalog.documentsFor(a.product_id).required.map(function (x) { return x.kind; });
+      }
       return (
         '<section class="decision decision-warning">' +
         '<div class="decision-title">' + icon('file', 20) + 'Банк запросил данные</div>' +
         (a.info_request ? '<div class="bank-comment"><span>Что нужно</span>' + esc(a.info_request) + '</div>' : '') +
+        (otherFields.length ? '<p class="decision-text">Дополните в заявке: ' + esc(otherFields.map(Catalog.fieldLabel).join(', ')) + '.</p>' : '') +
         '<ul class="docs req-docs">' +
         kinds.map(function (k) {
           var doc = have[k];
