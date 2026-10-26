@@ -843,10 +843,23 @@
   var DATA_HINTS = {
     turnover_monthly: 'Подтверждённый месячный оборот банк считает по бухгалтерской отчётности или выписке по счёту. Приложите такой документ в виде PDF с текстом (не фотографию): по фото цифры прочитать нельзя.',
     monthly_turnovers: 'Нужны помесячные обороты минимум за 6 месяцев — приложите выписку по расчётному счёту (PDF с текстом).',
-    collateral_confirmed_value: 'Нужна оценка залога — приложите отчёт об оценке.',
+    collateral_confirmed_value: 'Нужна подтверждённая стоимость залога — приложите отчёт об оценке (строка «Отчёт об оценке» ниже).',
     industry_risk: 'Банк не смог оценить риск вашей отрасли по ОКВЭД. Это внутренняя настройка банка, от вас ничего не требуется: сообщите об этом специалисту поддержки.',
     okved: 'В данных компании не указан ОКВЭД. Это внутренняя настройка банка, от вас ничего не требуется.',
   };
+
+  // Из какого документа воркер берёт недостающие данные: этот документ показываем как запрошенный,
+  // даже если его нет в списке документов продукта (бэкенд принимает любой вид из каталога)
+  function dataDocuments(field, productId) {
+    if (field === 'collateral_confirmed_value') return ['valuation_report'];
+    if (field === 'monthly_turnovers') return ['account_statement'];
+    if (field === 'turnover_monthly') {
+      if (productId === 'working_capital') return ['financial_statements'];
+      if (productId === 'marketplace_seller') return ['marketplace_sales_report'];
+      return ['account_statement'];
+    }
+    return [];
+  }
 
   function bankComment(text) {
     return text ? '<div class="bank-comment"><span>Комментарий специалиста</span>' + esc(text) + '</div>' : '';
@@ -895,6 +908,11 @@
       // Что просит воркер — в decision.missing_fields (documents.<kind>), сотрудник — текстом в info_request
       var kinds = (d.missing_fields || []).filter(function (f) { return f.indexOf('documents.') === 0; }).map(function (f) { return f.slice(10); });
       var otherFields = (d.missing_fields || []).filter(function (f) { return f.indexOf('documents.') !== 0; });
+      otherFields.forEach(function (f) {
+        dataDocuments(f, a.product_id).forEach(function (k) {
+          if (kinds.indexOf(k) === -1) kinds.push(k);
+        });
+      });
       var asked = {};
       kinds.forEach(function (k) { asked[k] = true; });
       // Кроме запрошенного показываем все документы продукта (и необязательные): любой можно приложить или заменить
